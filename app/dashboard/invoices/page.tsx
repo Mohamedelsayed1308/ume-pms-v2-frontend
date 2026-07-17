@@ -258,8 +258,9 @@ export default function InvoicesPage() {
         supplier_id: supplierId || prev.supplier_id,
         vessel_id: vesselId || prev.vessel_id,
       }));
-    } catch {
-      alert('فشل استخراج البيانات — تأكد من وضوح الفاتورة');
+    } catch (err: any) {
+      const msg = err?.response?.data?.message || err?.message || 'unknown error';
+      alert('فشل استخراج البيانات: ' + msg);
     } finally {
       setExtracting(false);
     }
@@ -326,9 +327,10 @@ export default function InvoicesPage() {
           },
         } : it
       ));
-    } catch {
+    } catch (err: any) {
+      const msg = err?.response?.data?.message || err?.message || 'unknown';
       setBulkItems((prev) => prev.map((it, i) =>
-        i === index ? { ...it, status: 'error', error: 'فشل الاستخراج' } : it
+        i === index ? { ...it, status: 'error', error: 'فشل: ' + msg } : it
       ));
     }
   }
