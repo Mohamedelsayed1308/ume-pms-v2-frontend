@@ -236,11 +236,19 @@ export default function InvoicesPage() {
                     </span>
                   </td>
                   <td className="px-4 py-3">
-                    {inv.approval_status ? (
-                      <span className={`px-2 py-1 rounded-full text-xs ${approvalColor[inv.approval_status]}`}>
-                        {approvalLabel[inv.approval_status]}
-                      </span>
-                    ) : '—'}
+                    <select
+                      value={inv.approval_status || ''}
+                      onChange={async (e) => {
+                        await api.put(`/api/invoices/${inv.id}`, { approval_status: e.target.value || null });
+                        load();
+                      }}
+                      className={`text-xs border rounded-full px-2 py-1 cursor-pointer focus:outline-none ${inv.approval_status ? approvalColor[inv.approval_status] : 'bg-gray-50 text-gray-500'}`}
+                    >
+                      <option value="">— بدون —</option>
+                      <option value="waiting_po">Waiting PO</option>
+                      <option value="send_to_pay">Send to Pay</option>
+                      <option value="hold">Hold</option>
+                    </select>
                   </td>
                   <td className="px-4 py-3 flex gap-2">
                     <button onClick={() => openEdit(inv)} className="text-blue-600 hover:underline text-xs">تعديل</button>
