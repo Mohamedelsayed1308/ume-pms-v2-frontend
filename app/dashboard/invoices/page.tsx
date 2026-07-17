@@ -51,6 +51,7 @@ export default function InvoicesPage() {
   const [uploading, setUploading] = useState(false);
   const [extracting, setExtracting] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [supplierSearch, setSupplierSearch] = useState('');
   const [supplierOpen, setSupplierOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -136,7 +137,16 @@ export default function InvoicesPage() {
       if (editing) {
         await api.put(`/api/invoices/${editing.id}`, data);
       } else {
-        await api.post('/api/invoices', data);
+        const res = await api.post('/api/invoices', data);
+        const newInvoiceId = res.data.id;
+        if (pendingFile && newInvoiceId) {
+          const fd = new FormData();
+          fd.append('file', pendingFile);
+          await api.post(`/api/attachments/invoice/${newInvoiceId}`, fd, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+          });
+          setPendingFile(null);
+        }
       }
       setShowModal(false);
       load();
@@ -356,14 +366,14 @@ export default function InvoicesPage() {
                 e.preventDefault();
                 setDragOver(false);
                 const file = e.dataTransfer.files[0];
-                if (file) handleExtract(file);
+                if (file) { setPendingFile(file); handleExtract(file); }
               }}
               onClick={() => extractRef.current?.click()}
               className={`mb-4 border-2 border-dashed rounded-xl p-4 text-center cursor-pointer transition-colors ${dragOver ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:border-blue-400 hover:bg-gray-50'}`}
             >
               <input ref={extractRef} type="file" className="hidden"
                 accept=".pdf,.jpg,.jpeg,.png"
-                onChange={(e) => { if (e.target.files?.[0]) handleExtract(e.target.files[0]); }} />
+                onChange={(e) => { if (e.target.files?.[0]) { setPendingFile(e.target.files[0]); handleExtract(e.target.files[0]); } }} />
               {extracting ? (
                 <div className="flex items-center justify-center gap-2 text-blue-600">
                   <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24" fill="none">
@@ -375,8 +385,17 @@ export default function InvoicesPage() {
               ) : (
                 <>
                   <div className="text-2xl mb-1">🤖</div>
-                  <p className="text-sm font-medium text-gray-700">اسحب صورة أو PDF الفاتورة هنا</p>
-                  <p className="text-xs text-gray-400 mt-1">Claude سيستخرج البيانات تلقائياً • أو اضغط للاختيار</p>
+                  {pendingFile ? (
+                    <>
+                      <p className="text-sm font-medium text-green-700">✓ {pendingFile.name}</p>
+                      <p className="text-xs text-green-500 mt-1">سيتم حفظ الملف كمرفق عند الحفظ</p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-sm font-medium text-gray-700">اسحب صورة أو PDF الفاتورة هنا</p>
+                      <p className="text-xs text-gray-400 mt-1">Claude سيستخرج البيانات تلقائياً • أو اضغط للاختيار</p>
+                    </>
+                  )}
                 </>
               )}
             </div>
@@ -489,7 +508,7 @@ export default function InvoicesPage() {
                 className="flex-1 bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50">
                 {loading ? 'جاري الحفظ...' : 'حفظ'}
               </button>
-              <button onClick={() => setShowModal(false)}
+              <button onClick={() => { setShowModal(false); setPendingFile(null); }}
                 className="flex-1 border border-gray-300 py-2 rounded-lg hover:bg-gray-50">
                 إلغاء
               </button>
