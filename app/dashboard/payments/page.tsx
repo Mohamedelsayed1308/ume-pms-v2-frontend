@@ -314,7 +314,7 @@ export default function PaymentsPage() {
                     <div className="space-y-1">
                       {attachments.map((att) => (
                         <div key={att.id} className="flex items-center justify-between bg-gray-50 rounded px-3 py-2">
-                          <a href={`http://127.0.0.1:3001/uploads/${att.filename}`} target="_blank" rel="noreferrer"
+                          <a href={att.url || `https://ume-pms-v2-backend-production.up.railway.app/uploads/${att.filename}`} target="_blank" rel="noreferrer"
                             className="flex items-center gap-2 text-sm text-blue-600 hover:underline">
                             <span>{getFileIcon(att.mimetype)}</span>
                             <span>{att.original_name}</span>

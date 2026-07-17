@@ -519,7 +519,7 @@ export default function InvoicesPage() {
                     <div className="flex items-center gap-2">
                       <span className="text-xl">{getFileIcon(att.mimetype)}</span>
                       <div>
-                        <a href={`https://ume-pms-v2-backend-production.up.railway.app/uploads/${att.filename}`} target="_blank" rel="noreferrer"
+                        <a href={att.url || `https://ume-pms-v2-backend-production.up.railway.app/uploads/${att.filename}`} target="_blank" rel="noreferrer"
                           className="text-sm text-blue-600 hover:underline font-medium">
                           {att.original_name}
                         </a>
