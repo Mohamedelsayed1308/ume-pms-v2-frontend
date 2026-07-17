@@ -2,6 +2,18 @@
 import { useEffect, useState, useRef } from 'react';
 import api from '@/lib/api';
 
+interface BulkItem {
+  file: File;
+  status: 'pending' | 'extracting' | 'ready' | 'saving' | 'saved' | 'error';
+  data: {
+    invoice_number: string; supplier_id: string; supplier_name: string;
+    vessel_id: string; total_amount: string; currency: string;
+    invoice_date: string; due_date: string; description: string;
+    type: string; approval_status: string;
+  };
+  error: string;
+}
+
 interface Invoice {
   id: string;
   invoice_number: string;
@@ -54,8 +66,13 @@ export default function InvoicesPage() {
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [supplierSearch, setSupplierSearch] = useState('');
   const [supplierOpen, setSupplierOpen] = useState(false);
+  const [showBulkModal, setShowBulkModal] = useState(false);
+  const [bulkItems, setBulkItems] = useState<BulkItem[]>([]);
+  const [bulkDragOver, setBulkDragOver] = useState(false);
+  const [savingAll, setSavingAll] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const extractRef = useRef<HTMLInputElement>(null);
+  const bulkInputRef = useRef<HTMLInputElement>(null);
   const supplierDropRef = useRef<HTMLDivElement>(null);
 
   async function load() {
@@ -248,6 +265,119 @@ export default function InvoicesPage() {
     }
   }
 
+  const emptyBulkData = () => ({
+    invoice_number: '', supplier_id: '', supplier_name: '',
+    vessel_id: '', total_amount: '', currency: 'USD',
+    invoice_date: '', due_date: '', description: '',
+    type: 'preliminary', approval_status: '',
+  });
+
+  async function processBulkFile(index: number, file: File, currentSuppliers: any[]) {
+    setBulkItems((prev) => prev.map((it, i) => i === index ? { ...it, status: 'extracting' } : it));
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await api.post('/api/invoices/extract', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      const d = res.data;
+
+      let supplierId = '';
+      let supplierName = d.supplier_name || '';
+      if (supplierName) {
+        const existing = currentSuppliers.find(
+          (s) => s.name.toLowerCase().trim() === supplierName.toLowerCase().trim()
+        );
+        if (existing) {
+          supplierId = existing.id;
+        } else {
+          const newSup = await api.post('/api/suppliers', { name: supplierName });
+          supplierId = newSup.data.id;
+          const supRes = await api.get('/api/suppliers');
+          setSuppliers(supRes.data);
+          currentSuppliers = supRes.data;
+        }
+      }
+
+      let vesselId = '';
+      if (d.vessel_name) {
+        const existing = vessels.find(
+          (v) => v.name.toLowerCase().trim() === d.vessel_name.toLowerCase().trim()
+        );
+        if (existing) vesselId = existing.id;
+      }
+
+      setBulkItems((prev) => prev.map((it, i) =>
+        i === index ? {
+          ...it,
+          status: 'ready',
+          data: {
+            invoice_number: d.invoice_number || '',
+            supplier_id: supplierId,
+            supplier_name: supplierName,
+            vessel_id: vesselId,
+            total_amount: d.total_amount ? String(d.total_amount) : '',
+            currency: d.currency || 'USD',
+            invoice_date: d.invoice_date || '',
+            due_date: d.due_date || '',
+            description: d.description || '',
+            type: 'preliminary',
+            approval_status: '',
+          },
+        } : it
+      ));
+    } catch {
+      setBulkItems((prev) => prev.map((it, i) =>
+        i === index ? { ...it, status: 'error', error: 'فشل الاستخراج' } : it
+      ));
+    }
+  }
+
+  async function handleBulkFiles(files: File[]) {
+    const newItems: BulkItem[] = files.map((file) => ({
+      file, status: 'pending', data: emptyBulkData(), error: '',
+    }));
+    const startIndex = bulkItems.length;
+    setBulkItems((prev) => [...prev, ...newItems]);
+    const currentSuppliers = [...suppliers];
+    await Promise.all(files.map((file, i) => processBulkFile(startIndex + i, file, currentSuppliers)));
+  }
+
+  async function handleBulkSaveAll() {
+    const readyItems = bulkItems.filter((it) => it.status === 'ready');
+    if (readyItems.length === 0) return;
+    setSavingAll(true);
+    for (let i = 0; i < bulkItems.length; i++) {
+      const item = bulkItems[i];
+      if (item.status !== 'ready') continue;
+      setBulkItems((prev) => prev.map((it, idx) => idx === i ? { ...it, status: 'saving' } : it));
+      try {
+        const payload = {
+          ...item.data,
+          total_amount: parseFloat(item.data.total_amount) || 0,
+          vessel_id: item.data.vessel_id || null,
+          po_id: null,
+          invoice_date: item.data.invoice_date || null,
+          due_date: item.data.due_date || null,
+        };
+        const res = await api.post('/api/invoices', payload);
+        const newInvoiceId = res.data.id;
+        const fd = new FormData();
+        fd.append('file', item.file);
+        await api.post(`/api/attachments/invoice/${newInvoiceId}`, fd, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+        setBulkItems((prev) => prev.map((it, idx) => idx === i ? { ...it, status: 'saved' } : it));
+      } catch (err: any) {
+        setBulkItems((prev) => prev.map((it, idx) =>
+          idx === i ? { ...it, status: 'error', error: err?.response?.data?.message || 'فشل الحفظ' } : it
+        ));
+      }
+    }
+    setSavingAll(false);
+    load();
+  }
+
   async function handleDeleteAttachment(id: string) {
     if (!confirm('حذف المرفق؟')) return;
     await api.delete(`/api/attachments/${id}`);
@@ -269,9 +399,15 @@ export default function InvoicesPage() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-2xl font-bold text-gray-800">الفواتير</h2>
-        <button onClick={openAdd} className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">
-          + إضافة فاتورة
-        </button>
+        <div className="flex gap-2">
+          <button onClick={() => { setBulkItems([]); setShowBulkModal(true); }}
+            className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 flex items-center gap-2">
+            <span>⚡</span> رفع متعدد
+          </button>
+          <button onClick={openAdd} className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">
+            + إضافة فاتورة
+          </button>
+        </div>
       </div>
 
       {/* Filter */}
@@ -516,6 +652,234 @@ export default function InvoicesPage() {
           </div>
         </div>
       )}
+      {/* Bulk Upload Modal */}
+      {showBulkModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between p-6 border-b">
+              <div>
+                <h3 className="font-bold text-lg">⚡ رفع فواتير متعددة</h3>
+                <p className="text-sm text-gray-500 mt-1">اسحب عدة فواتير دفعةً واحدة — Claude سيستخرج بيانات كل واحدة تلقائياً</p>
+              </div>
+              <button onClick={() => setShowBulkModal(false)} className="text-gray-400 hover:text-gray-600 text-xl">✕</button>
+            </div>
+
+            {/* Drop Zone */}
+            <div className="p-6 border-b">
+              <div
+                onDragOver={(e) => { e.preventDefault(); setBulkDragOver(true); }}
+                onDragLeave={() => setBulkDragOver(false)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setBulkDragOver(false);
+                  const files = Array.from(e.dataTransfer.files).filter(
+                    (f) => f.type.includes('pdf') || f.type.includes('image')
+                  );
+                  if (files.length) handleBulkFiles(files);
+                }}
+                onClick={() => bulkInputRef.current?.click()}
+                className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors ${bulkDragOver ? 'border-purple-500 bg-purple-50' : 'border-gray-300 hover:border-purple-400 hover:bg-gray-50'}`}
+              >
+                <input ref={bulkInputRef} type="file" multiple className="hidden"
+                  accept=".pdf,.jpg,.jpeg,.png"
+                  onChange={(e) => {
+                    const files = Array.from(e.target.files || []);
+                    if (files.length) handleBulkFiles(files);
+                    e.target.value = '';
+                  }} />
+                <div className="text-4xl mb-2">🤖</div>
+                <p className="text-sm font-medium text-gray-700">اسحب ملفات PDF أو صور هنا</p>
+                <p className="text-xs text-gray-400 mt-1">يمكن سحب عدة ملفات في نفس الوقت • أو اضغط للاختيار</p>
+              </div>
+            </div>
+
+            {/* Items List */}
+            {bulkItems.length > 0 && (
+              <div className="flex-1 overflow-y-auto p-6 space-y-3">
+                {bulkItems.map((item, i) => (
+                  <div key={i} className={`border rounded-xl p-4 ${
+                    item.status === 'saved' ? 'border-green-200 bg-green-50' :
+                    item.status === 'error' ? 'border-red-200 bg-red-50' :
+                    item.status === 'extracting' || item.status === 'saving' ? 'border-blue-200 bg-blue-50' :
+                    'border-gray-200 bg-white'
+                  }`}>
+                    <div className="flex items-start gap-3">
+                      {/* Status Icon */}
+                      <div className="mt-1 text-lg flex-shrink-0">
+                        {item.status === 'pending' && <span className="text-gray-400">⏳</span>}
+                        {item.status === 'extracting' && (
+                          <svg className="animate-spin h-5 w-5 text-blue-500" viewBox="0 0 24 24" fill="none">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                          </svg>
+                        )}
+                        {item.status === 'saving' && (
+                          <svg className="animate-spin h-5 w-5 text-purple-500" viewBox="0 0 24 24" fill="none">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                          </svg>
+                        )}
+                        {item.status === 'ready' && <span className="text-blue-500">✏️</span>}
+                        {item.status === 'saved' && <span className="text-green-600">✅</span>}
+                        {item.status === 'error' && <span className="text-red-500">❌</span>}
+                      </div>
+
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between mb-2">
+                          <p className="text-sm font-medium text-gray-700 truncate">{item.file.name}</p>
+                          <span className="text-xs text-gray-400 ml-2 flex-shrink-0">
+                            {(item.file.size / 1024).toFixed(0)} KB
+                          </span>
+                        </div>
+
+                        {item.status === 'extracting' && (
+                          <p className="text-xs text-blue-600">Claude يقرأ الفاتورة...</p>
+                        )}
+                        {item.status === 'pending' && (
+                          <p className="text-xs text-gray-400">في الانتظار...</p>
+                        )}
+                        {item.status === 'error' && (
+                          <p className="text-xs text-red-600">{item.error}</p>
+                        )}
+                        {item.status === 'saved' && (
+                          <p className="text-xs text-green-600">تم الحفظ بنجاح ✓</p>
+                        )}
+
+                        {(item.status === 'ready' || item.status === 'saving') && (
+                          <div className="grid grid-cols-3 gap-2 mt-2">
+                            <div>
+                              <label className="text-xs text-gray-500">رقم الفاتورة</label>
+                              <input
+                                value={item.data.invoice_number}
+                                onChange={(e) => setBulkItems((prev) => prev.map((it, idx) =>
+                                  idx === i ? { ...it, data: { ...it.data, invoice_number: e.target.value } } : it
+                                ))}
+                                className="w-full border rounded px-2 py-1 text-xs mt-0.5 focus:outline-none focus:ring-1 focus:ring-blue-400"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-xs text-gray-500">المورد</label>
+                              <select
+                                value={item.data.supplier_id}
+                                onChange={(e) => setBulkItems((prev) => prev.map((it, idx) =>
+                                  idx === i ? { ...it, data: { ...it.data, supplier_id: e.target.value } } : it
+                                ))}
+                                className="w-full border rounded px-2 py-1 text-xs mt-0.5 focus:outline-none focus:ring-1 focus:ring-blue-400"
+                              >
+                                <option value="">— اختر —</option>
+                                {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                              </select>
+                            </div>
+                            <div>
+                              <label className="text-xs text-gray-500">المبلغ</label>
+                              <div className="flex gap-1 mt-0.5">
+                                <input
+                                  type="number"
+                                  value={item.data.total_amount}
+                                  onChange={(e) => setBulkItems((prev) => prev.map((it, idx) =>
+                                    idx === i ? { ...it, data: { ...it.data, total_amount: e.target.value } } : it
+                                  ))}
+                                  className="flex-1 border rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400"
+                                />
+                                <select
+                                  value={item.data.currency}
+                                  onChange={(e) => setBulkItems((prev) => prev.map((it, idx) =>
+                                    idx === i ? { ...it, data: { ...it.data, currency: e.target.value } } : it
+                                  ))}
+                                  className="border rounded px-1 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400"
+                                >
+                                  <option value="USD">USD</option>
+                                  <option value="EUR">EUR</option>
+                                  <option value="EGP">EGP</option>
+                                </select>
+                              </div>
+                            </div>
+                            <div>
+                              <label className="text-xs text-gray-500">تاريخ الفاتورة</label>
+                              <input type="date" value={item.data.invoice_date}
+                                onChange={(e) => setBulkItems((prev) => prev.map((it, idx) =>
+                                  idx === i ? { ...it, data: { ...it.data, invoice_date: e.target.value } } : it
+                                ))}
+                                className="w-full border rounded px-2 py-1 text-xs mt-0.5 focus:outline-none focus:ring-1 focus:ring-blue-400"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-xs text-gray-500">تاريخ الاستحقاق</label>
+                              <input type="date" value={item.data.due_date}
+                                onChange={(e) => setBulkItems((prev) => prev.map((it, idx) =>
+                                  idx === i ? { ...it, data: { ...it.data, due_date: e.target.value } } : it
+                                ))}
+                                className="w-full border rounded px-2 py-1 text-xs mt-0.5 focus:outline-none focus:ring-1 focus:ring-blue-400"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-xs text-gray-500">النوع</label>
+                              <select value={item.data.type}
+                                onChange={(e) => setBulkItems((prev) => prev.map((it, idx) =>
+                                  idx === i ? { ...it, data: { ...it.data, type: e.target.value } } : it
+                                ))}
+                                className="w-full border rounded px-2 py-1 text-xs mt-0.5 focus:outline-none focus:ring-1 focus:ring-blue-400"
+                              >
+                                <option value="preliminary">أولية</option>
+                                <option value="final">نهائية</option>
+                              </select>
+                            </div>
+                            <div className="col-span-3">
+                              <label className="text-xs text-gray-500">الوصف</label>
+                              <input value={item.data.description}
+                                onChange={(e) => setBulkItems((prev) => prev.map((it, idx) =>
+                                  idx === i ? { ...it, data: { ...it.data, description: e.target.value } } : it
+                                ))}
+                                className="w-full border rounded px-2 py-1 text-xs mt-0.5 focus:outline-none focus:ring-1 focus:ring-blue-400"
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {item.status !== 'saving' && item.status !== 'saved' && (
+                        <button onClick={() => setBulkItems((prev) => prev.filter((_, idx) => idx !== i))}
+                          className="text-gray-300 hover:text-red-400 text-sm flex-shrink-0 mt-1">✕</button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Footer */}
+            <div className="p-6 border-t flex items-center justify-between gap-3">
+              <p className="text-sm text-gray-500">
+                {bulkItems.filter((i) => i.status === 'ready').length} جاهزة •{' '}
+                {bulkItems.filter((i) => i.status === 'saved').length} تم حفظها •{' '}
+                {bulkItems.filter((i) => i.status === 'extracting' || i.status === 'pending').length} قيد المعالجة
+              </p>
+              <div className="flex gap-2">
+                <button onClick={() => setShowBulkModal(false)}
+                  className="px-4 py-2 border border-gray-300 rounded-lg text-sm hover:bg-gray-50">
+                  إغلاق
+                </button>
+                <button
+                  onClick={handleBulkSaveAll}
+                  disabled={savingAll || bulkItems.filter((i) => i.status === 'ready').length === 0}
+                  className="px-6 py-2 bg-purple-600 text-white rounded-lg text-sm hover:bg-purple-700 disabled:opacity-50 flex items-center gap-2"
+                >
+                  {savingAll ? (
+                    <>
+                      <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                      </svg>
+                      جاري الحفظ...
+                    </>
+                  ) : `حفظ الكل (${bulkItems.filter((i) => i.status === 'ready').length})`}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Attachments Modal */}
       {attachModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
