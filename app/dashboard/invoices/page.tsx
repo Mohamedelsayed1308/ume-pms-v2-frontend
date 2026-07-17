@@ -51,8 +51,11 @@ export default function InvoicesPage() {
   const [uploading, setUploading] = useState(false);
   const [extracting, setExtracting] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+  const [supplierSearch, setSupplierSearch] = useState('');
+  const [supplierOpen, setSupplierOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const extractRef = useRef<HTMLInputElement>(null);
+  const supplierDropRef = useRef<HTMLDivElement>(null);
 
   async function load() {
     const [invRes, supRes, vesRes, poRes] = await Promise.all([
@@ -68,6 +71,17 @@ export default function InvoicesPage() {
   }
 
   useEffect(() => { load(); }, []);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (supplierDropRef.current && !supplierDropRef.current.contains(e.target as Node)) {
+        setSupplierOpen(false);
+        setSupplierSearch('');
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   useEffect(() => {
     if (form.supplier_id) {
@@ -371,13 +385,31 @@ export default function InvoicesPage() {
                   <option value="final">نهائية</option>
                 </select>
               </div>
-              <div>
+              <div ref={supplierDropRef} className="relative">
                 <label className="block text-sm text-gray-600 mb-1">المورد *</label>
-                <select value={form.supplier_id} onChange={(e) => setForm({ ...form, supplier_id: e.target.value, po_id: '' })}
-                  className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                  <option value="">— اختر المورد —</option>
-                  {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-                </select>
+                <input
+                  type="text"
+                  placeholder="— ابحث أو اختر المورد —"
+                  value={supplierSearch || suppliers.find((s) => s.id === form.supplier_id)?.name || ''}
+                  onFocus={() => { setSupplierOpen(true); setSupplierSearch(''); }}
+                  onChange={(e) => { setSupplierSearch(e.target.value); setSupplierOpen(true); setForm({ ...form, supplier_id: '', po_id: '' }); }}
+                  className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                {supplierOpen && (
+                  <div className="absolute z-50 w-full bg-white border border-gray-200 rounded-lg shadow-lg mt-1 max-h-48 overflow-y-auto">
+                    {suppliers
+                      .filter((s) => s.name.toLowerCase().includes(supplierSearch.toLowerCase()))
+                      .map((s) => (
+                        <div key={s.id}
+                          onMouseDown={() => { setForm({ ...form, supplier_id: s.id, po_id: '' }); setSupplierSearch(''); setSupplierOpen(false); }}
+                          className="px-3 py-2 hover:bg-blue-50 cursor-pointer text-sm text-gray-800"
+                        >{s.name}</div>
+                      ))}
+                    {suppliers.filter((s) => s.name.toLowerCase().includes(supplierSearch.toLowerCase())).length === 0 && (
+                      <div className="px-3 py-2 text-sm text-gray-400">لا توجد نتائج</div>
+                    )}
+                  </div>
+                )}
               </div>
               <div>
                 <label className="block text-sm text-gray-600 mb-1">السفينة</label>
