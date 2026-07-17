@@ -507,16 +507,15 @@ export default function InvoicesPage() {
             </div>
 
             {/* Upload */}
-            <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center mb-4">
-              <input ref={fileRef} type="file" onChange={handleUpload} className="hidden" id="file-upload"
+            <div onClick={() => !uploading && fileRef.current?.click()}
+              className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center mb-4 cursor-pointer hover:border-blue-400 hover:bg-gray-50 transition-colors">
+              <input ref={fileRef} type="file" onChange={handleUpload} className="hidden"
                 accept=".pdf,.jpg,.jpeg,.png,.xlsx,.xls,.doc,.docx" />
-              <label htmlFor="file-upload" className="cursor-pointer">
-                <div className="text-3xl mb-2">📎</div>
-                <p className="text-sm text-gray-600">
-                  {uploading ? 'جاري الرفع...' : 'اضغط لرفع ملف'}
-                </p>
-                <p className="text-xs text-gray-400 mt-1">PDF, صور, Excel, Word — حتى 10MB</p>
-              </label>
+              <div className="text-3xl mb-2">📎</div>
+              <p className="text-sm text-gray-600">
+                {uploading ? 'جاري الرفع...' : 'اضغط لرفع ملف'}
+              </p>
+              <p className="text-xs text-gray-400 mt-1">PDF, صور, Excel, Word — حتى 10MB</p>
             </div>
 
             {/* List */}
