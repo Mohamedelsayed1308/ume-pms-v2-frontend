@@ -158,23 +158,33 @@ export default function InvoicesPage() {
   }
 
   async function openAttachments(inv: Invoice) {
+    setAttachments([]);
     setAttachModal(inv);
-    const res = await api.get(`/api/attachments/invoice/${inv.id}`);
-    setAttachments(res.data);
+    try {
+      const res = await api.get(`/api/attachments/invoice/${inv.id}`);
+      setAttachments(res.data);
+    } catch {
+      setAttachments([]);
+    }
   }
 
   async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
     if (!e.target.files?.[0] || !attachModal) return;
     setUploading(true);
-    const formData = new FormData();
-    formData.append('file', e.target.files[0]);
-    await api.post(`/api/attachments/invoice/${attachModal.id}`, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
-    const res = await api.get(`/api/attachments/invoice/${attachModal.id}`);
-    setAttachments(res.data);
-    setUploading(false);
-    if (fileRef.current) fileRef.current.value = '';
+    try {
+      const formData = new FormData();
+      formData.append('file', e.target.files[0]);
+      await api.post(`/api/attachments/invoice/${attachModal.id}`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      const res = await api.get(`/api/attachments/invoice/${attachModal.id}`);
+      setAttachments(res.data);
+    } catch (err: any) {
+      alert('فشل رفع الملف: ' + (err?.response?.data?.message || err.message));
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = '';
+    }
   }
 
   async function handleExtract(file: File) {
