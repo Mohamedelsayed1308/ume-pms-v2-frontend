@@ -7,6 +7,8 @@ interface Invoice {
   invoice_number: string;
   type: string;
   status: string;
+  approval_status: string;
+  comment: string;
   currency: string;
   total_amount: number;
   paid_amount: number;
@@ -22,7 +24,11 @@ const empty = {
   invoice_number: '', supplier_id: '', vessel_id: '', po_id: '',
   type: 'preliminary', currency: 'USD', total_amount: '',
   invoice_date: '', due_date: '', description: '', notes: '',
+  approval_status: '', comment: '',
 };
+
+const approvalLabel: Record<string, string> = { waiting_po: 'Waiting PO', send_to_pay: 'Send to Pay', hold: 'Hold' };
+const approvalColor: Record<string, string> = { waiting_po: 'bg-orange-100 text-orange-700', send_to_pay: 'bg-blue-100 text-blue-700', hold: 'bg-red-100 text-red-700' };
 
 const statusLabel: Record<string, string> = { unpaid: 'غير مدفوعة', partial: 'مدفوعة جزئياً', paid: 'مدفوعة', cancelled: 'ملغاة' };
 const statusColor: Record<string, string> = { unpaid: 'bg-red-100 text-red-700', partial: 'bg-yellow-100 text-yellow-700', paid: 'bg-green-100 text-green-700', cancelled: 'bg-gray-100 text-gray-500' };
@@ -89,6 +95,8 @@ export default function InvoicesPage() {
       due_date: inv.due_date?.slice(0, 10) || '',
       description: inv.description || '',
       notes: '',
+      approval_status: inv.approval_status || '',
+      comment: inv.comment || '',
     });
     setError('');
     setShowModal(true);
@@ -201,6 +209,7 @@ export default function InvoicesPage() {
               <th className="px-4 py-3">المتبقي</th>
               <th className="px-4 py-3">الاستحقاق</th>
               <th className="px-4 py-3">الحالة</th>
+              <th className="px-4 py-3">حالة الموافقة</th>
               <th className="px-4 py-3">إجراءات</th>
             </tr>
           </thead>
@@ -225,6 +234,13 @@ export default function InvoicesPage() {
                     <span className={`px-2 py-1 rounded-full text-xs ${statusColor[inv.status]}`}>
                       {statusLabel[inv.status]}
                     </span>
+                  </td>
+                  <td className="px-4 py-3">
+                    {inv.approval_status ? (
+                      <span className={`px-2 py-1 rounded-full text-xs ${approvalColor[inv.approval_status]}`}>
+                        {approvalLabel[inv.approval_status]}
+                      </span>
+                    ) : '—'}
                   </td>
                   <td className="px-4 py-3 flex gap-2">
                     <button onClick={() => openEdit(inv)} className="text-blue-600 hover:underline text-xs">تعديل</button>
@@ -312,6 +328,22 @@ export default function InvoicesPage() {
                 <input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })}
                   className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">حالة الموافقة</label>
+                <select value={form.approval_status} onChange={(e) => setForm({ ...form, approval_status: e.target.value })}
+                  className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  <option value="">— بدون —</option>
+                  <option value="waiting_po">Waiting PO</option>
+                  <option value="send_to_pay">Send to Pay</option>
+                  <option value="hold">Hold</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">تعليق</label>
+                <input value={form.comment} onChange={(e) => setForm({ ...form, comment: e.target.value })}
+                  className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="أي ملاحظة..." />
+              </div>
             </div>
             {error && <p className="text-red-500 text-sm mt-2">{error}</p>}
             <div className="flex gap-2 mt-4">
@@ -359,7 +391,7 @@ export default function InvoicesPage() {
                     <div className="flex items-center gap-2">
                       <span className="text-xl">{getFileIcon(att.mimetype)}</span>
                       <div>
-                        <a href={`http://127.0.0.1:3001/uploads/${att.filename}`} target="_blank" rel="noreferrer"
+                        <a href={`https://ume-pms-v2-backend-production.up.railway.app/uploads/${att.filename}`} target="_blank" rel="noreferrer"
                           className="text-sm text-blue-600 hover:underline font-medium">
                           {att.original_name}
                         </a>
