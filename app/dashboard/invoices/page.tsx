@@ -172,6 +172,30 @@ export default function InvoicesPage() {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
       const d = res.data;
+
+      let supplierId = '';
+      if (d.supplier_name) {
+        const existing = suppliers.find((s) =>
+          s.name.toLowerCase().trim() === d.supplier_name.toLowerCase().trim()
+        );
+        if (existing) {
+          supplierId = existing.id;
+        } else {
+          const newSup = await api.post('/api/suppliers', { name: d.supplier_name });
+          supplierId = newSup.data.id;
+          const supRes = await api.get('/api/suppliers');
+          setSuppliers(supRes.data);
+        }
+      }
+
+      let vesselId = '';
+      if (d.vessel_name) {
+        const existingVessel = vessels.find((v) =>
+          v.name.toLowerCase().trim() === d.vessel_name.toLowerCase().trim()
+        );
+        if (existingVessel) vesselId = existingVessel.id;
+      }
+
       setForm((prev) => ({
         ...prev,
         invoice_number: d.invoice_number || prev.invoice_number,
@@ -180,6 +204,8 @@ export default function InvoicesPage() {
         invoice_date: d.invoice_date || prev.invoice_date,
         due_date: d.due_date || prev.due_date,
         description: d.description || prev.description,
+        supplier_id: supplierId || prev.supplier_id,
+        vessel_id: vesselId || prev.vessel_id,
       }));
     } catch {
       alert('فشل استخراج البيانات — تأكد من وضوح الفاتورة');
