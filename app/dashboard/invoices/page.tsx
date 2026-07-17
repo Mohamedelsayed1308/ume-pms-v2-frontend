@@ -49,7 +49,10 @@ export default function InvoicesPage() {
   const [attachModal, setAttachModal] = useState<Invoice | null>(null);
   const [attachments, setAttachments] = useState<any[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [extracting, setExtracting] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const extractRef = useRef<HTMLInputElement>(null);
 
   async function load() {
     const [invRes, supRes, vesRes, poRes] = await Promise.all([
@@ -158,6 +161,31 @@ export default function InvoicesPage() {
     setAttachments(res.data);
     setUploading(false);
     if (fileRef.current) fileRef.current.value = '';
+  }
+
+  async function handleExtract(file: File) {
+    setExtracting(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await api.post('/api/invoices/extract', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      const d = res.data;
+      setForm((prev) => ({
+        ...prev,
+        invoice_number: d.invoice_number || prev.invoice_number,
+        total_amount: d.total_amount ? String(d.total_amount) : prev.total_amount,
+        currency: d.currency || prev.currency,
+        invoice_date: d.invoice_date || prev.invoice_date,
+        due_date: d.due_date || prev.due_date,
+        description: d.description || prev.description,
+      }));
+    } catch {
+      alert('فشل استخراج البيانات — تأكد من وضوح الفاتورة');
+    } finally {
+      setExtracting(false);
+    }
   }
 
   async function handleDeleteAttachment(id: string) {
@@ -269,6 +297,40 @@ export default function InvoicesPage() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
             <h3 className="font-bold text-lg mb-4">{editing ? 'تعديل فاتورة' : 'إضافة فاتورة'}</h3>
+
+            {/* AI Extract Zone */}
+            <div
+              onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={(e) => {
+                e.preventDefault();
+                setDragOver(false);
+                const file = e.dataTransfer.files[0];
+                if (file) handleExtract(file);
+              }}
+              onClick={() => extractRef.current?.click()}
+              className={`mb-4 border-2 border-dashed rounded-xl p-4 text-center cursor-pointer transition-colors ${dragOver ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:border-blue-400 hover:bg-gray-50'}`}
+            >
+              <input ref={extractRef} type="file" className="hidden"
+                accept=".pdf,.jpg,.jpeg,.png"
+                onChange={(e) => { if (e.target.files?.[0]) handleExtract(e.target.files[0]); }} />
+              {extracting ? (
+                <div className="flex items-center justify-center gap-2 text-blue-600">
+                  <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                  </svg>
+                  <span className="text-sm font-medium">Claude يقرأ الفاتورة...</span>
+                </div>
+              ) : (
+                <>
+                  <div className="text-2xl mb-1">🤖</div>
+                  <p className="text-sm font-medium text-gray-700">اسحب صورة أو PDF الفاتورة هنا</p>
+                  <p className="text-xs text-gray-400 mt-1">Claude سيستخرج البيانات تلقائياً • أو اضغط للاختيار</p>
+                </>
+              )}
+            </div>
+
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-sm text-gray-600 mb-1">رقم الفاتورة *</label>
