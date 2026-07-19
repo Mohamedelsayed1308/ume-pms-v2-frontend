@@ -20,6 +20,7 @@ interface Invoice {
   type: string;
   status: string;
   approval_status: string;
+  approval_status_date: string;
   comment: string;
   currency: string;
   total_amount: number;
@@ -37,11 +38,23 @@ const empty = {
   invoice_number: '', supplier_id: '', vessel_id: '', po_id: '',
   type: 'preliminary', currency: 'USD', total_amount: '',
   invoice_date: '', due_date: '', description: '', notes: '',
-  approval_status: '', comment: '',
+  approval_status: '', approval_status_date: '', comment: '',
 };
 
-const approvalLabel: Record<string, string> = { waiting_po: 'Waiting PO', send_to_pay: 'Send to Pay', hold: 'Hold' };
-const approvalColor: Record<string, string> = { waiting_po: 'bg-orange-100 text-orange-700', send_to_pay: 'bg-blue-100 text-blue-700', hold: 'bg-red-100 text-red-700' };
+const approvalLabel: Record<string, string> = {
+  waiting_po: 'Waiting PO',
+  send_to_pay: 'Send to Pay',
+  hold: 'Hold',
+  delivery_missing: 'Delivery Missing',
+  paid: 'Paid',
+};
+const approvalColor: Record<string, string> = {
+  waiting_po: 'bg-orange-100 text-orange-700',
+  send_to_pay: 'bg-blue-100 text-blue-700',
+  hold: 'bg-red-100 text-red-700',
+  delivery_missing: 'bg-purple-100 text-purple-700',
+  paid: 'bg-green-100 text-green-700',
+};
 
 const statusLabel: Record<string, string> = { unpaid: 'غير مدفوعة', partial: 'مدفوعة جزئياً', paid: 'مدفوعة', cancelled: 'ملغاة' };
 const statusColor: Record<string, string> = { unpaid: 'bg-red-100 text-red-700', partial: 'bg-yellow-100 text-yellow-700', paid: 'bg-green-100 text-green-700', cancelled: 'bg-gray-100 text-gray-500' };
@@ -132,6 +145,7 @@ export default function InvoicesPage() {
       description: inv.description || '',
       notes: '',
       approval_status: inv.approval_status || '',
+      approval_status_date: inv.approval_status_date?.slice(0, 10) || '',
       comment: inv.comment || '',
     });
     setError('');
@@ -464,19 +478,39 @@ export default function InvoicesPage() {
                     </span>
                   </td>
                   <td className="px-4 py-3">
-                    <select
-                      value={inv.approval_status || ''}
-                      onChange={async (e) => {
-                        await api.put(`/api/invoices/${inv.id}`, { approval_status: e.target.value || null });
-                        load();
-                      }}
-                      className={`text-xs border rounded-full px-2 py-1 cursor-pointer focus:outline-none ${inv.approval_status ? approvalColor[inv.approval_status] : 'bg-gray-50 text-gray-500'}`}
-                    >
-                      <option value="">— بدون —</option>
-                      <option value="waiting_po">Waiting PO</option>
-                      <option value="send_to_pay">Send to Pay</option>
-                      <option value="hold">Hold</option>
-                    </select>
+                    <div className="flex flex-col gap-1">
+                      <select
+                        value={inv.approval_status || ''}
+                        onChange={async (e) => {
+                          const newStatus = e.target.value || null;
+                          const today = new Date().toISOString().slice(0, 10);
+                          await api.put(`/api/invoices/${inv.id}`, {
+                            approval_status: newStatus,
+                            approval_status_date: newStatus ? today : null,
+                          });
+                          load();
+                        }}
+                        className={`text-xs border rounded-full px-2 py-1 cursor-pointer focus:outline-none ${inv.approval_status ? approvalColor[inv.approval_status] : 'bg-gray-50 text-gray-500'}`}
+                      >
+                        <option value="">— بدون —</option>
+                        <option value="waiting_po">Waiting PO</option>
+                        <option value="send_to_pay">Send to Pay</option>
+                        <option value="hold">Hold</option>
+                        <option value="delivery_missing">Delivery Missing</option>
+                        <option value="paid">Paid</option>
+                      </select>
+                      {inv.approval_status && (
+                        <input
+                          type="date"
+                          value={inv.approval_status_date?.slice(0, 10) || ''}
+                          onChange={async (e) => {
+                            await api.put(`/api/invoices/${inv.id}`, { approval_status_date: e.target.value || null });
+                            load();
+                          }}
+                          className="text-xs border rounded px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-400 w-32"
+                        />
+                      )}
+                    </div>
                   </td>
                   <td className="px-4 py-3 text-xs text-gray-500">{inv.created_by_name || '—'}</td>
                   <td className="px-4 py-3 flex gap-2">
@@ -628,14 +662,24 @@ export default function InvoicesPage() {
               </div>
               <div>
                 <label className="block text-sm text-gray-600 mb-1">حالة الموافقة</label>
-                <select value={form.approval_status} onChange={(e) => setForm({ ...form, approval_status: e.target.value })}
+                <select value={form.approval_status} onChange={(e) => setForm({ ...form, approval_status: e.target.value, approval_status_date: e.target.value ? (form.approval_status_date || new Date().toISOString().slice(0, 10)) : '' })}
                   className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
                   <option value="">— بدون —</option>
                   <option value="waiting_po">Waiting PO</option>
                   <option value="send_to_pay">Send to Pay</option>
                   <option value="hold">Hold</option>
+                  <option value="delivery_missing">Delivery Missing</option>
+                  <option value="paid">Paid</option>
                 </select>
               </div>
+              {form.approval_status && (
+                <div>
+                  <label className="block text-sm text-gray-600 mb-1">تاريخ الحالة</label>
+                  <input type="date" value={form.approval_status_date}
+                    onChange={(e) => setForm({ ...form, approval_status_date: e.target.value })}
+                    className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
+              )}
               <div>
                 <label className="block text-sm text-gray-600 mb-1">تعليق</label>
                 <input value={form.comment} onChange={(e) => setForm({ ...form, comment: e.target.value })}

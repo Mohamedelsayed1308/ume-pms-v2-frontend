@@ -67,10 +67,12 @@ export default function DashboardPage() {
                   <td className="py-2">{Number(inv.total_amount).toLocaleString()} {inv.currency}</td>
                   <td className="py-2">{inv.due_date?.slice(0, 10)}</td>
                   <td className="py-2">
-                    <span className={`px-2 py-1 rounded-full text-xs ${
+                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                       inv.is_overdue ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'
                     }`}>
-                      {inv.is_overdue ? 'متأخرة' : `${inv.days_until_due} يوم`}
+                      {inv.is_overdue
+                        ? `متأخرة ${Math.abs(inv.days_until_due)} يوم`
+                        : `${inv.days_until_due} يوم`}
                     </span>
                   </td>
                 </tr>

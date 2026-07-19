@@ -5,7 +5,7 @@ import api from '@/lib/api';
 const statusLabel: Record<string, string> = { unpaid: 'غير مدفوعة', partial: 'جزئي', paid: 'مدفوعة', cancelled: 'ملغاة' };
 const statusColor: Record<string, string> = { unpaid: 'bg-red-100 text-red-700', partial: 'bg-yellow-100 text-yellow-700', paid: 'bg-green-100 text-green-700', cancelled: 'bg-gray-100 text-gray-500' };
 
-type ReportType = 'supplier-statement' | 'unpaid-supplier' | 'unpaid-vessel' | 'vessel-suppliers' | 'due-alerts' | 'user-activity';
+type ReportType = 'supplier-statement' | 'unpaid-supplier' | 'unpaid-vessel' | 'vessel-suppliers' | 'due-alerts' | 'user-activity' | 'dept-delays';
 
 interface UserReport {
   user_id: string;
@@ -49,6 +49,8 @@ export default function ReportsPage() {
         res = await api.get(`/api/invoices/alerts/due?days=${daysAhead}`);
       } else if (reportType === 'user-activity') {
         res = await api.get('/api/invoices/report/by-user');
+      } else if (reportType === 'dept-delays') {
+        res = await api.get('/api/invoices/report/department-delays');
       }
       if (res) setData(res.data);
     } finally {
@@ -63,12 +65,13 @@ export default function ReportsPage() {
     { id: 'unpaid-vessel', label: '🚢 مستحقات مركب', desc: 'الفواتير غير المدفوعة على مركب معين' },
     { id: 'vessel-suppliers', label: '📊 موردو المركب', desc: 'حجم تعامل كل مورد على المركب' },
     { id: 'user-activity', label: '👤 نشاط المستخدمين', desc: 'عدد الفواتير لكل مستخدم حسب السفينة' },
+    { id: 'dept-delays', label: '🔔 تأخرات الأقسام', desc: 'فواتير تجاوزت 3 أيام بدون إجراء' },
   ];
 
   const needsSupplier = ['supplier-statement', 'unpaid-supplier'].includes(reportType);
   const needsVessel = ['unpaid-vessel', 'vessel-suppliers'].includes(reportType);
   const needsDays = reportType === 'due-alerts';
-  const noFilter = reportType === 'user-activity';
+  const noFilter = reportType === 'user-activity' || reportType === 'dept-delays';
 
   return (
     <div>
@@ -290,6 +293,65 @@ export default function ReportsPage() {
                   {data.length === 0 && <tr><td colSpan={5} className="text-center py-6 text-gray-400">لا توجد بيانات</td></tr>}
                 </tbody>
               </table>
+            </>
+          )}
+
+          {/* Department Delays */}
+          {reportType === 'dept-delays' && Array.isArray(data) && (
+            <>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-bold text-gray-700">🔔 تأخرات الأقسام — {data.length} فاتورة متأخرة</h3>
+                <p className="text-xs text-gray-400">الفواتير التي تجاوزت 3 أيام في نفس الحالة</p>
+              </div>
+              {data.length === 0 ? (
+                <p className="text-center py-10 text-green-600 font-medium">✅ لا توجد تأخرات — كل الأقسام تعمل في الوقت المحدد</p>
+              ) : (
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 text-gray-600 text-right">
+                    <tr>
+                      <th className="px-4 py-2">رقم الفاتورة</th>
+                      <th className="px-4 py-2">المورد</th>
+                      <th className="px-4 py-2">السفينة</th>
+                      <th className="px-4 py-2">المبلغ</th>
+                      <th className="px-4 py-2">الحالة</th>
+                      <th className="px-4 py-2">تاريخ الحالة</th>
+                      <th className="px-4 py-2 text-center">أيام التأخر</th>
+                      <th className="px-4 py-2">القسم المسؤول</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.map((inv: any) => (
+                      <tr key={inv.id} className="border-t hover:bg-red-50/30">
+                        <td className="px-4 py-2 font-mono text-blue-700">{inv.invoice_number}</td>
+                        <td className="px-4 py-2">{inv.supplier || '—'}</td>
+                        <td className="px-4 py-2">{inv.vessel || '—'}</td>
+                        <td className="px-4 py-2">{Number(inv.total_amount).toLocaleString()} {inv.currency}</td>
+                        <td className="px-4 py-2">
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                            inv.approval_status === 'waiting_po' ? 'bg-orange-100 text-orange-700' :
+                            inv.approval_status === 'delivery_missing' ? 'bg-purple-100 text-purple-700' :
+                            'bg-blue-100 text-blue-700'
+                          }`}>
+                            {inv.approval_status === 'waiting_po' ? 'Waiting PO' :
+                             inv.approval_status === 'delivery_missing' ? 'Delivery Missing' : 'Send to Pay'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2 text-gray-500">{inv.approval_status_date?.slice(0, 10)}</td>
+                        <td className="px-4 py-2 text-center">
+                          <span className={`px-2 py-1 rounded-full text-xs font-bold ${
+                            inv.days_delayed > 7 ? 'bg-red-100 text-red-700' : 'bg-orange-100 text-orange-700'
+                          }`}>
+                            {inv.days_delayed} يوم
+                          </span>
+                        </td>
+                        <td className="px-4 py-2">
+                          <span className="text-xs font-medium text-gray-700">{inv.department}</span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
             </>
           )}
 
