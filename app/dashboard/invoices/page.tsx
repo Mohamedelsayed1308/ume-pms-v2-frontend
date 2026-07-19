@@ -194,8 +194,13 @@ export default function InvoicesPage() {
     try {
       await api.delete(`/api/invoices/${id}`);
       load();
-    } catch {
-      alert('لا يمكن الحذف — توجد مدفوعات مرتبطة بهذه الفاتورة');
+    } catch (err: any) {
+      const msg = err?.response?.data?.message || err?.message || '';
+      if (msg.toLowerCase().includes('payment') || msg.toLowerCase().includes('foreign') || msg.toLowerCase().includes('constraint')) {
+        alert('لا يمكن الحذف — توجد مدفوعات مرتبطة بهذه الفاتورة');
+      } else {
+        alert('فشل الحذف: ' + (msg || 'خطأ غير معروف'));
+      }
     }
   }
 
