@@ -43,6 +43,7 @@ const empty = {
 };
 
 const approvalLabel: Record<string, string> = {
+  waiting_approval: 'Waiting Approval',
   waiting_po: 'Waiting PO',
   send_to_pay: 'Send to Pay',
   hold: 'Hold',
@@ -50,6 +51,7 @@ const approvalLabel: Record<string, string> = {
   paid: 'Paid',
 };
 const approvalColor: Record<string, string> = {
+  waiting_approval: 'bg-yellow-100 text-yellow-700',
   waiting_po: 'bg-orange-100 text-orange-700',
   send_to_pay: 'bg-blue-100 text-blue-700',
   hold: 'bg-red-100 text-red-700',
@@ -499,6 +501,7 @@ export default function InvoicesPage() {
                         className={`text-xs border rounded-full px-2 py-1 cursor-pointer focus:outline-none ${inv.approval_status ? approvalColor[inv.approval_status] : 'bg-gray-50 text-gray-500'}`}
                       >
                         <option value="">— بدون —</option>
+                        <option value="waiting_approval">Waiting Approval</option>
                         <option value="waiting_po">Waiting PO</option>
                         <option value="send_to_pay">Send to Pay</option>
                         <option value="hold">Hold</option>
