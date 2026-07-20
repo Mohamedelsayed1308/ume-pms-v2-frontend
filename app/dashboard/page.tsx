@@ -20,7 +20,7 @@ export default function DashboardPage() {
         invoices: invoices.data.length,
         alerts: alertsRes.data.length,
       });
-      setAlerts(alertsRes.data.slice(0, 5));
+      setAlerts(alertsRes.data);
     }
     load();
   }, []);
