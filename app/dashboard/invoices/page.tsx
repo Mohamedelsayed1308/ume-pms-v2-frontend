@@ -460,6 +460,7 @@ export default function InvoicesPage() {
               <th className="px-4 py-3">الحالة</th>
               <th className="px-4 py-3">حالة الموافقة</th>
               <th className="px-4 py-3">أضافها</th>
+              <th className="px-4 py-3">تعليق</th>
               <th className="px-4 py-3">إجراءات</th>
             </tr>
           </thead>
@@ -522,6 +523,9 @@ export default function InvoicesPage() {
                     </div>
                   </td>
                   <td className="px-4 py-3 text-xs text-gray-500">{inv.created_by_name || '—'}</td>
+                  <td className="px-4 py-3 text-xs text-gray-600 max-w-[160px]">
+                    <span title={inv.comment || ''} className="line-clamp-2">{inv.comment || '—'}</span>
+                  </td>
                   <td className="px-4 py-3 flex gap-2">
                     <button onClick={() => openEdit(inv)} className="text-blue-600 hover:underline text-xs">تعديل</button>
                     <button onClick={() => openAttachments(inv)} className="text-green-600 hover:underline text-xs">📎 مرفقات</button>
