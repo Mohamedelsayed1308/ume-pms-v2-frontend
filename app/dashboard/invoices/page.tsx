@@ -647,7 +647,6 @@ export default function InvoicesPage() {
                 <select value={form.currency} onChange={(e) => setForm({ ...form, currency: e.target.value })}
                   className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
                   {CURRENCIES.map(c => <option key={c.code} value={c.code}>{c.label}</option>)}
-                  <option value="EGP">EGP — جنيه</option>
                 </select>
               </div>
               <div>
@@ -843,7 +842,6 @@ export default function InvoicesPage() {
                                   className="border rounded px-1 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400"
                                 >
                                   {CURRENCIES.map(c => <option key={c.code} value={c.code}>{c.code}</option>)}
-                                  <option value="EGP">EGP</option>
                                 </select>
                               </div>
                             </div>

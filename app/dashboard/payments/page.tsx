@@ -261,7 +261,6 @@ export default function PaymentsPage() {
                   <select value={form.currency} onChange={(e) => setForm({ ...form, currency: e.target.value })}
                     className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
                     {CURRENCIES.map(c => <option key={c.code} value={c.code}>{c.label}</option>)}
-                    <option value="EGP">EGP</option>
                   </select>
                 </div>
                 <div>
