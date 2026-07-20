@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import api from '@/lib/api';
+import * as XLSX from 'xlsx';
 
 const statusLabel: Record<string, string> = { unpaid: 'غير مدفوعة', partial: 'جزئي', paid: 'مدفوعة', cancelled: 'ملغاة' };
 const statusColor: Record<string, string> = { unpaid: 'bg-red-100 text-red-700', partial: 'bg-yellow-100 text-yellow-700', paid: 'bg-green-100 text-green-700', cancelled: 'bg-gray-100 text-gray-500' };
@@ -14,6 +15,13 @@ interface UserReport {
   by_vessel: { vessel: string; count: number }[];
 }
 
+function exportToExcel(rows: any[], filename: string) {
+  const ws = XLSX.utils.json_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'تقرير');
+  XLSX.writeFile(wb, `${filename}.xlsx`);
+}
+
 export default function ReportsPage() {
   const [reportType, setReportType] = useState<ReportType>('due-alerts');
   const [suppliers, setSuppliers] = useState<any[]>([]);
@@ -24,6 +32,7 @@ export default function ReportsPage() {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [attachments, setAttachments] = useState<Record<string, any[]>>({});
 
   useEffect(() => {
     Promise.all([api.get('/api/suppliers'), api.get('/api/vessels')]).then(([s, v]) => {
@@ -32,9 +41,21 @@ export default function ReportsPage() {
     });
   }, []);
 
+  async function loadAttachments(invoices: any[]) {
+    const map: Record<string, any[]> = {};
+    await Promise.all(invoices.map(async (inv: any) => {
+      try {
+        const res = await api.get(`/api/attachments/invoice/${inv.id}`);
+        map[inv.id] = res.data || [];
+      } catch { map[inv.id] = []; }
+    }));
+    setAttachments(map);
+  }
+
   async function runReport() {
     setLoading(true);
     setData(null);
+    setAttachments({});
     try {
       let res;
       if (reportType === 'supplier-statement' && selectedSupplier) {
@@ -52,7 +73,13 @@ export default function ReportsPage() {
       } else if (reportType === 'dept-delays') {
         res = await api.get('/api/invoices/report/department-delays');
       }
-      if (res) setData(res.data);
+      if (res) {
+        setData(res.data);
+        // Load attachments for invoice-based reports
+        if (['unpaid-supplier', 'unpaid-vessel', 'due-alerts', 'dept-delays'].includes(reportType) && Array.isArray(res.data)) {
+          loadAttachments(res.data);
+        }
+      }
     } finally {
       setLoading(false);
     }
@@ -72,6 +99,22 @@ export default function ReportsPage() {
   const needsVessel = ['unpaid-vessel', 'vessel-suppliers'].includes(reportType);
   const needsDays = reportType === 'due-alerts';
   const noFilter = reportType === 'user-activity' || reportType === 'dept-delays';
+
+  function AttachmentCell({ invoiceId }: { invoiceId: string }) {
+    const files = attachments[invoiceId];
+    if (!files) return <span className="text-gray-300 text-xs">...</span>;
+    if (files.length === 0) return <span className="text-gray-300 text-xs">—</span>;
+    return (
+      <div className="flex flex-col gap-1">
+        {files.map((f: any) => (
+          <a key={f.id} href={f.file_url} target="_blank" rel="noreferrer"
+            className="text-blue-600 hover:underline text-xs flex items-center gap-1 truncate max-w-[140px]" title={f.file_name}>
+            📎 {f.file_name}
+          </a>
+        ))}
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -137,7 +180,22 @@ export default function ReportsPage() {
           {/* Due Alerts */}
           {reportType === 'due-alerts' && Array.isArray(data) && (
             <>
-              <h3 className="font-bold text-gray-700 mb-4">⚠️ فواتير مستحقة — {data.length} فاتورة</h3>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-bold text-gray-700">⚠️ فواتير مستحقة — {data.length} فاتورة</h3>
+                <button onClick={() => exportToExcel(data.map((inv: any) => ({
+                  'رقم الفاتورة': inv.invoice_number,
+                  'المورد': inv.supplier?.name,
+                  'السفينة': inv.vessel?.name || '—',
+                  'المبلغ': inv.total_amount,
+                  'العملة': inv.currency,
+                  'المتبقي': +inv.total_amount - +inv.paid_amount,
+                  'تاريخ الاستحقاق': inv.due_date?.slice(0, 10),
+                  'الحالة': inv.is_overdue ? `متأخرة ${Math.abs(inv.days_until_due)} يوم` : `${inv.days_until_due} يوم`,
+                })), 'تنبيهات-الاستحقاق')}
+                  className="bg-green-600 text-white text-sm px-4 py-1.5 rounded-lg hover:bg-green-700 flex items-center gap-2">
+                  📥 Excel
+                </button>
+              </div>
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 text-gray-600 text-right">
                   <tr>
@@ -148,6 +206,7 @@ export default function ReportsPage() {
                     <th className="px-4 py-2">المتبقي</th>
                     <th className="px-4 py-2">تاريخ الاستحقاق</th>
                     <th className="px-4 py-2">الحالة</th>
+                    <th className="px-4 py-2">المرفقات</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -164,9 +223,10 @@ export default function ReportsPage() {
                           {inv.is_overdue ? `متأخرة ${Math.abs(inv.days_until_due)} يوم` : `${inv.days_until_due} يوم`}
                         </span>
                       </td>
+                      <td className="px-4 py-2"><AttachmentCell invoiceId={inv.id} /></td>
                     </tr>
                   ))}
-                  {data.length === 0 && <tr><td colSpan={7} className="text-center py-6 text-gray-400">لا توجد فواتير مستحقة</td></tr>}
+                  {data.length === 0 && <tr><td colSpan={8} className="text-center py-6 text-gray-400">لا توجد فواتير مستحقة</td></tr>}
                 </tbody>
               </table>
             </>
@@ -177,12 +237,25 @@ export default function ReportsPage() {
             <>
               <div className="flex justify-between items-center mb-4">
                 <h3 className="font-bold text-gray-700">📒 كشف حساب — {data.supplier.name}</h3>
-                <div className="flex gap-6 text-sm">
-                  <span className="text-red-600">إجمالي مدين: <strong>{Number(data.summary.total_debit).toLocaleString()}</strong></span>
-                  <span className="text-green-600">إجمالي دائن: <strong>{Number(data.summary.total_credit).toLocaleString()}</strong></span>
-                  <span className={data.summary.balance > 0 ? 'text-red-700 font-bold' : 'text-green-700 font-bold'}>
-                    الرصيد: {Number(data.summary.balance).toLocaleString()}
-                  </span>
+                <div className="flex items-center gap-4">
+                  <div className="flex gap-6 text-sm">
+                    <span className="text-red-600">إجمالي مدين: <strong>{Number(data.summary.total_debit).toLocaleString()}</strong></span>
+                    <span className="text-green-600">إجمالي دائن: <strong>{Number(data.summary.total_credit).toLocaleString()}</strong></span>
+                    <span className={data.summary.balance > 0 ? 'text-red-700 font-bold' : 'text-green-700 font-bold'}>
+                      الرصيد: {Number(data.summary.balance).toLocaleString()}
+                    </span>
+                  </div>
+                  <button onClick={() => exportToExcel(data.transactions.map((t: any) => ({
+                    'التاريخ': t.date?.slice(0, 10),
+                    'البيان': t.description,
+                    'السفينة': t.vessel || '—',
+                    'مدين': t.debit || 0,
+                    'دائن': t.credit || 0,
+                    'الرصيد': t.running_balance,
+                  })), `كشف-حساب-${data.supplier.name}`)}
+                    className="bg-green-600 text-white text-sm px-4 py-1.5 rounded-lg hover:bg-green-700 flex items-center gap-2">
+                    📥 Excel
+                  </button>
                 </div>
               </div>
               <table className="w-full text-sm">
@@ -227,10 +300,29 @@ export default function ReportsPage() {
           {/* Unpaid by Supplier or Vessel */}
           {(reportType === 'unpaid-supplier' || reportType === 'unpaid-vessel') && Array.isArray(data) && (
             <>
-              <h3 className="font-bold text-gray-700 mb-4">🔴 الفواتير غير المسددة — {data.length} فاتورة</h3>
-              <div className="flex gap-6 text-sm mb-4">
-                <span className="text-gray-600">إجمالي: <strong>{data.reduce((s: number, i: any) => s + +i.total_amount, 0).toLocaleString()}</strong></span>
-                <span className="text-red-600">المتبقي: <strong>{data.reduce((s: number, i: any) => s + (+i.total_amount - +i.paid_amount), 0).toLocaleString()}</strong></span>
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="font-bold text-gray-700 mb-1">🔴 الفواتير غير المسددة — {data.length} فاتورة</h3>
+                  <div className="flex gap-6 text-sm">
+                    <span className="text-gray-600">إجمالي: <strong>{data.reduce((s: number, i: any) => s + +i.total_amount, 0).toLocaleString()}</strong></span>
+                    <span className="text-red-600">المتبقي: <strong>{data.reduce((s: number, i: any) => s + (+i.total_amount - +i.paid_amount), 0).toLocaleString()}</strong></span>
+                  </div>
+                </div>
+                <button onClick={() => exportToExcel(data.map((inv: any) => ({
+                  'رقم الفاتورة': inv.invoice_number,
+                  'المورد': inv.supplier?.name || '—',
+                  'السفينة': inv.vessel?.name || '—',
+                  'المبلغ': inv.total_amount,
+                  'العملة': inv.currency,
+                  'المدفوع': inv.paid_amount,
+                  'المتبقي': +inv.total_amount - +inv.paid_amount,
+                  'الاستحقاق': inv.due_date?.slice(0, 10) || '—',
+                  'الحالة': statusLabel[inv.status],
+                  'المرفقات': (attachments[inv.id] || []).map((f: any) => f.file_url).join(' | '),
+                })), reportType === 'unpaid-supplier' ? 'مستحقات-مورد' : 'مستحقات-مركب')}
+                  className="bg-green-600 text-white text-sm px-4 py-1.5 rounded-lg hover:bg-green-700 flex items-center gap-2">
+                  📥 Excel
+                </button>
               </div>
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 text-gray-600 text-right">
@@ -243,6 +335,7 @@ export default function ReportsPage() {
                     <th className="px-4 py-2">المتبقي</th>
                     <th className="px-4 py-2">الاستحقاق</th>
                     <th className="px-4 py-2">الحالة</th>
+                    <th className="px-4 py-2">المرفقات</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -258,9 +351,10 @@ export default function ReportsPage() {
                       <td className="px-4 py-2">
                         <span className={`px-2 py-1 rounded-full text-xs ${statusColor[inv.status]}`}>{statusLabel[inv.status]}</span>
                       </td>
+                      <td className="px-4 py-2"><AttachmentCell invoiceId={inv.id} /></td>
                     </tr>
                   ))}
-                  {data.length === 0 && <tr><td colSpan={7} className="text-center py-6 text-gray-400">لا توجد فواتير مستحقة</td></tr>}
+                  {data.length === 0 && <tr><td colSpan={8} className="text-center py-6 text-gray-400">لا توجد فواتير مستحقة</td></tr>}
                 </tbody>
               </table>
             </>
@@ -269,7 +363,19 @@ export default function ReportsPage() {
           {/* Vessel Suppliers */}
           {reportType === 'vessel-suppliers' && Array.isArray(data) && (
             <>
-              <h3 className="font-bold text-gray-700 mb-4">📊 موردو المركب — {data.length} مورد</h3>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-bold text-gray-700">📊 موردو المركب — {data.length} مورد</h3>
+                <button onClick={() => exportToExcel(data.map((row: any) => ({
+                  'المورد': row.supplier_name,
+                  'عدد الفواتير': row.total_invoices,
+                  'إجمالي الفواتير': row.total_amount,
+                  'المدفوع': row.paid_amount,
+                  'المتبقي': +row.total_amount - +row.paid_amount,
+                })), 'موردو-المركب')}
+                  className="bg-green-600 text-white text-sm px-4 py-1.5 rounded-lg hover:bg-green-700 flex items-center gap-2">
+                  📥 Excel
+                </button>
+              </div>
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 text-gray-600 text-right">
                   <tr>
@@ -300,8 +406,27 @@ export default function ReportsPage() {
           {reportType === 'dept-delays' && Array.isArray(data) && (
             <>
               <div className="flex items-center justify-between mb-4">
-                <h3 className="font-bold text-gray-700">🔔 تأخرات الأقسام — {data.length} فاتورة متأخرة</h3>
-                <p className="text-xs text-gray-400">الفواتير التي تجاوزت 3 أيام في نفس الحالة</p>
+                <div>
+                  <h3 className="font-bold text-gray-700">🔔 تأخرات الأقسام — {data.length} فاتورة متأخرة</h3>
+                  <p className="text-xs text-gray-400 mt-1">الفواتير التي تجاوزت 3 أيام في نفس الحالة</p>
+                </div>
+                {data.length > 0 && (
+                  <button onClick={() => exportToExcel(data.map((inv: any) => ({
+                    'رقم الفاتورة': inv.invoice_number,
+                    'المورد': inv.supplier || '—',
+                    'السفينة': inv.vessel || '—',
+                    'المبلغ': inv.total_amount,
+                    'العملة': inv.currency,
+                    'الحالة': inv.approval_status,
+                    'تاريخ الحالة': inv.approval_status_date?.slice(0, 10),
+                    'أيام التأخر': inv.days_delayed,
+                    'القسم المسؤول': inv.department,
+                    'المرفقات': (attachments[inv.id] || []).map((f: any) => f.file_url).join(' | '),
+                  })), 'تأخرات-الأقسام')}
+                    className="bg-green-600 text-white text-sm px-4 py-1.5 rounded-lg hover:bg-green-700 flex items-center gap-2">
+                    📥 Excel
+                  </button>
+                )}
               </div>
               {data.length === 0 ? (
                 <p className="text-center py-10 text-green-600 font-medium">✅ لا توجد تأخرات — كل الأقسام تعمل في الوقت المحدد</p>
@@ -317,6 +442,7 @@ export default function ReportsPage() {
                       <th className="px-4 py-2">تاريخ الحالة</th>
                       <th className="px-4 py-2 text-center">أيام التأخر</th>
                       <th className="px-4 py-2">القسم المسؤول</th>
+                      <th className="px-4 py-2">المرفقات</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -347,6 +473,7 @@ export default function ReportsPage() {
                         <td className="px-4 py-2">
                           <span className="text-xs font-medium text-gray-700">{inv.department}</span>
                         </td>
+                        <td className="px-4 py-2"><AttachmentCell invoiceId={inv.id} /></td>
                       </tr>
                     ))}
                   </tbody>
@@ -358,7 +485,19 @@ export default function ReportsPage() {
           {/* User Activity */}
           {reportType === 'user-activity' && Array.isArray(data) && (
             <>
-              <h3 className="font-bold text-gray-700 mb-4">👤 نشاط المستخدمين — {data.length} مستخدم</h3>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-bold text-gray-700">👤 نشاط المستخدمين — {data.length} مستخدم</h3>
+                <button onClick={() => {
+                  const rows: any[] = [];
+                  (data as UserReport[]).forEach(u => {
+                    u.by_vessel.forEach(v => rows.push({ 'المستخدم': u.user_name, 'المركب': v.vessel, 'عدد الفواتير': v.count }));
+                  });
+                  exportToExcel(rows, 'نشاط-المستخدمين');
+                }}
+                  className="bg-green-600 text-white text-sm px-4 py-1.5 rounded-lg hover:bg-green-700 flex items-center gap-2">
+                  📥 Excel
+                </button>
+              </div>
               {(() => {
                 const users = data as UserReport[];
                 const total = users.reduce((s, u) => s + u.total, 0);
