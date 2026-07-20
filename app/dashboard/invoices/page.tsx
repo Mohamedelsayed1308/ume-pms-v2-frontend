@@ -679,6 +679,8 @@ export default function InvoicesPage() {
                 <select value={form.approval_status} onChange={(e) => setForm({ ...form, approval_status: e.target.value, approval_status_date: e.target.value ? (form.approval_status_date || new Date().toISOString().slice(0, 10)) : '' })}
                   className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
                   <option value="">— بدون —</option>
+                  <option value="booking_waiting_payment">Booking - Waiting Payment</option>
+                  <option value="waiting_approval">Waiting Approval</option>
                   <option value="waiting_po">Waiting PO</option>
                   <option value="send_to_pay">Send to Pay</option>
                   <option value="hold">Hold</option>
