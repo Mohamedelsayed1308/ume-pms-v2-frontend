@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState, useRef } from 'react';
 import api from '@/lib/api';
+import { CURRENCIES } from '@/lib/currencies';
 
 interface BulkItem {
   file: File;
@@ -645,8 +646,7 @@ export default function InvoicesPage() {
                 <label className="block text-sm text-gray-600 mb-1">العملة</label>
                 <select value={form.currency} onChange={(e) => setForm({ ...form, currency: e.target.value })}
                   className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                  <option value="USD">USD — دولار</option>
-                  <option value="EUR">EUR — يورو</option>
+                  {CURRENCIES.map(c => <option key={c.code} value={c.code}>{c.label}</option>)}
                   <option value="EGP">EGP — جنيه</option>
                 </select>
               </div>
@@ -842,8 +842,7 @@ export default function InvoicesPage() {
                                   ))}
                                   className="border rounded px-1 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400"
                                 >
-                                  <option value="USD">USD</option>
-                                  <option value="EUR">EUR</option>
+                                  {CURRENCIES.map(c => <option key={c.code} value={c.code}>{c.code}</option>)}
                                   <option value="EGP">EGP</option>
                                 </select>
                               </div>
