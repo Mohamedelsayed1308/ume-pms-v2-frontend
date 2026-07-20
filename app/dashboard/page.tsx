@@ -54,6 +54,7 @@ export default function DashboardPage() {
               <tr className="text-right text-gray-500 border-b">
                 <th className="pb-2">رقم الفاتورة</th>
                 <th className="pb-2">المورد</th>
+                <th className="pb-2">المركب</th>
                 <th className="pb-2">المبلغ</th>
                 <th className="pb-2">تاريخ الاستحقاق</th>
                 <th className="pb-2">الحالة</th>
@@ -64,6 +65,7 @@ export default function DashboardPage() {
                 <tr key={inv.id} className="border-b last:border-0">
                   <td className="py-2">{inv.invoice_number}</td>
                   <td className="py-2">{inv.supplier?.name}</td>
+                  <td className="py-2">{inv.vessel?.name ?? '—'}</td>
                   <td className="py-2">{Number(inv.total_amount).toLocaleString()} {inv.currency}</td>
                   <td className="py-2">{inv.due_date?.slice(0, 10)}</td>
                   <td className="py-2">
