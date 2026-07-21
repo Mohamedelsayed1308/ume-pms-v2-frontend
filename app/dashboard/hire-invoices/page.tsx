@@ -96,6 +96,12 @@ export default function HireInvoicesPage() {
     setShowModal(true);
   }
 
+  function buildItemDesc(vessel: any, days: string) {
+    if (!vessel) return '';
+    const d = days ? ` Hire for ${days} Days` : ' Hire';
+    return `MV-${vessel.name} IMO ${vessel.imo_number || ''}${d}`;
+  }
+
   function onVesselChange(vesselId: string) {
     const vessel = vessels.find((v) => v.id === vesselId);
     const autoCompany = vessel?.shipping_company_id
@@ -106,6 +112,11 @@ export default function HireInvoicesPage() {
       vessel_id: vesselId,
       shipping_company_id: autoCompany ? autoCompany.id : prev.shipping_company_id,
     }));
+    if (vessel) {
+      setItems((prev) => prev.map((it, i) =>
+        i === 0 ? { ...it, description: buildItemDesc(vessel, it.days) } : it
+      ));
+    }
   }
 
   function calcTotal() {
@@ -116,11 +127,18 @@ export default function HireInvoicesPage() {
   }
 
   function updateItem(idx: number, field: string, val: string) {
+    const vessel = vessels.find((v) => v.id === form.vessel_id);
     const updated = items.map((it, i) => {
       if (i !== idx) return it;
       const newIt = { ...it, [field]: val };
       if ((field === 'days' || field === 'daily_hire') && newIt.days && newIt.daily_hire) {
         newIt.amount = String(parseFloat(newIt.days) * parseFloat(newIt.daily_hire));
+      }
+      if (field === 'days' && idx === 0 && vessel) {
+        const autoDesc = buildItemDesc(vessel, val);
+        if (!it.description || it.description === buildItemDesc(vessel, it.days)) {
+          newIt.description = autoDesc;
+        }
       }
       return newIt;
     });
