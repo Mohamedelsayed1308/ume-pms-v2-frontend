@@ -1,5 +1,5 @@
-'use client';
-import { useEffect, useState, useRef } from 'react';
+﻿'use client';
+import { useEffect, useState, useRef, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import api from '@/lib/api';
 import { CURRENCIES } from '@/lib/currencies';
@@ -75,7 +75,7 @@ const statusLabel: Record<string, string> = { unpaid: 'غير مدفوعة', par
 const statusColor: Record<string, string> = { unpaid: 'bg-red-100 text-red-700', partial: 'bg-yellow-100 text-yellow-700', paid: 'bg-green-100 text-green-700', cancelled: 'bg-gray-100 text-gray-500' };
 const typeLabel: Record<string, string> = { preliminary: 'أولية', final: 'نهائية' };
 
-export default function InvoicesPage() {
+function InvoicesContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const filterPoId = searchParams.get('po_id') || '';
@@ -1126,5 +1126,13 @@ export default function InvoicesPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function InvoicesPage() {
+  return (
+    <Suspense fallback={<div className="p-8 text-center text-gray-400">جاري التحميل...</div>}>
+      <InvoicesContent />
+    </Suspense>
   );
 }
