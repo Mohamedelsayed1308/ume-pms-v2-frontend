@@ -186,76 +186,100 @@ export default function HireInvoicesPage() {
     const autoTable = (await import('jspdf-autotable')).default;
 
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-    const W = 210; const M = 15;
+    const W = 210; const M = 18; const GRAY = [100, 100, 100] as [number,number,number];
+    const DARK = [30, 30, 30] as [number,number,number];
+    const LIGHT_BG = [248, 248, 248] as [number,number,number];
+    const BORDER = [200, 200, 200] as [number,number,number];
 
-    // Header
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-    doc.text(inv.shipping_company?.name || '', M, 20);
-    doc.text(inv.shipping_company?.address || '', M, 26);
+    // ── Top bar ──────────────────────────────────────────────────────────────
+    doc.setFillColor(25, 50, 90);
+    doc.rect(0, 0, W, 2, 'F');
 
-    // Invoice box top right
-    doc.setFontSize(16);
+    // ── Shipping company (left) ───────────────────────────────────────────────
+    doc.setFontSize(11);
     doc.setFont('helvetica', 'bold');
+    doc.setTextColor(...DARK);
+    doc.text(inv.shipping_company?.name || '', M, 16);
+    doc.setFontSize(8.5);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(...GRAY);
+    const addrLines = (inv.shipping_company?.address || '').split('\n');
+    addrLines.forEach((line, i) => doc.text(line, M, 22 + i * 4.5));
+
+    // ── "Invoice" heading (right) ─────────────────────────────────────────────
+    doc.setFontSize(24);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(25, 50, 90);
     doc.text('Invoice', W - M, 18, { align: 'right' });
 
-    doc.setFontSize(9);
-    doc.setFont('helvetica', 'normal');
+    // ── Date / Invoice# mini-table (right) ────────────────────────────────────
     autoTable(doc, {
       startY: 22,
-      margin: { left: W - 70, right: M },
+      margin: { left: W - 72, right: M },
       theme: 'grid',
       head: [['Date', 'Invoice #']],
       body: [[inv.invoice_date?.slice(0, 10) || '', inv.invoice_number]],
-      styles: { fontSize: 9 },
-      headStyles: { fillColor: [255, 255, 255], textColor: [0, 0, 0] },
+      styles: { fontSize: 8.5, cellPadding: 2.5, textColor: DARK },
+      headStyles: { fillColor: LIGHT_BG, textColor: DARK, fontStyle: 'bold', lineColor: BORDER, lineWidth: 0.3 },
+      bodyStyles: { lineColor: BORDER, lineWidth: 0.3 },
     });
 
-    // Bill To box
-    const billToY = 45;
-    doc.setDrawColor(180, 180, 180);
-    doc.rect(M, billToY, 95, 35);
-    doc.setFontSize(8);
-    doc.setFont('helvetica', 'bold');
-    doc.text('Bill To', M + 2, billToY + 5);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(9);
-    const custLines = [
-      `Messrs: ${inv.customer?.name || ''}`,
-      ...(inv.customer?.address || '').split('\n'),
-      inv.customer?.vat_no ? `VAT NO  ${inv.customer.vat_no}` : 'VAT NO',
-    ];
-    custLines.forEach((line, i) => doc.text(line, M + 2, billToY + 11 + i * 5));
+    // ── Divider ───────────────────────────────────────────────────────────────
+    const divY = 42;
+    doc.setDrawColor(...BORDER);
+    doc.setLineWidth(0.4);
+    doc.line(M, divY, W - M, divY);
 
-    // Header table
-    const hireFrom = inv.hire_from ? new Date(inv.hire_from).toLocaleDateString('en-GB').replace(/\//g, '-') + '\nUTC 00:00' : '';
-    const hireTo = inv.hire_to ? new Date(inv.hire_to).toLocaleDateString('en-GB').replace(/\//g, '-') + '\nUTC 23:59' : '';
+    // ── Bill To box ───────────────────────────────────────────────────────────
+    const billY = divY + 4;
+    doc.setDrawColor(...BORDER);
+    doc.setLineWidth(0.3);
+    doc.roundedRect(M, billY, 100, 36, 1.5, 1.5);
+    doc.setFontSize(7.5);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(...GRAY);
+    doc.text('BILL TO', M + 3, billY + 5.5);
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(...DARK);
+    doc.text(`Messrs: ${inv.customer?.name || ''}`, M + 3, billY + 11);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8.5);
+    doc.setTextColor(...GRAY);
+    const custAddr = (inv.customer?.address || '').split('\n');
+    custAddr.forEach((line, i) => doc.text(line, M + 3, billY + 17 + i * 4.5));
+    const vatY = billY + 17 + custAddr.length * 4.5;
+    doc.text(inv.customer?.vat_no ? `VAT NO  ${inv.customer.vat_no}` : 'VAT NO', M + 3, vatY);
+
+    // ── Charter party header table ────────────────────────────────────────────
+    const fmtDate = (d: string | undefined) => d ? new Date(d).toLocaleDateString('en-GB').replace(/\//g, '-') : '—';
+    const hireFrom = inv.hire_from ? fmtDate(inv.hire_from) + '\nUTC 00:00' : '—';
+    const hireTo   = inv.hire_to   ? fmtDate(inv.hire_to)   + '\nUTC 23:59' : '—';
 
     autoTable(doc, {
-      startY: 85,
+      startY: billY + 42,
       margin: { left: M, right: M },
       theme: 'grid',
       head: [['Place of Business', 'CP Date', 'Hire From', 'Hire To', 'Vessel']],
       body: [[
-        inv.place_of_business || '',
-        inv.cp_date?.slice(0, 10) || '',
+        inv.place_of_business || '—',
+        inv.cp_date?.slice(0, 10) || '—',
         hireFrom,
         hireTo,
         `${inv.vessel?.name || ''}\nIMO:${inv.vessel?.imo_number || ''}`,
       ]],
-      styles: { fontSize: 9, halign: 'center', cellPadding: 3 },
-      headStyles: { fillColor: [255, 255, 255], textColor: [0, 0, 0] },
-      columnStyles: { 4: { halign: 'center' } },
+      styles: { fontSize: 8.5, halign: 'center', cellPadding: 3, textColor: DARK, lineColor: BORDER, lineWidth: 0.3 },
+      headStyles: { fillColor: LIGHT_BG, textColor: DARK, fontStyle: 'bold', lineColor: BORDER, lineWidth: 0.3 },
     });
 
-    // Items table
-    const itemRows = (inv.items || []).map(it => [
+    // ── Items table ───────────────────────────────────────────────────────────
+    const itemRows: any[] = (inv.items || []).sort((a,b) => a.sort_order - b.sort_order).map(it => [
       it.days ? String(it.days) : '',
       it.description,
       it.daily_hire ? fmt(+it.daily_hire) : '',
       fmt(+it.amount),
     ]);
-    itemRows.push(['', 'We appreciate your prompt payment.', '', '']);
+    itemRows.push([{ content: 'We appreciate your prompt payment.', colSpan: 4, styles: { fontStyle: 'italic', textColor: GRAY, halign: 'left' } }]);
 
     autoTable(doc, {
       startY: (doc as any).lastAutoTable.finalY,
@@ -263,26 +287,47 @@ export default function HireInvoicesPage() {
       theme: 'grid',
       head: [['Days', 'Description', 'Daily Hire', 'Amount']],
       body: itemRows,
-      styles: { fontSize: 9 },
-      headStyles: { fillColor: [255, 255, 255], textColor: [0, 0, 0] },
-      columnStyles: { 0: { halign: 'center', cellWidth: 15 }, 2: { halign: 'right', cellWidth: 30 }, 3: { halign: 'right', cellWidth: 30 } },
+      styles: { fontSize: 8.5, cellPadding: 3, textColor: DARK, lineColor: BORDER, lineWidth: 0.3 },
+      headStyles: { fillColor: LIGHT_BG, textColor: DARK, fontStyle: 'bold', lineColor: BORDER, lineWidth: 0.3 },
+      columnStyles: {
+        0: { halign: 'center', cellWidth: 18 },
+        2: { halign: 'right', cellWidth: 32 },
+        3: { halign: 'right', cellWidth: 32 },
+      },
     });
 
-    // Total
-    const finalY = (doc as any).lastAutoTable.finalY;
-    doc.setFontSize(11);
+    // ── Total row ─────────────────────────────────────────────────────────────
+    const finalY = (doc as any).lastAutoTable.finalY + 2;
+    doc.setFillColor(25, 50, 90);
+    doc.rect(W - M - 80, finalY, 80, 9, 'F');
+    doc.setFontSize(10);
     doc.setFont('helvetica', 'bold');
-    doc.text(`Total ${inv.currency} ${fmt(+inv.total_amount)}`, W - M, finalY + 8, { align: 'right' });
+    doc.setTextColor(255, 255, 255);
+    doc.text(`Total  ${inv.currency}  ${fmt(+inv.total_amount)}`, W - M - 4, finalY + 6, { align: 'right' });
+    doc.setTextColor(...DARK);
 
-    // Bank details
-    const bankY = finalY + 20;
-    doc.setFontSize(9);
+    // ── Bank details ──────────────────────────────────────────────────────────
+    const bankY = finalY + 18;
+    doc.setDrawColor(...BORDER);
+    doc.setLineWidth(0.3);
+    doc.line(M, bankY - 2, W - M, bankY - 2);
+    doc.setFontSize(8.5);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(...DARK);
+    doc.text('Our Bank Details', M, bankY + 4);
     doc.setFont('helvetica', 'normal');
-    doc.text('Our Bank Details', M, bankY);
-    doc.text(`Bank Name: ${inv.shipping_company?.bank_name || ''}`, M, bankY + 5);
-    doc.text(`Acc. Name: ${inv.shipping_company?.acc_name || ''}`, M, bankY + 10);
-    doc.text(`IBAN: ${inv.shipping_company?.iban_eur || ''}  EURO`, M, bankY + 15);
-    doc.text(`Swift Code : ${inv.shipping_company?.swift_code || ''}`, M, bankY + 20);
+    doc.setTextColor(...GRAY);
+    const bankLines = [
+      `Bank Name: ${inv.shipping_company?.bank_name || ''}`,
+      `Acc. Name: ${inv.shipping_company?.acc_name || ''}`,
+      `IBAN: ${inv.shipping_company?.iban_eur || ''}  EURO`,
+      `Swift Code : ${inv.shipping_company?.swift_code || ''}`,
+    ];
+    bankLines.forEach((line, i) => doc.text(line, M, bankY + 10 + i * 5));
+
+    // ── Bottom bar ────────────────────────────────────────────────────────────
+    doc.setFillColor(25, 50, 90);
+    doc.rect(0, 295, W, 2, 'F');
 
     doc.save(`${inv.invoice_number}.pdf`);
   }
@@ -529,97 +574,127 @@ export default function HireInvoicesPage() {
                 <button onClick={() => setPreviewInv(null)} className="text-gray-400 hover:text-gray-600 text-xl">✕</button>
               </div>
             </div>
-            <div className="p-8 font-mono text-sm" dir="ltr">
-              {/* Company header */}
-              <div className="mb-6">
-                <p className="font-bold text-base">{previewInv.shipping_company?.name}</p>
-                <p className="text-gray-600 whitespace-pre-line">{previewInv.shipping_company?.address}</p>
-              </div>
+            <div className="font-sans text-sm" dir="ltr">
+              {/* Top bar */}
+              <div className="h-1.5 bg-[#19325a] rounded-t-xl" />
 
-              {/* Invoice title + date/number box */}
-              <div className="flex justify-between items-start mb-6">
-                <div className="border p-3 w-64">
-                  <p className="font-bold text-xs text-gray-500 mb-1">Bill To</p>
-                  <p className="font-bold">Messrs: {previewInv.customer?.name}</p>
-                  <p className="text-gray-600 text-xs whitespace-pre-line">{previewInv.customer?.address}</p>
-                  <p className="text-gray-600 text-xs mt-1">VAT NO  {previewInv.customer?.vat_no || ''}</p>
+              <div className="p-8">
+                {/* Company + Invoice heading */}
+                <div className="flex justify-between items-start mb-5">
+                  <div>
+                    <p className="font-bold text-base text-gray-900">{previewInv.shipping_company?.name}</p>
+                    <p className="text-gray-500 text-xs whitespace-pre-line mt-1">{previewInv.shipping_company?.address}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-3xl font-bold text-[#19325a] mb-2">Invoice</p>
+                    <table className="border-collapse text-xs ml-auto">
+                      <thead>
+                        <tr className="bg-gray-50">
+                          <th className="border border-gray-200 px-3 py-1.5 font-semibold text-gray-600">Date</th>
+                          <th className="border border-gray-200 px-3 py-1.5 font-semibold text-gray-600">Invoice #</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td className="border border-gray-200 px-3 py-1.5 text-gray-800">{previewInv.invoice_date?.slice(0,10)}</td>
+                          <td className="border border-gray-200 px-3 py-1.5 text-gray-800 font-mono">{previewInv.invoice_number}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-2xl font-bold text-center mb-2">Invoice</p>
-                  <table className="border border-collapse text-xs">
-                    <thead><tr><th className="border px-3 py-1">Date</th><th className="border px-3 py-1">Invoice #</th></tr></thead>
-                    <tbody><tr><td className="border px-3 py-1">{previewInv.invoice_date?.slice(0,10)}</td><td className="border px-3 py-1">{previewInv.invoice_number}</td></tr></tbody>
-                  </table>
+
+                {/* Divider */}
+                <hr className="border-gray-200 mb-5" />
+
+                {/* Bill To */}
+                <div className="border border-gray-200 rounded-lg p-4 mb-6 w-72 bg-gray-50">
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Bill To</p>
+                  <p className="font-semibold text-gray-900">Messrs: {previewInv.customer?.name}</p>
+                  <p className="text-gray-500 text-xs whitespace-pre-line mt-1">{previewInv.customer?.address}</p>
+                  <p className="text-gray-500 text-xs mt-1">VAT NO&nbsp;&nbsp;{previewInv.customer?.vat_no || ''}</p>
                 </div>
-              </div>
 
-              {/* Charter party header table */}
-              <table className="w-full border border-collapse text-xs mb-0">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="border px-2 py-1">Place of Business</th>
-                    <th className="border px-2 py-1">CP Date</th>
-                    <th className="border px-2 py-1">Hire From</th>
-                    <th className="border px-2 py-1">Hire To</th>
-                    <th className="border px-2 py-1">Vessel</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr className="text-center">
-                    <td className="border px-2 py-2">{previewInv.place_of_business || '—'}</td>
-                    <td className="border px-2 py-2">{previewInv.cp_date?.slice(0,10) || '—'}</td>
-                    <td className="border px-2 py-2">
-                      {previewInv.hire_from ? new Date(previewInv.hire_from).toLocaleDateString('en-GB').replace(/\//g,'-') : '—'}<br/>
-                      <span className="text-gray-500">UTC 00:00</span>
-                    </td>
-                    <td className="border px-2 py-2">
-                      {previewInv.hire_to ? new Date(previewInv.hire_to).toLocaleDateString('en-GB').replace(/\//g,'-') : '—'}<br/>
-                      <span className="text-gray-500">UTC 23:59</span>
-                    </td>
-                    <td className="border px-2 py-2 font-bold">
-                      {previewInv.vessel?.name}<br/>
-                      <span className="font-normal text-gray-500">IMO:{previewInv.vessel?.imo_number}</span>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-
-              {/* Items table */}
-              <table className="w-full border border-collapse text-xs">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="border px-2 py-1 w-12">Days</th>
-                    <th className="border px-2 py-1 text-left">Description</th>
-                    <th className="border px-2 py-1 w-24 text-right">Daily Hire</th>
-                    <th className="border px-2 py-1 w-28 text-right">Amount</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {previewInv.items?.map((it, i) => (
-                    <tr key={i}>
-                      <td className="border px-2 py-3 text-center">{it.days || ''}</td>
-                      <td className="border px-2 py-3">{it.description}</td>
-                      <td className="border px-2 py-3 text-right">{it.daily_hire ? fmt(+it.daily_hire) : ''}</td>
-                      <td className="border px-2 py-3 text-right">{fmt(+it.amount)}</td>
+                {/* Charter party table */}
+                <table className="w-full border-collapse text-xs mb-0">
+                  <thead>
+                    <tr className="bg-gray-50">
+                      {['Place of Business','CP Date','Hire From','Hire To','Vessel'].map(h => (
+                        <th key={h} className="border border-gray-200 px-3 py-2 font-semibold text-gray-600 text-center">{h}</th>
+                      ))}
                     </tr>
-                  ))}
-                  <tr>
-                    <td colSpan={2} className="border px-2 py-3 text-gray-500 italic">We appreciate your prompt payment.</td>
-                    <td className="border px-2 py-3 text-right font-bold" colSpan={2}>
-                      Total {previewInv.currency} {fmt(+previewInv.total_amount)}
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    <tr className="text-center text-gray-800">
+                      <td className="border border-gray-200 px-3 py-3">{previewInv.place_of_business || '—'}</td>
+                      <td className="border border-gray-200 px-3 py-3">{previewInv.cp_date?.slice(0,10) || '—'}</td>
+                      <td className="border border-gray-200 px-3 py-3">
+                        {previewInv.hire_from ? new Date(previewInv.hire_from).toLocaleDateString('en-GB').replace(/\//g,'-') : '—'}
+                        <br/><span className="text-gray-400 text-[10px]">UTC 00:00</span>
+                      </td>
+                      <td className="border border-gray-200 px-3 py-3">
+                        {previewInv.hire_to ? new Date(previewInv.hire_to).toLocaleDateString('en-GB').replace(/\//g,'-') : '—'}
+                        <br/><span className="text-gray-400 text-[10px]">UTC 23:59</span>
+                      </td>
+                      <td className="border border-gray-200 px-3 py-3 font-semibold">
+                        {previewInv.vessel?.name}
+                        <br/><span className="font-normal text-gray-400 text-[10px]">IMO:{previewInv.vessel?.imo_number}</span>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
 
-              {/* Bank details */}
-              <div className="mt-6 text-xs text-gray-700 space-y-0.5">
-                <p className="font-bold">Our Bank Details</p>
-                <p>Bank Name: {previewInv.shipping_company?.bank_name}</p>
-                <p>Acc. Name: {previewInv.shipping_company?.acc_name}</p>
-                <p>IBAN: {previewInv.shipping_company?.iban_eur}  EURO</p>
-                <p>Swift Code : {previewInv.shipping_company?.swift_code}</p>
+                {/* Items table */}
+                <table className="w-full border-collapse text-xs">
+                  <thead>
+                    <tr className="bg-gray-50">
+                      <th className="border border-gray-200 px-3 py-2 font-semibold text-gray-600 text-center w-12">Days</th>
+                      <th className="border border-gray-200 px-3 py-2 font-semibold text-gray-600 text-left">Description</th>
+                      <th className="border border-gray-200 px-3 py-2 font-semibold text-gray-600 text-right w-24">Daily Hire</th>
+                      <th className="border border-gray-200 px-3 py-2 font-semibold text-gray-600 text-right w-28">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[...(previewInv.items || [])].sort((a,b) => a.sort_order - b.sort_order).map((it, i) => (
+                      <tr key={i} className="hover:bg-gray-50">
+                        <td className="border border-gray-200 px-3 py-3 text-center text-gray-700">{it.days || ''}</td>
+                        <td className="border border-gray-200 px-3 py-3 text-gray-600">{it.description}</td>
+                        <td className="border border-gray-200 px-3 py-3 text-right text-gray-700 font-mono">{it.daily_hire ? fmt(+it.daily_hire) : ''}</td>
+                        <td className="border border-gray-200 px-3 py-3 text-right text-gray-800 font-mono">{fmt(+it.amount)}</td>
+                      </tr>
+                    ))}
+                    <tr>
+                      <td colSpan={2} className="border border-gray-200 px-3 py-3 text-gray-400 italic text-[11px]">
+                        We appreciate your prompt payment.
+                      </td>
+                      <td colSpan={2} className="border border-gray-200 px-3 py-3" />
+                    </tr>
+                  </tbody>
+                </table>
+
+                {/* Total */}
+                <div className="flex justify-end mt-3">
+                  <div className="bg-[#19325a] text-white px-6 py-3 rounded-lg">
+                    <span className="text-sm font-bold tracking-wide">
+                      Total&nbsp;&nbsp;{previewInv.currency}&nbsp;&nbsp;{fmt(+previewInv.total_amount)}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Bank details */}
+                <div className="mt-8 pt-5 border-t border-gray-200">
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Our Bank Details</p>
+                  <div className="text-xs text-gray-600 space-y-1">
+                    <p>Bank Name: <span className="text-gray-800 font-medium">{previewInv.shipping_company?.bank_name}</span></p>
+                    <p>Acc. Name: <span className="text-gray-800 font-medium">{previewInv.shipping_company?.acc_name}</span></p>
+                    <p>IBAN: <span className="text-gray-800 font-mono">{previewInv.shipping_company?.iban_eur}</span>&nbsp;&nbsp;EURO</p>
+                    <p>Swift Code: <span className="text-gray-800 font-mono">{previewInv.shipping_company?.swift_code}</span></p>
+                  </div>
+                </div>
               </div>
+
+              {/* Bottom bar */}
+              <div className="h-1.5 bg-[#19325a] rounded-b-xl" />
             </div>
           </div>
         </div>
