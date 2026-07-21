@@ -5,6 +5,7 @@ import api from '@/lib/api';
 interface Vessel {
   id: string; name: string; imo_number: string; flag: string;
   vessel_type: string; is_active: boolean; shipping_company_id: string;
+  owner_name: string; owner_address: string;
   shipping_company?: { id: string; name: string };
 }
 
@@ -36,7 +37,7 @@ export default function VesselsPage() {
 
   function openEdit(v: Vessel) {
     setEditing(v);
-    setForm({ name: v.name, imo_number: v.imo_number || '', flag: v.flag || '', vessel_type: v.vessel_type || '', is_active: v.is_active, shipping_company_id: v.shipping_company_id || '', owner_name: (v as any).owner_name || '', owner_address: (v as any).owner_address || '' });
+    setForm({ name: v.name, imo_number: v.imo_number || '', flag: v.flag || '', vessel_type: v.vessel_type || '', is_active: v.is_active, shipping_company_id: v.shipping_company_id || '', owner_name: v.owner_name || '', owner_address: v.owner_address || '' });
     setError('');
     setShowModal(true);
   }
@@ -52,8 +53,9 @@ export default function VesselsPage() {
       }
       setShowModal(false);
       load();
-    } catch {
-      setError('حدث خطأ، حاول مرة أخرى');
+    } catch (err: any) {
+      const msg = err?.response?.data?.message || err?.message || 'حدث خطأ';
+      setError(Array.isArray(msg) ? msg.join(', ') : String(msg));
     } finally {
       setLoading(false);
     }
@@ -118,8 +120,8 @@ export default function VesselsPage() {
 
       {/* Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-md">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-md max-h-[95vh] overflow-y-auto">
             <h3 className="font-bold text-lg mb-4">{editing ? 'تعديل سفينة' : 'إضافة سفينة'}</h3>
             <div className="space-y-3">
               <div>
@@ -155,13 +157,13 @@ export default function VesselsPage() {
               </div>
               <div>
                 <label className="block text-sm text-gray-600 mb-1">اسم المالك</label>
-                <input value={(form as any).owner_name} onChange={(e) => setForm({ ...form, owner_name: e.target.value } as any)}
+                <input value={form.owner_name} onChange={(e) => setForm({ ...form, owner_name: e.target.value })}
                   placeholder="ISBA Shipping LTD"
                   className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
               <div>
                 <label className="block text-sm text-gray-600 mb-1">عنوان المالك</label>
-                <textarea value={(form as any).owner_address} onChange={(e) => setForm({ ...form, owner_address: e.target.value } as any)}
+                <textarea value={form.owner_address} onChange={(e) => setForm({ ...form, owner_address: e.target.value })}
                   placeholder={"13 Karaiskaki Street\n3032 Limassol\nCyprus"} rows={3}
                   className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" />
               </div>
