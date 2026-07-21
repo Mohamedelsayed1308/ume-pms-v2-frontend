@@ -3,6 +3,15 @@ import { useEffect, useState, useRef } from 'react';
 import api from '@/lib/api';
 import { CURRENCIES } from '@/lib/currencies';
 
+const VESSEL_PREFIX: Record<string, string> = {
+  '06': 'Alcudia Express',
+  '07': 'Bridge',
+  '04': 'Gubal Trader',
+  '08': 'Monte Express',
+  '01': 'Poseidon Express',
+  '05': 'Wasa Express',
+};
+
 interface BulkItem {
   file: File;
   status: 'pending' | 'extracting' | 'ready' | 'saving' | 'saved' | 'error';
@@ -272,6 +281,49 @@ export default function InvoicesPage() {
         if (existingVessel) vesselId = existingVessel.id;
       }
 
+      let poId = '';
+      let autoVesselId = vesselId;
+
+      if (d.po_number) {
+        // البحث عن PO موجود بنفس الرقم
+        const existingPo = pos.find((p) =>
+          p.po_number?.toLowerCase().trim() === d.po_number.toLowerCase().trim()
+        );
+
+        if (existingPo) {
+          poId = existingPo.id;
+          // استخدم مركب أمر الشراء الموجود إن لم يُحدَّد
+          if (!autoVesselId && existingPo.vessel?.id) autoVesselId = existingPo.vessel.id;
+        } else {
+          // استخرج البادئة من رقم PO (أول رقمين قبل أول -)
+          const prefix = d.po_number.split('-')[0]?.trim();
+          const vesselName = prefix ? VESSEL_PREFIX[prefix] : null;
+          let poVesselId = autoVesselId;
+          if (vesselName) {
+            const v = vessels.find((v: any) => v.name === vesselName);
+            if (v) poVesselId = v.id;
+          }
+
+          // إنشاء أمر الشراء تلقائياً
+          try {
+            const newPo = await api.post('/api/purchase-orders', {
+              po_number: d.po_number,
+              supplier_id: supplierId || null,
+              vessel_id: poVesselId || null,
+              description: '',
+              order_date: d.invoice_date || null,
+            });
+            poId = newPo.data.id;
+            if (!autoVesselId && poVesselId) autoVesselId = poVesselId;
+            // تحديث قائمة أوامر الشراء
+            const poRes = await api.get('/api/purchase-orders');
+            setPos(poRes.data);
+          } catch {
+            // في حال فشل الإنشاء، نتجاهل ونكمل
+          }
+        }
+      }
+
       setForm((prev) => ({
         ...prev,
         invoice_number: d.invoice_number || prev.invoice_number,
@@ -281,7 +333,8 @@ export default function InvoicesPage() {
         due_date: d.due_date || prev.due_date,
         description: d.description || prev.description,
         supplier_id: supplierId || prev.supplier_id,
-        vessel_id: vesselId || prev.vessel_id,
+        vessel_id: autoVesselId || prev.vessel_id,
+        po_id: poId || prev.po_id,
       }));
     } catch (err: any) {
       const msg = err?.response?.data?.message || err?.message || 'unknown error';
