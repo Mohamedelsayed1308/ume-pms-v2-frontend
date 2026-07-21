@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useState, useRef } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import api from '@/lib/api';
 import { CURRENCIES } from '@/lib/currencies';
 
@@ -75,6 +76,9 @@ const statusColor: Record<string, string> = { unpaid: 'bg-red-100 text-red-700',
 const typeLabel: Record<string, string> = { preliminary: 'أولية', final: 'نهائية' };
 
 export default function InvoicesPage() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const filterPoId = searchParams.get('po_id') || '';
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [vessels, setVessels] = useState<any[]>([]);
@@ -513,10 +517,18 @@ export default function InvoicesPage() {
     return '📎';
   }
 
-  const displayed = filterStatus ? invoices.filter((i) => i.status === filterStatus) : invoices;
+  const displayed = invoices
+    .filter((i) => !filterStatus || i.status === filterStatus)
+    .filter((i) => !filterPoId || i.purchase_order?.id === filterPoId);
 
   return (
     <div>
+      {filterPoId && (
+        <div className="mb-4 flex items-center gap-3 bg-blue-50 border border-blue-200 rounded-lg px-4 py-2 text-sm text-blue-800">
+          <span>🔍 عرض فواتير أمر الشراء: <strong>{pos.find(p => p.id === filterPoId)?.po_number || filterPoId}</strong></span>
+          <button onClick={() => router.push('/dashboard/invoices')} className="mr-auto text-blue-600 hover:underline text-xs">✕ إلغاء الفلتر</button>
+        </div>
+      )}
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-2xl font-bold text-gray-800">الفواتير</h2>
         <div className="flex gap-2">

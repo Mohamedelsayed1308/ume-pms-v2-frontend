@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import api from '@/lib/api';
 import * as XLSX from 'xlsx';
 
@@ -24,6 +25,7 @@ const VESSEL_PREFIX: Record<string, string> = {
 };
 
 export default function PurchaseOrdersPage() {
+  const router = useRouter();
   const [pos, setPos] = useState<PO[]>([]);
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [vessels, setVessels] = useState<any[]>([]);
@@ -145,6 +147,7 @@ export default function PurchaseOrdersPage() {
                 <td className="px-4 py-3 text-gray-500">{po.order_date?.slice(0, 10) || '—'}</td>
                 <td className="px-4 py-3 text-gray-500">{po.description || '—'}</td>
                 <td className="px-4 py-3 flex gap-2">
+                  <button onClick={() => router.push(`/dashboard/invoices?po_id=${po.id}`)} className="text-green-600 hover:underline text-xs">الفواتير</button>
                   <button onClick={() => openEdit(po)} className="text-blue-600 hover:underline text-xs">تعديل</button>
                   <button onClick={() => handleDelete(po.id, po.po_number)} className="text-red-500 hover:underline text-xs">حذف</button>
                 </td>
