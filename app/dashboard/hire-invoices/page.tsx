@@ -18,6 +18,8 @@ interface HireInvoice {
 const emptyForm = {
   invoice_number: '', invoice_date: '', customer_id: '', vessel_id: '', shipping_company_id: '',
   place_of_business: '', cp_date: '', hire_from: '', hire_to: '',
+  hire_from_date: '', hire_from_time: '00:00',
+  hire_to_date: '', hire_to_time: '23:59',
   currency: 'EUR', total_amount: '0', status: 'unpaid', notes: '',
 };
 const emptyItem = { days: '', description: '', daily_hire: '', amount: '' };
@@ -78,6 +80,10 @@ export default function HireInvoicesPage() {
       cp_date: inv.cp_date?.slice(0, 10) || '',
       hire_from: inv.hire_from ? inv.hire_from.slice(0, 16) : '',
       hire_to: inv.hire_to ? inv.hire_to.slice(0, 16) : '',
+      hire_from_date: inv.hire_from ? inv.hire_from.slice(0, 10) : '',
+      hire_from_time: inv.hire_from ? inv.hire_from.slice(11, 16) || '00:00' : '00:00',
+      hire_to_date: inv.hire_to ? inv.hire_to.slice(0, 10) : '',
+      hire_to_time: inv.hire_to ? inv.hire_to.slice(11, 16) || '23:59' : '23:59',
       currency: inv.currency || 'EUR',
       total_amount: String(inv.total_amount),
       status: inv.status,
@@ -130,6 +136,8 @@ export default function HireInvoicesPage() {
     try {
       const payload = {
         ...form,
+        hire_from: form.hire_from_date ? `${form.hire_from_date}T${form.hire_from_time || '00:00'}` : null,
+        hire_to: form.hire_to_date ? `${form.hire_to_date}T${form.hire_to_time || '23:59'}` : null,
         total_amount: calcTotal(),
         items: items.filter(it => it.description).map((it, i) => ({
           days: it.days ? parseInt(it.days) : null,
@@ -411,18 +419,30 @@ export default function HireInvoicesPage() {
                     className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 </div>
                 <div>
-                  <label className="block text-sm text-gray-600 mb-1">Hire From (UTC 00:00)</label>
-                  <input type="datetime-local" value={form.hire_from} onChange={(e) => setForm({ ...form, hire_from: e.target.value })}
-                    step="60"
-                    className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 [&::-webkit-calendar-picker-indicator]:cursor-pointer" />
-                  <p className="text-xs text-gray-400 mt-1">صيغة 24 ساعة — مثال: 00:00</p>
+                  <label className="block text-sm text-gray-600 mb-1">Hire From</label>
+                  <div className="flex gap-2">
+                    <input type="date" value={form.hire_from_date}
+                      onChange={(e) => setForm({ ...form, hire_from_date: e.target.value })}
+                      className="flex-1 border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    <input type="time" value={form.hire_from_time}
+                      onChange={(e) => setForm({ ...form, hire_from_time: e.target.value })}
+                      className="w-24 border rounded-lg px-2 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+                      placeholder="00:00" />
+                  </div>
+                  <p className="text-xs text-gray-400 mt-1">UTC — افتراضي: 00:00</p>
                 </div>
                 <div>
-                  <label className="block text-sm text-gray-600 mb-1">Hire To (UTC 23:59)</label>
-                  <input type="datetime-local" value={form.hire_to} onChange={(e) => setForm({ ...form, hire_to: e.target.value })}
-                    step="60"
-                    className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 [&::-webkit-calendar-picker-indicator]:cursor-pointer" />
-                  <p className="text-xs text-gray-400 mt-1">صيغة 24 ساعة — مثال: 23:59</p>
+                  <label className="block text-sm text-gray-600 mb-1">Hire To</label>
+                  <div className="flex gap-2">
+                    <input type="date" value={form.hire_to_date}
+                      onChange={(e) => setForm({ ...form, hire_to_date: e.target.value })}
+                      className="flex-1 border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    <input type="time" value={form.hire_to_time}
+                      onChange={(e) => setForm({ ...form, hire_to_time: e.target.value })}
+                      className="w-24 border rounded-lg px-2 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+                      placeholder="23:59" />
+                  </div>
+                  <p className="text-xs text-gray-400 mt-1">UTC — افتراضي: 23:59</p>
                 </div>
                 <div>
                   <label className="block text-sm text-gray-600 mb-1">العملة</label>
