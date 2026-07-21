@@ -177,11 +177,32 @@ export default function InvoicesPage() {
     if (!form.total_amount) { setError('المبلغ مطلوب'); return; }
     setLoading(true);
     try {
+      // إنشاء PO يدوي إن وُجد رقم مؤقت لم يُحفظ بعد
+      let resolvedPoId = form.po_id;
+      if (poManualNumber.trim() && !form.po_id) {
+        const prefix = poManualNumber.split('-')[0]?.trim();
+        const vesselName = prefix ? VESSEL_PREFIX[prefix] : null;
+        let vesselId = form.vessel_id || null;
+        if (vesselName) {
+          const v = vessels.find((v: any) => v.name === vesselName);
+          if (v) vesselId = v.id;
+        }
+        const newPo = await api.post('/api/purchase-orders', {
+          po_number: poManualNumber.trim(),
+          supplier_id: form.supplier_id || null,
+          vessel_id: vesselId,
+          description: form.description || '',
+          order_date: form.invoice_date || null,
+        });
+        resolvedPoId = newPo.data.id;
+        setPoManualNumber('');
+      }
+
       const data = {
         ...form,
         total_amount: parseFloat(form.total_amount),
         vessel_id: form.vessel_id || null,
-        po_id: form.po_id || null,
+        po_id: resolvedPoId || null,
         invoice_date: form.invoice_date || null,
         due_date: form.due_date || null,
       };
@@ -208,38 +229,18 @@ export default function InvoicesPage() {
     }
   }
 
-  async function handleCreateManualPo() {
+  function handleConfirmManualPo() {
     if (!poManualNumber.trim()) return;
-    setPoManualSaving(true);
-    try {
-      const prefix = poManualNumber.split('-')[0]?.trim();
-      const vesselName = prefix ? VESSEL_PREFIX[prefix] : null;
-      let vesselId = form.vessel_id || null;
-      if (vesselName) {
-        const v = vessels.find((v: any) => v.name === vesselName);
-        if (v) vesselId = v.id;
-      }
-      const newPo = await api.post('/api/purchase-orders', {
-        po_number: poManualNumber.trim(),
-        supplier_id: form.supplier_id || null,
-        vessel_id: vesselId,
-        description: '',
-        order_date: form.invoice_date || null,
-      });
-      const poRes = await api.get('/api/purchase-orders');
-      setPos(poRes.data);
-      setForm((prev) => ({
-        ...prev,
-        po_id: newPo.data.id,
-        vessel_id: vesselId || prev.vessel_id,
-      }));
-      setPoManualMode(false);
-      setPoManualNumber('');
-    } catch {
-      alert('فشل إنشاء أمر الشراء، تحقق من الرقم');
-    } finally {
-      setPoManualSaving(false);
+    const prefix = poManualNumber.split('-')[0]?.trim();
+    const vesselName = prefix ? VESSEL_PREFIX[prefix] : null;
+    let vesselId = form.vessel_id || '';
+    if (vesselName) {
+      const v = vessels.find((v: any) => v.name === vesselName);
+      if (v) vesselId = v.id;
     }
+    // حفظ مؤقت في state فقط — الإنشاء الفعلي عند حفظ الفاتورة
+    setForm((prev) => ({ ...prev, vessel_id: vesselId || prev.vessel_id }));
+    setPoManualMode(false);
   }
 
   async function handleDelete(id: string, num: string) {
@@ -747,9 +748,9 @@ export default function InvoicesPage() {
                       placeholder="مثال: 05-024/2026e-O002"
                       className="flex-1 border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
                     />
-                    <button type="button" onClick={handleCreateManualPo} disabled={poManualSaving || !poManualNumber.trim()}
+                    <button type="button" onClick={handleConfirmManualPo} disabled={!poManualNumber.trim()}
                       className="bg-blue-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-blue-700 disabled:opacity-50 whitespace-nowrap">
-                      {poManualSaving ? '...' : 'إضافة'}
+                      تأكيد
                     </button>
                   </div>
                 ) : (
@@ -759,9 +760,14 @@ export default function InvoicesPage() {
                     {filteredPos.map((p) => <option key={p.id} value={p.id}>{p.po_number}</option>)}
                   </select>
                 )}
-                {form.po_id && !poManualMode && (
+                {!poManualMode && form.po_id && (
                   <p className="text-xs text-green-600 mt-1">
                     ✓ {filteredPos.find(p => p.id === form.po_id)?.po_number || pos.find(p => p.id === form.po_id)?.po_number}
+                  </p>
+                )}
+                {!poManualMode && !form.po_id && poManualNumber && (
+                  <p className="text-xs text-orange-600 mt-1">
+                    ⏳ {poManualNumber} — سيتم إنشاؤه عند الحفظ
                   </p>
                 )}
               </div>
