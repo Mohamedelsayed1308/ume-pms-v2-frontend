@@ -8,7 +8,7 @@ interface Vessel {
   shipping_company?: { id: string; name: string };
 }
 
-const empty = { name: '', imo_number: '', flag: '', vessel_type: '', is_active: true, shipping_company_id: '' };
+const empty = { name: '', imo_number: '', flag: '', vessel_type: '', is_active: true, shipping_company_id: '', owner_name: '', owner_address: '' };
 
 export default function VesselsPage() {
   const [vessels, setVessels] = useState<Vessel[]>([]);
@@ -36,7 +36,7 @@ export default function VesselsPage() {
 
   function openEdit(v: Vessel) {
     setEditing(v);
-    setForm({ name: v.name, imo_number: v.imo_number || '', flag: v.flag || '', vessel_type: v.vessel_type || '', is_active: v.is_active, shipping_company_id: v.shipping_company_id || '' });
+    setForm({ name: v.name, imo_number: v.imo_number || '', flag: v.flag || '', vessel_type: v.vessel_type || '', is_active: v.is_active, shipping_company_id: v.shipping_company_id || '', owner_name: (v as any).owner_name || '', owner_address: (v as any).owner_address || '' });
     setError('');
     setShowModal(true);
   }
@@ -149,6 +149,21 @@ export default function VesselsPage() {
                   <option value="">— بدون —</option>
                   {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
+              </div>
+              <div className="col-span-2 border-t pt-3 mt-1">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">بيانات المالك (Bill To)</p>
+              </div>
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">اسم المالك</label>
+                <input value={(form as any).owner_name} onChange={(e) => setForm({ ...form, owner_name: e.target.value } as any)}
+                  placeholder="ISBA Shipping LTD"
+                  className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">عنوان المالك</label>
+                <textarea value={(form as any).owner_address} onChange={(e) => setForm({ ...form, owner_address: e.target.value } as any)}
+                  placeholder={"13 Karaiskaki Street\n3032 Limassol\nCyprus"} rows={3}
+                  className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" />
               </div>
               <div className="flex items-center gap-2">
                 <input type="checkbox" checked={form.is_active} onChange={(e) => setForm({ ...form, is_active: e.target.checked })} id="active" />
