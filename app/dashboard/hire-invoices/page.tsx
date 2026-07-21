@@ -359,6 +359,7 @@ export default function HireInvoicesPage() {
               <th className="px-4 py-3">التاريخ</th>
               <th className="px-4 py-3">العميل</th>
               <th className="px-4 py-3">السفينة</th>
+              <th className="px-4 py-3">فترة التأجير</th>
               <th className="px-4 py-3">المبلغ</th>
               <th className="px-4 py-3">المسدد</th>
               <th className="px-4 py-3">الحالة</th>
@@ -372,6 +373,11 @@ export default function HireInvoicesPage() {
                 <td className="px-4 py-3 text-gray-500">{inv.invoice_date?.slice(0, 10)}</td>
                 <td className="px-4 py-3">{inv.customer?.name}</td>
                 <td className="px-4 py-3">{inv.vessel?.name}</td>
+                <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">
+                  {inv.hire_from ? new Date(inv.hire_from).toLocaleDateString('en-GB').replace(/\//g,'-') : '—'}
+                  <span className="mx-1 text-gray-300">→</span>
+                  {inv.hire_to ? new Date(inv.hire_to).toLocaleDateString('en-GB').replace(/\//g,'-') : '—'}
+                </td>
                 <td className="px-4 py-3 font-medium">{fmt(+inv.total_amount)} {inv.currency}</td>
                 <td className="px-4 py-3 text-green-700">{fmt(+inv.paid_amount)} {inv.currency}</td>
                 <td className="px-4 py-3">
@@ -387,7 +393,7 @@ export default function HireInvoicesPage() {
                 </td>
               </tr>
             ))}
-            {displayed.length === 0 && <tr><td colSpan={8} className="text-center py-8 text-gray-400">لا توجد فواتير</td></tr>}
+            {displayed.length === 0 && <tr><td colSpan={9} className="text-center py-8 text-gray-400">لا توجد فواتير</td></tr>}
           </tbody>
         </table>
       </div>
