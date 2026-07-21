@@ -310,7 +310,7 @@ export default function InvoicesPage() {
               po_number: d.po_number,
               supplier_id: supplierId || null,
               vessel_id: poVesselId || null,
-              description: '',
+              description: d.description || '',
               order_date: d.invoice_date || null,
             });
             poId = newPo.data.id;
