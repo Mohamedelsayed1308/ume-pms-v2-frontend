@@ -94,6 +94,9 @@ export default function InvoicesPage() {
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [supplierSearch, setSupplierSearch] = useState('');
   const [supplierOpen, setSupplierOpen] = useState(false);
+  const [poManualMode, setPoManualMode] = useState(false);
+  const [poManualNumber, setPoManualNumber] = useState('');
+  const [poManualSaving, setPoManualSaving] = useState(false);
   const [showBulkModal, setShowBulkModal] = useState(false);
   const [bulkItems, setBulkItems] = useState<BulkItem[]>([]);
   const [bulkDragOver, setBulkDragOver] = useState(false);
@@ -141,6 +144,8 @@ export default function InvoicesPage() {
     setEditing(null);
     setForm(empty);
     setError('');
+    setPoManualMode(false);
+    setPoManualNumber('');
     setShowModal(true);
   }
 
@@ -200,6 +205,40 @@ export default function InvoicesPage() {
       setError(err.response?.data?.message || 'حدث خطأ، حاول مرة أخرى');
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleCreateManualPo() {
+    if (!poManualNumber.trim()) return;
+    setPoManualSaving(true);
+    try {
+      const prefix = poManualNumber.split('-')[0]?.trim();
+      const vesselName = prefix ? VESSEL_PREFIX[prefix] : null;
+      let vesselId = form.vessel_id || null;
+      if (vesselName) {
+        const v = vessels.find((v: any) => v.name === vesselName);
+        if (v) vesselId = v.id;
+      }
+      const newPo = await api.post('/api/purchase-orders', {
+        po_number: poManualNumber.trim(),
+        supplier_id: form.supplier_id || null,
+        vessel_id: vesselId,
+        description: '',
+        order_date: form.invoice_date || null,
+      });
+      const poRes = await api.get('/api/purchase-orders');
+      setPos(poRes.data);
+      setForm((prev) => ({
+        ...prev,
+        po_id: newPo.data.id,
+        vessel_id: vesselId || prev.vessel_id,
+      }));
+      setPoManualMode(false);
+      setPoManualNumber('');
+    } catch {
+      alert('فشل إنشاء أمر الشراء، تحقق من الرقم');
+    } finally {
+      setPoManualSaving(false);
     }
   }
 
@@ -693,12 +732,38 @@ export default function InvoicesPage() {
                 </select>
               </div>
               <div className="col-span-2">
-                <label className="block text-sm text-gray-600 mb-1">أمر الشراء</label>
-                <select value={form.po_id} onChange={(e) => setForm({ ...form, po_id: e.target.value })}
-                  className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                  <option value="">— اختر أمر الشراء (اختياري) —</option>
-                  {filteredPos.map((p) => <option key={p.id} value={p.id}>{p.po_number}</option>)}
-                </select>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-sm text-gray-600">أمر الشراء</label>
+                  <button type="button" onClick={() => { setPoManualMode(!poManualMode); setPoManualNumber(''); }}
+                    className="text-xs text-blue-600 hover:underline">
+                    {poManualMode ? '← اختر من القائمة' : '+ أدخل رقم يدوياً'}
+                  </button>
+                </div>
+                {poManualMode ? (
+                  <div className="flex gap-2">
+                    <input
+                      value={poManualNumber}
+                      onChange={(e) => setPoManualNumber(e.target.value)}
+                      placeholder="مثال: 05-024/2026e-O002"
+                      className="flex-1 border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
+                    />
+                    <button type="button" onClick={handleCreateManualPo} disabled={poManualSaving || !poManualNumber.trim()}
+                      className="bg-blue-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-blue-700 disabled:opacity-50 whitespace-nowrap">
+                      {poManualSaving ? '...' : 'إضافة'}
+                    </button>
+                  </div>
+                ) : (
+                  <select value={form.po_id} onChange={(e) => setForm({ ...form, po_id: e.target.value })}
+                    className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="">— اختر أمر الشراء (اختياري) —</option>
+                    {filteredPos.map((p) => <option key={p.id} value={p.id}>{p.po_number}</option>)}
+                  </select>
+                )}
+                {form.po_id && !poManualMode && (
+                  <p className="text-xs text-green-600 mt-1">
+                    ✓ {filteredPos.find(p => p.id === form.po_id)?.po_number || pos.find(p => p.id === form.po_id)?.po_number}
+                  </p>
+                )}
               </div>
               <div>
                 <label className="block text-sm text-gray-600 mb-1">المبلغ *</label>
