@@ -51,6 +51,14 @@ export default function ManagementInvoicesPage() {
   }
   useEffect(() => { load(); }, []);
 
+  function autoDescription(dateStr: string) {
+    if (!dateStr) return '';
+    const d = new Date(dateStr);
+    const month = d.toLocaleString('en-US', { month: 'long' });
+    const year = d.getFullYear();
+    return `Commercial / Operation Management fees ${month} ${year}`;
+  }
+
   function openAdd() {
     setEditing(null); setForm(emptyForm); setError(''); setShowModal(true);
   }
@@ -312,7 +320,16 @@ export default function ManagementInvoicesPage() {
                 </div>
                 <div>
                   <label className="block text-sm text-gray-600 mb-1">تاريخ الفاتورة *</label>
-                  <input type="date" value={form.invoice_date} onChange={(e) => setForm({ ...form, invoice_date: e.target.value })}
+                  <input type="date" value={form.invoice_date} onChange={(e) => {
+                    const d = e.target.value;
+                    setForm((prev) => ({
+                      ...prev,
+                      invoice_date: d,
+                      description: (!prev.description || prev.description === autoDescription(prev.invoice_date))
+                        ? autoDescription(d)
+                        : prev.description,
+                    }));
+                  }}
                     className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500" />
                 </div>
                 <div>
