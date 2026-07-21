@@ -3,18 +3,16 @@ import { useEffect, useState } from 'react';
 import api from '@/lib/api';
 
 interface Vessel {
-  id: string;
-  name: string;
-  imo_number: string;
-  flag: string;
-  vessel_type: string;
-  is_active: boolean;
+  id: string; name: string; imo_number: string; flag: string;
+  vessel_type: string; is_active: boolean; shipping_company_id: string;
+  shipping_company?: { id: string; name: string };
 }
 
-const empty = { name: '', imo_number: '', flag: '', vessel_type: '', is_active: true };
+const empty = { name: '', imo_number: '', flag: '', vessel_type: '', is_active: true, shipping_company_id: '' };
 
 export default function VesselsPage() {
   const [vessels, setVessels] = useState<Vessel[]>([]);
+  const [companies, setCompanies] = useState<any[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<Vessel | null>(null);
   const [form, setForm] = useState(empty);
@@ -22,8 +20,9 @@ export default function VesselsPage() {
   const [error, setError] = useState('');
 
   async function load() {
-    const res = await api.get('/api/vessels');
-    setVessels(res.data);
+    const [vesRes, compRes] = await Promise.all([api.get('/api/vessels'), api.get('/api/shipping-companies')]);
+    setVessels(vesRes.data);
+    setCompanies(compRes.data);
   }
 
   useEffect(() => { load(); }, []);
@@ -37,7 +36,7 @@ export default function VesselsPage() {
 
   function openEdit(v: Vessel) {
     setEditing(v);
-    setForm({ name: v.name, imo_number: v.imo_number || '', flag: v.flag || '', vessel_type: v.vessel_type || '', is_active: v.is_active });
+    setForm({ name: v.name, imo_number: v.imo_number || '', flag: v.flag || '', vessel_type: v.vessel_type || '', is_active: v.is_active, shipping_company_id: v.shipping_company_id || '' });
     setError('');
     setShowModal(true);
   }
@@ -98,6 +97,7 @@ export default function VesselsPage() {
                 <td className="px-4 py-3 text-gray-500">{v.imo_number || '—'}</td>
                 <td className="px-4 py-3 text-gray-500">{v.flag || '—'}</td>
                 <td className="px-4 py-3 text-gray-500">{v.vessel_type || '—'}</td>
+                <td className="px-4 py-3 text-gray-500 text-xs">{v.shipping_company?.name || '—'}</td>
                 <td className="px-4 py-3">
                   <span className={`px-2 py-1 rounded-full text-xs ${v.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
                     {v.is_active ? 'نشطة' : 'غير نشطة'}
@@ -141,6 +141,14 @@ export default function VesselsPage() {
                 <label className="block text-sm text-gray-600 mb-1">النوع</label>
                 <input value={form.vessel_type} onChange={(e) => setForm({ ...form, vessel_type: e.target.value })}
                   className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">شركة الشحن (Owner)</label>
+                <select value={form.shipping_company_id} onChange={(e) => setForm({ ...form, shipping_company_id: e.target.value })}
+                  className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  <option value="">— بدون —</option>
+                  {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
               </div>
               <div className="flex items-center gap-2">
                 <input type="checkbox" checked={form.is_active} onChange={(e) => setForm({ ...form, is_active: e.target.checked })} id="active" />
