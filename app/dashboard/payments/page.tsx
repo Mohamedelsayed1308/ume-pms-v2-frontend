@@ -57,6 +57,7 @@ export default function PaymentsPage() {
   const [shared, setShared] = useState(emptyShared);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [invoiceAttachments, setInvoiceAttachments] = useState<Record<string, any[]>>({});
 
   async function load() {
     const [payRes, invRes, supRes] = await Promise.all([
@@ -79,9 +80,10 @@ export default function PaymentsPage() {
     setShowModal(true);
   }
 
-  function onSupplierChange(supplierId: string) {
+  async function onSupplierChange(supplierId: string) {
     setSelectedSupplierId(supplierId);
     setError('');
+    setInvoiceAttachments({});
     const filtered = allInvoices.filter((i) => i.supplier?.id === supplierId);
     setInvoiceRows(filtered.map((inv) => ({
       id: inv.id,
@@ -93,6 +95,15 @@ export default function PaymentsPage() {
       amount: String(Math.max(0, +inv.total_amount - +inv.paid_amount)),
       currency: inv.currency || 'USD',
     })));
+    // Load attachments for all invoices
+    const attMap: Record<string, any[]> = {};
+    await Promise.all(filtered.map(async (inv: any) => {
+      try {
+        const res = await api.get(`/api/attachments/invoice/${inv.id}`);
+        attMap[inv.id] = res.data || [];
+      } catch { attMap[inv.id] = []; }
+    }));
+    setInvoiceAttachments(attMap);
   }
 
   function toggleRow(id: string) {
@@ -264,7 +275,22 @@ export default function PaymentsPage() {
                                   <input type="checkbox" checked={row.checked} onChange={() => toggleRow(row.id)}
                                     className="w-4 h-4 cursor-pointer" />
                                 </td>
-                                <td className="px-3 py-2 font-mono text-blue-700 font-medium">{row.invoice_number}</td>
+                                <td className="px-3 py-2">
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-mono text-blue-700 font-medium">{row.invoice_number}</span>
+                                    {invoiceAttachments[row.id]?.length > 0 && (
+                                      <div className="flex gap-1">
+                                        {invoiceAttachments[row.id].map((att: any, i: number) => (
+                                          <a key={att.id} href={att.file_url} target="_blank" rel="noreferrer"
+                                            title={att.file_name}
+                                            className="text-gray-400 hover:text-blue-600 transition-colors">
+                                            📎
+                                          </a>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                </td>
                                 <td className="px-3 py-2 text-gray-600">{row.vessel?.name || '—'}</td>
                                 <td className="px-3 py-2 text-gray-600">{row.total_amount.toLocaleString()}</td>
                                 <td className="px-3 py-2 text-green-600">{row.paid_amount.toLocaleString()}</td>
