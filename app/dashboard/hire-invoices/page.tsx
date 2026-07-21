@@ -39,6 +39,7 @@ export default function HireInvoicesPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [viewInv, setViewInv] = useState<HireInvoice | null>(null);
+  const [previewInv, setPreviewInv] = useState<HireInvoice | null>(null);
   const [payForm, setPayForm] = useState({ payment_date: '', amount: '', currency: 'EUR', reference: '', notes: '' });
   const [payLoading, setPayLoading] = useState(false);
   const [filterStatus, setFilterStatus] = useState('');
@@ -326,7 +327,7 @@ export default function HireInvoicesPage() {
                   </span>
                 </td>
                 <td className="px-4 py-3 flex gap-2">
-                  <button onClick={() => exportPDF(inv)} className="text-green-600 hover:underline text-xs">PDF</button>
+                  <button onClick={() => setPreviewInv(inv)} className="text-green-600 hover:underline text-xs font-medium border border-green-400 rounded px-1">PDF</button>
                   <button onClick={() => setViewInv(inv)} className="text-purple-600 hover:underline text-xs">دفع</button>
                   <button onClick={() => openEdit(inv)} className="text-blue-600 hover:underline text-xs">تعديل</button>
                   <button onClick={() => handleDelete(inv.id, inv.invoice_number)} className="text-red-500 hover:underline text-xs">حذف</button>
@@ -390,9 +391,19 @@ export default function HireInvoicesPage() {
               <div className="grid grid-cols-2 gap-3 pt-2 border-t">
                 <div>
                   <label className="block text-sm text-gray-600 mb-1">Place of Business</label>
-                  <input value={form.place_of_business} onChange={(e) => setForm({ ...form, place_of_business: e.target.value })}
-                    placeholder="Spain"
-                    className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  <select value={form.place_of_business} onChange={(e) => setForm({ ...form, place_of_business: e.target.value })}
+                    className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="">— اختر —</option>
+                    <option value="Spain">Spain</option>
+                    <option value="Cyprus">Cyprus</option>
+                    <option value="Morocco">Morocco</option>
+                    <option value="Egypt">Egypt</option>
+                    <option value="UAE">UAE</option>
+                    <option value="Greece">Greece</option>
+                    <option value="Malta">Malta</option>
+                    <option value="Panama">Panama</option>
+                    <option value="Liberia">Liberia</option>
+                  </select>
                 </div>
                 <div>
                   <label className="block text-sm text-gray-600 mb-1">CP Date</label>
@@ -402,12 +413,16 @@ export default function HireInvoicesPage() {
                 <div>
                   <label className="block text-sm text-gray-600 mb-1">Hire From (UTC 00:00)</label>
                   <input type="datetime-local" value={form.hire_from} onChange={(e) => setForm({ ...form, hire_from: e.target.value })}
-                    className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    step="60"
+                    className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 [&::-webkit-calendar-picker-indicator]:cursor-pointer" />
+                  <p className="text-xs text-gray-400 mt-1">صيغة 24 ساعة — مثال: 00:00</p>
                 </div>
                 <div>
                   <label className="block text-sm text-gray-600 mb-1">Hire To (UTC 23:59)</label>
                   <input type="datetime-local" value={form.hire_to} onChange={(e) => setForm({ ...form, hire_to: e.target.value })}
-                    className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    step="60"
+                    className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 [&::-webkit-calendar-picker-indicator]:cursor-pointer" />
+                  <p className="text-xs text-gray-400 mt-1">صيغة 24 ساعة — مثال: 23:59</p>
                 </div>
                 <div>
                   <label className="block text-sm text-gray-600 mb-1">العملة</label>
@@ -475,6 +490,116 @@ export default function HireInvoicesPage() {
                 {loading ? 'جاري الحفظ...' : 'حفظ الفاتورة'}
               </button>
               <button onClick={() => setShowModal(false)} className="flex-1 border border-gray-300 py-2 rounded-lg hover:bg-gray-50">إلغاء</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* PDF Preview Modal */}
+      {previewInv && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[95vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white border-b px-6 py-3 flex items-center justify-between">
+              <h3 className="font-bold text-gray-800">معاينة الفاتورة — {previewInv.invoice_number}</h3>
+              <div className="flex gap-2">
+                <button onClick={() => { exportPDF(previewInv); setPreviewInv(null); }}
+                  className="bg-green-600 text-white px-4 py-1.5 rounded-lg text-sm hover:bg-green-700">
+                  ⬇ تنزيل PDF
+                </button>
+                <button onClick={() => setPreviewInv(null)} className="text-gray-400 hover:text-gray-600 text-xl">✕</button>
+              </div>
+            </div>
+            <div className="p-8 font-mono text-sm" dir="ltr">
+              {/* Company header */}
+              <div className="mb-6">
+                <p className="font-bold text-base">{previewInv.shipping_company?.name}</p>
+                <p className="text-gray-600 whitespace-pre-line">{previewInv.shipping_company?.address}</p>
+              </div>
+
+              {/* Invoice title + date/number box */}
+              <div className="flex justify-between items-start mb-6">
+                <div className="border p-3 w-64">
+                  <p className="font-bold text-xs text-gray-500 mb-1">Bill To</p>
+                  <p className="font-bold">Messrs: {previewInv.customer?.name}</p>
+                  <p className="text-gray-600 text-xs whitespace-pre-line">{previewInv.customer?.address}</p>
+                  <p className="text-gray-600 text-xs mt-1">VAT NO  {previewInv.customer?.vat_no || ''}</p>
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-center mb-2">Invoice</p>
+                  <table className="border border-collapse text-xs">
+                    <thead><tr><th className="border px-3 py-1">Date</th><th className="border px-3 py-1">Invoice #</th></tr></thead>
+                    <tbody><tr><td className="border px-3 py-1">{previewInv.invoice_date?.slice(0,10)}</td><td className="border px-3 py-1">{previewInv.invoice_number}</td></tr></tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Charter party header table */}
+              <table className="w-full border border-collapse text-xs mb-0">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="border px-2 py-1">Place of Business</th>
+                    <th className="border px-2 py-1">CP Date</th>
+                    <th className="border px-2 py-1">Hire From</th>
+                    <th className="border px-2 py-1">Hire To</th>
+                    <th className="border px-2 py-1">Vessel</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr className="text-center">
+                    <td className="border px-2 py-2">{previewInv.place_of_business || '—'}</td>
+                    <td className="border px-2 py-2">{previewInv.cp_date?.slice(0,10) || '—'}</td>
+                    <td className="border px-2 py-2">
+                      {previewInv.hire_from ? new Date(previewInv.hire_from).toLocaleDateString('en-GB').replace(/\//g,'-') : '—'}<br/>
+                      <span className="text-gray-500">UTC 00:00</span>
+                    </td>
+                    <td className="border px-2 py-2">
+                      {previewInv.hire_to ? new Date(previewInv.hire_to).toLocaleDateString('en-GB').replace(/\//g,'-') : '—'}<br/>
+                      <span className="text-gray-500">UTC 23:59</span>
+                    </td>
+                    <td className="border px-2 py-2 font-bold">
+                      {previewInv.vessel?.name}<br/>
+                      <span className="font-normal text-gray-500">IMO:{previewInv.vessel?.imo_number}</span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+
+              {/* Items table */}
+              <table className="w-full border border-collapse text-xs">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="border px-2 py-1 w-12">Days</th>
+                    <th className="border px-2 py-1 text-left">Description</th>
+                    <th className="border px-2 py-1 w-24 text-right">Daily Hire</th>
+                    <th className="border px-2 py-1 w-28 text-right">Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {previewInv.items?.map((it, i) => (
+                    <tr key={i}>
+                      <td className="border px-2 py-3 text-center">{it.days || ''}</td>
+                      <td className="border px-2 py-3">{it.description}</td>
+                      <td className="border px-2 py-3 text-right">{it.daily_hire ? fmt(+it.daily_hire) : ''}</td>
+                      <td className="border px-2 py-3 text-right">{fmt(+it.amount)}</td>
+                    </tr>
+                  ))}
+                  <tr>
+                    <td colSpan={2} className="border px-2 py-3 text-gray-500 italic">We appreciate your prompt payment.</td>
+                    <td className="border px-2 py-3 text-right font-bold" colSpan={2}>
+                      Total {previewInv.currency} {fmt(+previewInv.total_amount)}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+
+              {/* Bank details */}
+              <div className="mt-6 text-xs text-gray-700 space-y-0.5">
+                <p className="font-bold">Our Bank Details</p>
+                <p>Bank Name: {previewInv.shipping_company?.bank_name}</p>
+                <p>Acc. Name: {previewInv.shipping_company?.acc_name}</p>
+                <p>IBAN: {previewInv.shipping_company?.iban_eur}  EURO</p>
+                <p>Swift Code : {previewInv.shipping_company?.swift_code}</p>
+              </div>
             </div>
           </div>
         </div>
