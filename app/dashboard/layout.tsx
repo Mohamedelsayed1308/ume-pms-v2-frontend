@@ -16,6 +16,7 @@ const navItems = [
   { href: '/dashboard/hire-invoices', label: 'فواتير الإيجار', icon: '🚢💰' },
   { href: '/dashboard/shipping-companies', label: 'شركات الشحن', icon: '🏢' },
   { href: '/dashboard/management-invoices', label: 'فواتير الإدارة', icon: '📄' },
+  { href: '/dashboard/profit-distribution', label: 'توزيع الأرباح', icon: '💰' },
 ];
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
