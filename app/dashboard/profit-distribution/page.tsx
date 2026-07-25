@@ -14,6 +14,7 @@ interface Period {
   poseidon_voyages: number; amal_voyages: number; daleela_voyages: number;
   poseidon_over_pax: number; amal_over_pax: number; daleela_over_pax: number;
   poseidon_rent: number; amal_rent: number; daleela_rent: number;
+  commission_amount: number;
   cash_safaga_badawi: number; cash_safaga_ittihad: number;
   transfers_badawi: number; transfers_ittihad: number;
   ratio_badawi: number; ratio_ittihad: number;
@@ -35,10 +36,11 @@ const emptyForm = (): Omit<Period, 'id'> => ({
   poseidon_voyages: 0, amal_voyages: 0, daleela_voyages: 0,
   poseidon_over_pax: 0, amal_over_pax: 0, daleela_over_pax: 0,
   poseidon_rent: 0, amal_rent: 0, daleela_rent: 0,
+  commission_amount: 0,
   cash_safaga_badawi: 0, cash_safaga_ittihad: 0,
   transfers_badawi: 0, transfers_ittihad: 0,
   ratio_badawi: 50, ratio_ittihad: 50,
-  commission_rate: 6.5, per_voyage_fee: 500,
+  commission_rate: 6.5, per_voyage_fee: 0,
   balance_prev_badawi: 0, balance_prev_ittihad: 0,
   status: 'draft', notes: '',
 });
@@ -65,7 +67,9 @@ function calcLocal(f: Omit<Period, 'id'>): Calc {
   const totalVoyages = n(f.poseidon_voyages) + n(f.amal_voyages) + n(f.daleela_voyages);
   const totalOverPax = n(f.poseidon_over_pax) + n(f.amal_over_pax) + n(f.daleela_over_pax);
   const totalRent = rent.total;
-  const commission = totalRevenue * (n(f.commission_rate) / 100) + totalVoyages * n(f.per_voyage_fee) + totalOverPax;
+  const commission = n(f.commission_amount) > 0
+    ? n(f.commission_amount)
+    : totalRevenue * (n(f.commission_rate) / 100) + totalVoyages * n(f.per_voyage_fee) + totalOverPax;
   const netProfit = totalRevenue - totalRent - commission;
   const shareBadawi = netProfit * (n(f.ratio_badawi) / 100);
   const shareIttihad = netProfit * (n(f.ratio_ittihad) / 100);
@@ -84,6 +88,9 @@ export default function ProfitDistributionPage() {
   const [error, setError] = useState('');
   const [driveId, setDriveId] = useState('');
   const [selected, setSelected] = useState<Period | null>(null);
+  const [voyageFrom, setVoyageFrom] = useState('');
+  const [voyageTo, setVoyageTo] = useState('');
+  const [fetchingVoyage, setFetchingVoyage] = useState(false);
 
   const load = useCallback(async () => {
     const res = await api.get('/api/profit-periods');
@@ -121,8 +128,23 @@ export default function ProfitDistributionPage() {
   const setNum = (key: keyof Omit<Period, 'id'>, val: string) =>
     setForm((prev) => ({ ...prev, [key]: val === '' ? 0 : parseFloat(val) || 0 }));
 
+  async function fetchVoyageDates() {
+    if (!voyageFrom || !voyageTo) { alert('أدخل أرقام الرحلات'); return; }
+    setFetchingVoyage(true);
+    try {
+      const res = await api.get('/api/profit-periods/voyage-dates', {
+        params: { from: voyageFrom, to: voyageTo },
+      });
+      if (res.data.error) { alert(res.data.error); return; }
+      setForm((prev) => ({ ...prev, date_from: res.data.date_from, date_to: res.data.date_to }));
+    } catch (e: any) {
+      alert('خطأ: ' + (e?.response?.data?.message || e?.message));
+    } finally {
+      setFetchingVoyage(false);
+    }
+  }
+
   async function fetchExcel() {
-    if (!driveId) { alert('أدخل Google Drive File ID أولاً'); return; }
     if (!form.date_from || !form.date_to) { alert('أدخل الفترة الزمنية أولاً'); return; }
     setFetching(true);
     try {
@@ -134,10 +156,15 @@ export default function ProfitDistributionPage() {
         ...prev,
         poseidon_revenue: d.poseidon?.revenue ?? prev.poseidon_revenue,
         poseidon_voyages: d.poseidon?.voyages ?? prev.poseidon_voyages,
-        amal_revenue: d.amal?.revenue ?? prev.amal_revenue,
-        amal_voyages: d.amal?.voyages ?? prev.amal_voyages,
-        daleela_revenue: d.daleela?.revenue ?? prev.daleela_revenue,
-        daleela_voyages: d.daleela?.voyages ?? prev.daleela_voyages,
+        amal_revenue:     d.amal?.revenue     ?? prev.amal_revenue,
+        amal_voyages:     d.amal?.voyages     ?? prev.amal_voyages,
+        daleela_revenue:  d.daleela?.revenue  ?? prev.daleela_revenue,
+        daleela_voyages:  d.daleela?.voyages  ?? prev.daleela_voyages,
+        commission_amount:
+          (d.poseidon?.commission ?? 0) + (d.amal?.commission ?? 0) + (d.daleela?.commission ?? 0),
+        cash_safaga_badawi:  d.poseidon?.cash_safaga ?? prev.cash_safaga_badawi,
+        cash_safaga_ittihad: (d.amal?.cash_safaga ?? 0) + (d.daleela?.cash_safaga ?? 0),
+        per_voyage_fee: 0,
       }));
     } catch (e: any) {
       alert('فشل جلب البيانات: ' + (e?.response?.data?.message || e?.message));
@@ -280,7 +307,7 @@ export default function ProfitDistributionPage() {
             <h3 className="font-bold text-lg mb-4 text-emerald-700">{editing ? 'تعديل فترة' : 'فترة جديدة'}</h3>
 
             {/* بيانات أساسية */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
               <div className="md:col-span-1">
                 <label className="block text-xs text-gray-500 mb-1">اسم الفترة *</label>
                 <input value={form.period_name} onChange={(e) => set('period_name', e.target.value)}
@@ -296,6 +323,30 @@ export default function ProfitDistributionPage() {
                 <label className="block text-xs text-gray-500 mb-1">إلى *</label>
                 <input type="date" value={form.date_to} onChange={(e) => set('date_to', e.target.value)}
                   className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+              </div>
+            </div>
+
+            {/* مساعد رقم الرحلة */}
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4">
+              <p className="text-xs font-semibold text-amber-700 mb-2">تحديد التواريخ من رقم الرحلة — Poseidon (اختياري)</p>
+              <div className="flex gap-2 items-end flex-wrap">
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">من رحلة رقم</label>
+                  <input type="number" value={voyageFrom} onChange={(e) => setVoyageFrom(e.target.value)}
+                    placeholder="60" className="w-24 border rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-amber-400" />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">إلى رحلة رقم</label>
+                  <input type="number" value={voyageTo} onChange={(e) => setVoyageTo(e.target.value)}
+                    placeholder="64" className="w-24 border rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-amber-400" />
+                </div>
+                <button onClick={fetchVoyageDates} disabled={fetchingVoyage}
+                  className="bg-amber-500 text-white px-3 py-1.5 rounded text-xs hover:bg-amber-600 disabled:opacity-50 whitespace-nowrap">
+                  {fetchingVoyage ? 'جاري...' : 'تطبيق التواريخ تلقائياً'}
+                </button>
+                {form.date_from && form.date_to && (
+                  <span className="text-xs text-amber-700 font-mono">{form.date_from} → {form.date_to}</span>
+                )}
               </div>
             </div>
 
@@ -353,21 +404,15 @@ export default function ProfitDistributionPage() {
               );
             })()}
 
-            {/* معاملات العمولة */}
-            <Section title="معاملات العمولة">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">نسبة العمولة %</label>
-                  <input type="number" step="0.1" value={form.commission_rate}
-                    onChange={(e) => setNum('commission_rate', e.target.value)}
-                    className="w-full border rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-400" />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">رسوم الرحلة ($/voyage)</label>
-                  <input type="number" value={form.per_voyage_fee}
-                    onChange={(e) => setNum('per_voyage_fee', e.target.value)}
-                    className="w-full border rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-400" />
-                </div>
+            {/* العمولة */}
+            <Section title="العمولة الإجمالية">
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">
+                  العمولة $ — تُجلب تلقائياً من الشيت (يمكن التعديل يدوياً)
+                </label>
+                <input type="number" value={form.commission_amount}
+                  onChange={(e) => setNum('commission_amount', e.target.value)}
+                  className="w-full border rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-400 font-mono" />
               </div>
             </Section>
 
