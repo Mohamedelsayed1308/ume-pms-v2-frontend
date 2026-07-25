@@ -2,9 +2,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import api from '@/lib/api';
 
-// ── ثوابت ─────────────────────────────────────────────────────────────────
-const GOOGLE_DRIVE_FILE_ID = ''; // سيُدخله المستخدم عند الحاجة
-
 interface Period {
   id: string;
   period_name: string;
@@ -13,6 +10,7 @@ interface Period {
   poseidon_revenue: number; amal_revenue: number; daleela_revenue: number;
   poseidon_voyages: number; amal_voyages: number; daleela_voyages: number;
   poseidon_over_pax: number; amal_over_pax: number; daleela_over_pax: number;
+  bunker_badawi: number; bunker_ittihad: number;
   poseidon_rent: number; amal_rent: number; daleela_rent: number;
   commission_amount: number;
   cash_safaga_badawi: number; cash_safaga_ittihad: number;
@@ -27,6 +25,7 @@ interface Calc {
   totalRevenue: number; totalRent: number; totalCommission: number;
   netForDistribution: number;
   distributionBadawi: number; distributionIttihad: number;
+  overPaxBadawi: number; overPaxIttihad: number;
   activityBadawi: number; activityIttihad: number;
   balanceBadawi: number; balanceIttihad: number;
   days: number; poseidonRent: number; amalRent: number; daleelaRent: number;
@@ -37,6 +36,7 @@ const emptyForm = (): Omit<Period, 'id'> => ({
   poseidon_revenue: 0, amal_revenue: 0, daleela_revenue: 0,
   poseidon_voyages: 0, amal_voyages: 0, daleela_voyages: 0,
   poseidon_over_pax: 0, amal_over_pax: 0, daleela_over_pax: 0,
+  bunker_badawi: 0, bunker_ittihad: 0,
   poseidon_rent: 0, amal_rent: 0, daleela_rent: 0,
   commission_amount: 0,
   cash_safaga_badawi: 0, cash_safaga_ittihad: 0,
@@ -65,19 +65,24 @@ function calcRent(f: Pick<Omit<Period,'id'>, 'date_from'|'date_to'|'daleela_reve
 function calcLocal(f: Omit<Period, 'id'>): Calc {
   const n = (v: any) => Number(v) || 0;
   const rent = calcRent(f);
-  const totalRevenue = n(f.poseidon_revenue) + n(f.amal_revenue) + n(f.daleela_revenue)
-                     + n(f.poseidon_over_pax) + n(f.amal_over_pax) + n(f.daleela_over_pax);
+
+  // الإيراد من الشيت يتضمن Over Pax — لا يُضاف مرة ثانية
+  const totalRevenue = n(f.poseidon_revenue) + n(f.amal_revenue) + n(f.daleela_revenue);
   const totalRent    = rent.total;
   const totalCommission = n(f.commission_amount);
 
-  // منطق Excel: توزيع = (إيراد - إيجار) × ratio%
+  // توزيع النسب = (إيراد - إيجار) × ratio%
   const netForDistribution = totalRevenue - totalRent;
   const distributionBadawi  = netForDistribution * (n(f.ratio_badawi)  / 100);
   const distributionIttihad = netForDistribution * (n(f.ratio_ittihad) / 100);
 
-  // نتيجة نشاط = توزيع - كاش + إيجار العبارة الخاصة
-  const activityBadawi  = distributionBadawi  - n(f.cash_safaga_badawi)  + rent.poseidon;
-  const activityIttihad = distributionIttihad - n(f.cash_safaga_ittihad) + rent.amal + rent.daleela;
+  // توزيع Over Pax: بدوي=66.67% Poseidon + 33.33% Daleela
+  const overPaxBadawi  = n(f.poseidon_over_pax) * (2/3) + n(f.daleela_over_pax) * (1/3);
+  const overPaxIttihad = n(f.poseidon_over_pax) * (1/3) + n(f.amal_over_pax) + n(f.daleela_over_pax) * (2/3);
+
+  // نتيجة نشاط = توزيع - كاش + overPax + إيجار العبارة + بنكر
+  const activityBadawi  = distributionBadawi  - n(f.cash_safaga_badawi)  + overPaxBadawi  + rent.poseidon + n(f.bunker_badawi);
+  const activityIttihad = distributionIttihad - n(f.cash_safaga_ittihad) + overPaxIttihad + rent.amal + rent.daleela + n(f.bunker_ittihad);
 
   const balanceBadawi  = n(f.balance_prev_badawi)  + activityBadawi  - n(f.transfers_badawi);
   const balanceIttihad = n(f.balance_prev_ittihad) + activityIttihad - n(f.transfers_ittihad);
@@ -86,6 +91,7 @@ function calcLocal(f: Omit<Period, 'id'>): Calc {
     totalRevenue, totalRent, totalCommission,
     netForDistribution,
     distributionBadawi, distributionIttihad,
+    overPaxBadawi, overPaxIttihad,
     activityBadawi, activityIttihad,
     balanceBadawi, balanceIttihad,
     days: rent.days, poseidonRent: rent.poseidon, amalRent: rent.amal, daleelaRent: rent.daleela,
@@ -118,9 +124,8 @@ export default function ProfitDistributionPage() {
   function openAdd() {
     setEditing(null);
     const f = emptyForm();
-    // رصيد متراكم من آخر فترة
     if (periods.length > 0) {
-      const last = periods[0]; // مرتبة DESC
+      const last = periods[0];
       const c = calcLocal(last as any);
       f.balance_prev_badawi = Math.round(c.balanceBadawi * 100) / 100;
       f.balance_prev_ittihad = Math.round(c.balanceIttihad * 100) / 100;
@@ -185,6 +190,8 @@ export default function ProfitDistributionPage() {
           (d.poseidon?.commission ?? 0) + (d.amal?.commission ?? 0) + (d.daleela?.commission ?? 0),
         cash_safaga_badawi:  d.poseidon?.cash_safaga ?? prev.cash_safaga_badawi,
         cash_safaga_ittihad: (d.amal?.cash_safaga ?? 0) + (d.daleela?.cash_safaga ?? 0),
+        bunker_badawi:   d.poseidon?.bunker ?? prev.bunker_badawi,
+        bunker_ittihad:  (d.amal?.bunker ?? 0) + (d.daleela?.bunker ?? 0),
         per_voyage_fee: 0,
       }));
     } catch (e: any) {
@@ -222,8 +229,6 @@ export default function ProfitDistributionPage() {
   }
 
   const calc = calcLocal(form);
-
-  // ── واجهة عرض التفاصيل ────────────────────────────────────────────────
   const detailCalc = selected ? calcLocal(selected as any) : null;
 
   return (
@@ -280,14 +285,15 @@ export default function ProfitDistributionPage() {
           <h3 className="font-bold text-lg mb-4 text-emerald-700">{selected.period_name} — تفاصيل الحساب</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
             {[
-              { label: 'Poseidon', rev: selected.poseidon_revenue, voy: selected.poseidon_voyages },
-              { label: 'Amal', rev: selected.amal_revenue, voy: selected.amal_voyages },
-              { label: 'Daleela', rev: selected.daleela_revenue, voy: selected.daleela_voyages },
+              { label: 'Poseidon', rev: selected.poseidon_revenue, voy: selected.poseidon_voyages, op: selected.poseidon_over_pax },
+              { label: 'Amal',     rev: selected.amal_revenue,     voy: selected.amal_voyages,     op: selected.amal_over_pax },
+              { label: 'Daleela',  rev: selected.daleela_revenue,  voy: selected.daleela_voyages,  op: selected.daleela_over_pax },
             ].map((v) => (
               <div key={v.label} className="bg-gray-50 rounded-lg p-4">
                 <p className="text-xs text-gray-500 font-semibold uppercase">{v.label}</p>
                 <p className="text-xl font-bold font-mono mt-1">${fmt(v.rev)}</p>
                 <p className="text-sm text-gray-500">{v.voy} رحلة</p>
+                {v.op > 0 && <p className="text-xs text-amber-600 font-mono">Over Pax: ${fmt(v.op)}</p>}
               </div>
             ))}
           </div>
@@ -305,6 +311,8 @@ export default function ProfitDistributionPage() {
                 name: 'بدوي (بوسيدون)',
                 dist: detailCalc.distributionBadawi,
                 rent: detailCalc.poseidonRent,
+                overPax: detailCalc.overPaxBadawi,
+                bunker: selected.bunker_badawi,
                 cash: selected.cash_safaga_badawi,
                 transfer: selected.transfers_badawi,
                 prev: selected.balance_prev_badawi,
@@ -315,6 +323,8 @@ export default function ProfitDistributionPage() {
                 name: 'الاتحاد (امل + دليلة)',
                 dist: detailCalc.distributionIttihad,
                 rent: detailCalc.amalRent + detailCalc.daleelaRent,
+                overPax: detailCalc.overPaxIttihad,
+                bunker: selected.bunker_ittihad,
                 cash: selected.cash_safaga_ittihad,
                 transfer: selected.transfers_ittihad,
                 prev: selected.balance_prev_ittihad,
@@ -328,7 +338,9 @@ export default function ProfitDistributionPage() {
                   <Row label="رصيد سابق" val={`$${fmt(co.prev)}`} />
                   <Row label="توزيع النسب" val={`$${fmt(co.dist)}`} />
                   <Row label="كاش سفاجا" val={`-$${fmt(co.cash)}`} color="red" />
+                  <Row label="Over Pax" val={`+$${fmt(co.overPax)}`} color="amber" />
                   <Row label="إيجار العبارات" val={`+$${fmt(co.rent)}`} color="green" />
+                  <Row label="بنكر" val={`+$${fmt(co.bunker)}`} color="green" />
                   <Row label="نتيجة النشاط" val={`$${fmt(co.activity)}`} bold />
                   <Row label="تحويلات" val={`-$${fmt(co.transfer)}`} color="red" />
                   <div className="border-t pt-2 mt-2">
@@ -393,7 +405,7 @@ export default function ProfitDistributionPage() {
 
             {/* جلب من Google Drive */}
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
-              <p className="text-xs font-semibold text-blue-700 mb-2">جلب البيانات من Google Drive Excel</p>
+              <p className="text-xs font-semibold text-blue-700 mb-2">جلب البيانات من Google Drive Excel (إيراد + عمولة + كاش + بنكر)</p>
               <div className="flex gap-2">
                 <input value={driveId} onChange={(e) => setDriveId(e.target.value)}
                   placeholder="Google Drive File ID"
@@ -406,7 +418,7 @@ export default function ProfitDistributionPage() {
             </div>
 
             {/* إيرادات العبارات */}
-            <Section title="إيرادات العبارات">
+            <Section title="إيرادات العبارات (Over Pax يدوي — يُوزَّع 66.67%/33.33%)">
               <VesselRow label="Poseidon"
                 revenue={form.poseidon_revenue} onRev={(v) => setNum('poseidon_revenue', v)}
                 voyages={form.poseidon_voyages} onVoy={(v) => setNum('poseidon_voyages', v)}
@@ -419,6 +431,24 @@ export default function ProfitDistributionPage() {
                 revenue={form.daleela_revenue} onRev={(v) => setNum('daleela_revenue', v)}
                 voyages={form.daleela_voyages} onVoy={(v) => setNum('daleela_voyages', v)}
                 overPax={form.daleela_over_pax} onOver={(v) => setNum('daleela_over_pax', v)} />
+            </Section>
+
+            {/* بنكر */}
+            <Section title="بنكر (مجلوب تلقائياً من الشيت — يمكن التعديل)">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">بنكر بدوي (Poseidon — عمود Z)</label>
+                  <input type="number" value={form.bunker_badawi}
+                    onChange={(e) => setNum('bunker_badawi', e.target.value)}
+                    className="w-full border rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-400 font-mono" />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">بنكر الاتحاد (Amal+Daleela — عمود W)</label>
+                  <input type="number" value={form.bunker_ittihad}
+                    onChange={(e) => setNum('bunker_ittihad', e.target.value)}
+                    className="w-full border rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-400 font-mono" />
+                </div>
+              </div>
             </Section>
 
             {/* إيجار العبارات — تلقائي */}
@@ -449,7 +479,7 @@ export default function ProfitDistributionPage() {
             <Section title="العمولة الإجمالية">
               <div>
                 <label className="block text-xs text-gray-500 mb-1">
-                  العمولة $ — تُجلب تلقائياً من الشيت (يمكن التعديل يدوياً)
+                  العمولة $ — تُجلب تلقائياً من الشيت (للعرض فقط — لا تؤثر على التوزيع)
                 </label>
                 <input type="number" value={form.commission_amount}
                   onChange={(e) => setNum('commission_amount', e.target.value)}
@@ -529,8 +559,8 @@ export default function ProfitDistributionPage() {
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
                 <CalcItem label="إجمالي الإيراد" val={`$${fmt(calc.totalRevenue)}`} />
                 <CalcItem label="الإيجار" val={`$${fmt(calc.totalRent)}`} />
-                <CalcItem label="العمولة" val={`$${fmt(calc.totalCommission)}`} />
-                <CalcItem label="أساس التوزيع" val={`$${fmt(calc.netForDistribution)}`} />
+                <CalcItem label="Over Pax بدوي" val={`$${fmt(calc.overPaxBadawi)}`} color="amber" />
+                <CalcItem label="Over Pax اتحاد" val={`$${fmt(calc.overPaxIttihad)}`} color="amber" />
                 <CalcItem label="نتيجة نشاط بدوي" val={`$${fmt(calc.activityBadawi)}`} color="blue" />
                 <CalcItem label="نتيجة نشاط الاتحاد" val={`$${fmt(calc.activityIttihad)}`} color="blue" />
                 <CalcItem label="رصيد بدوي" val={`$${fmt(calc.balanceBadawi)}`} color={calc.balanceBadawi >= 0 ? 'green' : 'red'} />
@@ -585,9 +615,9 @@ function VesselRow({ label, revenue, onRev, voyages, onVoy, overPax, onOver }: {
           className="w-full border rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-400" />
       </div>
       <div>
-        <label className="block text-xs text-gray-400 mb-0.5">Over Pax $</label>
+        <label className="block text-xs text-gray-400 mb-0.5">Over Pax $ (يدوي)</label>
         <input type="number" value={overPax} onChange={(e) => onOver(e.target.value)}
-          className="w-full border rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-400" />
+          className="w-full border rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-amber-400" />
       </div>
     </div>
   );
@@ -604,7 +634,10 @@ function DetailBox({ label, value, color }: { label: string; value: string; colo
 }
 
 function Row({ label, val, color, bold }: { label: string; val: string; color?: string; bold?: boolean }) {
-  const cls = color === 'red' ? 'text-red-600' : color === 'green' ? 'text-emerald-700' : 'text-gray-700';
+  const cls = color === 'red' ? 'text-red-600'
+    : color === 'green' ? 'text-emerald-700'
+    : color === 'amber' ? 'text-amber-600'
+    : 'text-gray-700';
   return (
     <div className="flex justify-between">
       <span className="text-gray-500">{label}</span>
@@ -614,7 +647,11 @@ function Row({ label, val, color, bold }: { label: string; val: string; color?: 
 }
 
 function CalcItem({ label, val, color }: { label: string; val: string; color?: string }) {
-  const cls = color === 'red' ? 'text-red-600' : color === 'green' ? 'text-emerald-600' : color === 'blue' ? 'text-blue-700' : 'text-gray-800';
+  const cls = color === 'red' ? 'text-red-600'
+    : color === 'green' ? 'text-emerald-600'
+    : color === 'blue' ? 'text-blue-700'
+    : color === 'amber' ? 'text-amber-600'
+    : 'text-gray-800';
   return (
     <div className="bg-white rounded p-2 border">
       <p className="text-gray-400 text-xs">{label}</p>
