@@ -24,10 +24,12 @@ interface Period {
 }
 
 interface Calc {
-  totalRevenue: number; totalVoyages: number; totalOverPax: number;
-  totalRent: number; commission: number; netProfit: number;
-  shareBadawi: number; shareIttihad: number;
+  totalRevenue: number; totalRent: number; totalCommission: number;
+  netForDistribution: number;
+  distributionBadawi: number; distributionIttihad: number;
+  activityBadawi: number; activityIttihad: number;
   balanceBadawi: number; balanceIttihad: number;
+  days: number; poseidonRent: number; amalRent: number; daleelaRent: number;
 }
 
 const emptyForm = (): Omit<Period, 'id'> => ({
@@ -64,18 +66,29 @@ function calcLocal(f: Omit<Period, 'id'>): Calc {
   const n = (v: any) => Number(v) || 0;
   const rent = calcRent(f);
   const totalRevenue = n(f.poseidon_revenue) + n(f.amal_revenue) + n(f.daleela_revenue);
-  const totalVoyages = n(f.poseidon_voyages) + n(f.amal_voyages) + n(f.daleela_voyages);
-  const totalOverPax = n(f.poseidon_over_pax) + n(f.amal_over_pax) + n(f.daleela_over_pax);
-  const totalRent = rent.total;
-  const commission = n(f.commission_amount) > 0
-    ? n(f.commission_amount)
-    : totalRevenue * (n(f.commission_rate) / 100) + totalVoyages * n(f.per_voyage_fee) + totalOverPax;
-  const netProfit = totalRevenue - totalRent - commission;
-  const shareBadawi = netProfit * (n(f.ratio_badawi) / 100);
-  const shareIttihad = netProfit * (n(f.ratio_ittihad) / 100);
-  const balanceBadawi = n(f.balance_prev_badawi) + shareBadawi - n(f.cash_safaga_badawi) - n(f.transfers_badawi);
-  const balanceIttihad = n(f.balance_prev_ittihad) + shareIttihad - n(f.cash_safaga_ittihad) - n(f.transfers_ittihad);
-  return { totalRevenue, totalVoyages, totalOverPax, totalRent, commission, netProfit, shareBadawi, shareIttihad, balanceBadawi, balanceIttihad };
+  const totalRent    = rent.total;
+  const totalCommission = n(f.commission_amount);
+
+  // منطق Excel: توزيع = (إيراد - إيجار) × ratio%
+  const netForDistribution = totalRevenue - totalRent;
+  const distributionBadawi  = netForDistribution * (n(f.ratio_badawi)  / 100);
+  const distributionIttihad = netForDistribution * (n(f.ratio_ittihad) / 100);
+
+  // نتيجة نشاط = توزيع - كاش + إيجار العبارة الخاصة
+  const activityBadawi  = distributionBadawi  - n(f.cash_safaga_badawi)  + rent.poseidon;
+  const activityIttihad = distributionIttihad - n(f.cash_safaga_ittihad) + rent.amal + rent.daleela;
+
+  const balanceBadawi  = n(f.balance_prev_badawi)  + activityBadawi  - n(f.transfers_badawi);
+  const balanceIttihad = n(f.balance_prev_ittihad) + activityIttihad - n(f.transfers_ittihad);
+
+  return {
+    totalRevenue, totalRent, totalCommission,
+    netForDistribution,
+    distributionBadawi, distributionIttihad,
+    activityBadawi, activityIttihad,
+    balanceBadawi, balanceIttihad,
+    days: rent.days, poseidonRent: rent.poseidon, amalRent: rent.amal, daleelaRent: rent.daleela,
+  };
 }
 
 export default function ProfitDistributionPage() {
@@ -274,24 +287,44 @@ export default function ProfitDistributionPage() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm mb-6">
             <DetailBox label="إجمالي الإيراد" value={`$${fmt(detailCalc.totalRevenue)}`} />
             <DetailBox label="إجمالي الإيجار" value={`$${fmt(detailCalc.totalRent)}`} color="red" />
-            <DetailBox label="العمولة" value={`$${fmt(detailCalc.commission)}`} color="red" />
-            <DetailBox label="صافي الربح" value={`$${fmt(detailCalc.netProfit)}`} color={detailCalc.netProfit >= 0 ? 'green' : 'red'} />
+            <DetailBox label="العمولة (للعرض)" value={`$${fmt(detailCalc.totalCommission)}`} />
+            <DetailBox label="أساس التوزيع" value={`$${fmt(detailCalc.netForDistribution)}`} color={detailCalc.netForDistribution >= 0 ? 'green' : 'red'} />
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {[
-              { name: 'بدوي', share: detailCalc.shareBadawi, cash: selected.cash_safaga_badawi, transfer: selected.transfers_badawi, prev: selected.balance_prev_badawi, balance: detailCalc.balanceBadawi },
-              { name: 'الاتحاد', share: detailCalc.shareIttihad, cash: selected.cash_safaga_ittihad, transfer: selected.transfers_ittihad, prev: selected.balance_prev_ittihad, balance: detailCalc.balanceIttihad },
+              {
+                name: 'بدوي (بوسيدون)',
+                dist: detailCalc.distributionBadawi,
+                rent: detailCalc.poseidonRent,
+                cash: selected.cash_safaga_badawi,
+                transfer: selected.transfers_badawi,
+                prev: selected.balance_prev_badawi,
+                activity: detailCalc.activityBadawi,
+                balance: detailCalc.balanceBadawi,
+              },
+              {
+                name: 'الاتحاد (امل + دليلة)',
+                dist: detailCalc.distributionIttihad,
+                rent: detailCalc.amalRent + detailCalc.daleelaRent,
+                cash: selected.cash_safaga_ittihad,
+                transfer: selected.transfers_ittihad,
+                prev: selected.balance_prev_ittihad,
+                activity: detailCalc.activityIttihad,
+                balance: detailCalc.balanceIttihad,
+              },
             ].map((co) => (
               <div key={co.name} className="border rounded-xl p-4">
                 <p className="font-bold text-base mb-3">{co.name}</p>
                 <div className="space-y-1 text-sm">
                   <Row label="رصيد سابق" val={`$${fmt(co.prev)}`} />
-                  <Row label="حصة هذه الفترة" val={`$${fmt(co.share)}`} />
+                  <Row label="توزيع النسب" val={`$${fmt(co.dist)}`} />
                   <Row label="كاش سفاجا" val={`-$${fmt(co.cash)}`} color="red" />
+                  <Row label="إيجار العبارات" val={`+$${fmt(co.rent)}`} color="green" />
+                  <Row label="نتيجة النشاط" val={`$${fmt(co.activity)}`} bold />
                   <Row label="تحويلات" val={`-$${fmt(co.transfer)}`} color="red" />
                   <div className="border-t pt-2 mt-2">
-                    <Row label="الرصيد المتراكم" val={`$${fmt(co.balance)}`} bold color={co.balance >= 0 ? 'green' : 'red'} />
+                    <Row label="الرصيد المرحّل" val={`$${fmt(co.balance)}`} bold color={co.balance >= 0 ? 'green' : 'red'} />
                   </div>
                 </div>
               </div>
@@ -487,13 +520,13 @@ export default function ProfitDistributionPage() {
               <p className="text-xs font-semibold text-emerald-700 mb-2">معاينة الحساب</p>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
                 <CalcItem label="إجمالي الإيراد" val={`$${fmt(calc.totalRevenue)}`} />
-                <CalcItem label="صافي الربح" val={`$${fmt(calc.netProfit)}`} />
-                <CalcItem label="حصة بدوي" val={`$${fmt(calc.shareBadawi)}`} color="blue" />
-                <CalcItem label="حصة الاتحاد" val={`$${fmt(calc.shareIttihad)}`} color="blue" />
+                <CalcItem label="الإيجار" val={`$${fmt(calc.totalRent)}`} />
+                <CalcItem label="العمولة" val={`$${fmt(calc.totalCommission)}`} />
+                <CalcItem label="أساس التوزيع" val={`$${fmt(calc.netForDistribution)}`} />
+                <CalcItem label="نتيجة نشاط بدوي" val={`$${fmt(calc.activityBadawi)}`} color="blue" />
+                <CalcItem label="نتيجة نشاط الاتحاد" val={`$${fmt(calc.activityIttihad)}`} color="blue" />
                 <CalcItem label="رصيد بدوي" val={`$${fmt(calc.balanceBadawi)}`} color={calc.balanceBadawi >= 0 ? 'green' : 'red'} />
                 <CalcItem label="رصيد الاتحاد" val={`$${fmt(calc.balanceIttihad)}`} color={calc.balanceIttihad >= 0 ? 'green' : 'red'} />
-                <CalcItem label="العمولة" val={`$${fmt(calc.commission)}`} />
-                <CalcItem label="الإيجار" val={`$${fmt(calc.totalRent)}`} />
               </div>
             </div>
 
