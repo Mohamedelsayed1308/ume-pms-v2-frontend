@@ -65,7 +65,8 @@ function calcRent(f: Pick<Omit<Period,'id'>, 'date_from'|'date_to'|'daleela_reve
 function calcLocal(f: Omit<Period, 'id'>): Calc {
   const n = (v: any) => Number(v) || 0;
   const rent = calcRent(f);
-  const totalRevenue = n(f.poseidon_revenue) + n(f.amal_revenue) + n(f.daleela_revenue);
+  const totalRevenue = n(f.poseidon_revenue) + n(f.amal_revenue) + n(f.daleela_revenue)
+                     + n(f.poseidon_over_pax) + n(f.amal_over_pax) + n(f.daleela_over_pax);
   const totalRent    = rent.total;
   const totalCommission = n(f.commission_amount);
 
