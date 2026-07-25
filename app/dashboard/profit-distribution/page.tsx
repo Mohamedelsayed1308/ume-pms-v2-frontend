@@ -46,12 +46,25 @@ const emptyForm = (): Omit<Period, 'id'> => ({
 const fmt = (n: number) =>
   new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n || 0);
 
+const DAILY_RATES = { poseidon: 14000, amal: 13000, daleela: 12000 };
+
+function calcRent(f: Pick<Omit<Period,'id'>, 'date_from'|'date_to'|'daleela_revenue'>) {
+  const days = f.date_from && f.date_to
+    ? Math.round((new Date(f.date_to).getTime() - new Date(f.date_from).getTime()) / 86400000) + 1
+    : 0;
+  const poseidon = days * DAILY_RATES.poseidon;
+  const amal     = days * DAILY_RATES.amal;
+  const daleela  = Number(f.daleela_revenue) > 0 ? days * DAILY_RATES.daleela : 0;
+  return { days, poseidon, amal, daleela, total: poseidon + amal + daleela };
+}
+
 function calcLocal(f: Omit<Period, 'id'>): Calc {
   const n = (v: any) => Number(v) || 0;
+  const rent = calcRent(f);
   const totalRevenue = n(f.poseidon_revenue) + n(f.amal_revenue) + n(f.daleela_revenue);
   const totalVoyages = n(f.poseidon_voyages) + n(f.amal_voyages) + n(f.daleela_voyages);
   const totalOverPax = n(f.poseidon_over_pax) + n(f.amal_over_pax) + n(f.daleela_over_pax);
-  const totalRent = n(f.poseidon_rent) + n(f.amal_rent) + n(f.daleela_rent);
+  const totalRent = rent.total;
   const commission = totalRevenue * (n(f.commission_rate) / 100) + totalVoyages * n(f.per_voyage_fee) + totalOverPax;
   const netProfit = totalRevenue - totalRent - commission;
   const shareBadawi = netProfit * (n(f.ratio_badawi) / 100);
@@ -316,19 +329,29 @@ export default function ProfitDistributionPage() {
                 overPax={form.daleela_over_pax} onOver={(v) => setNum('daleela_over_pax', v)} />
             </Section>
 
-            {/* إيجار العبارات */}
-            <Section title="إيجار العبارات (يدوي)">
-              <div className="grid grid-cols-3 gap-2">
-                {(['poseidon', 'amal', 'daleela'] as const).map((v) => (
-                  <div key={v}>
-                    <label className="block text-xs text-gray-400 mb-1 capitalize">{v}</label>
-                    <input type="number" value={form[`${v}_rent` as keyof typeof form] as number}
-                      onChange={(e) => setNum(`${v}_rent` as any, e.target.value)}
-                      className="w-full border rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-400" />
+            {/* إيجار العبارات — تلقائي */}
+            {(() => {
+              const r = calcRent(form);
+              return (
+                <Section title={`إيجار العبارات — تلقائي (${r.days} يوم)`}>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      { label: 'Poseidon', rate: DAILY_RATES.poseidon, val: r.poseidon },
+                      { label: 'Amal',     rate: DAILY_RATES.amal,     val: r.amal },
+                      { label: 'Daleela',  rate: DAILY_RATES.daleela,  val: r.daleela, note: Number(form.daleela_revenue) === 0 ? '(لا إيراد)' : '' },
+                    ].map(({ label, rate, val, note }) => (
+                      <div key={label} className="bg-gray-50 rounded p-2 text-center">
+                        <p className="text-xs text-gray-400 font-semibold">{label}</p>
+                        <p className="text-xs text-gray-400">${rate.toLocaleString()}/يوم</p>
+                        <p className="font-mono font-bold text-sm text-gray-700">${fmt(val)}</p>
+                        {note && <p className="text-xs text-orange-500">{note}</p>}
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            </Section>
+                  <p className="text-xs text-gray-500 mt-2 text-left">الإجمالي: <span className="font-bold font-mono">${fmt(r.total)}</span></p>
+                </Section>
+              );
+            })()}
 
             {/* معاملات العمولة */}
             <Section title="معاملات العمولة">
