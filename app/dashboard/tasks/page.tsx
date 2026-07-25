@@ -57,6 +57,28 @@ function fmtTime(d: string) {
   return new Date(d).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 }
 
+// ─── Notification helpers ──────────────────────────────────────────────────────
+function getDueSoonTasks(tasks: Task[]) {
+  const now = new Date(); now.setHours(0, 0, 0, 0);
+  const in3  = new Date(now); in3.setDate(in3.getDate() + 3);
+  return tasks.filter((t) => {
+    if (!t.due_date || t.status === 'done' || t.status === 'cancelled') return false;
+    const due = new Date(t.due_date); due.setHours(0, 0, 0, 0);
+    return due <= in3;
+  });
+}
+
+function fireNotifications(dueSoon: Task[]) {
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  dueSoon.forEach((t) => {
+    const due = new Date(t.due_date); due.setHours(0, 0, 0, 0);
+    const now = new Date(); now.setHours(0, 0, 0, 0);
+    const diff = Math.round((due.getTime() - now.getTime()) / 86400000);
+    const msg = diff < 0 ? `متأخرة ${Math.abs(diff)} يوم` : diff === 0 ? 'موعدها اليوم!' : `موعدها بعد ${diff} يوم`;
+    new Notification(`⚠️ ${t.title}`, { body: msg, icon: '/favicon.ico' });
+  });
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function TasksPage() {
   const [tasks, setTasks]           = useState<Task[]>([]);
@@ -68,13 +90,29 @@ export default function TasksPage() {
   const [filter, setFilter]         = useState<string>('all');
   const [search, setSearch]         = useState('');
   const [editId, setEditId]         = useState<string | null>(null);
+  const [alerts, setAlerts]         = useState<Task[]>([]);
+  const [showAlerts, setShowAlerts] = useState(true);
 
   const load = useCallback(async () => {
     const res = await api.get('/api/tasks');
     setTasks(res.data);
+    return res.data as Task[];
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load().then((loaded) => {
+      const dueSoon = getDueSoonTasks(loaded);
+      setAlerts(dueSoon);
+      if (!('Notification' in window)) return;
+      if (Notification.permission === 'granted') {
+        fireNotifications(dueSoon);
+      } else if (Notification.permission !== 'denied') {
+        Notification.requestPermission().then((perm) => {
+          if (perm === 'granted') fireNotifications(dueSoon);
+        });
+      }
+    });
+  }, [load]);
 
   // ── inline status/owner update ──────────────────────────────────────────────
   async function patchTask(id: string, patch: Partial<Task>) {
@@ -165,6 +203,34 @@ export default function TasksPage() {
           <span className="text-lg leading-none">+</span> مهمة جديدة
         </button>
       </div>
+
+      {/* ── Due-soon alert banner ── */}
+      {showAlerts && alerts.length > 0 && (
+        <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm font-semibold text-amber-800 flex items-center gap-1.5">
+              ⚠️ {alerts.length} {alerts.length === 1 ? 'مهمة' : 'مهام'} تحتاج انتباهك
+            </span>
+            <button onClick={() => setShowAlerts(false)} className="text-amber-400 hover:text-amber-700 text-xs">✕ إغلاق</button>
+          </div>
+          <div className="space-y-1.5">
+            {alerts.map((t) => {
+              const due = new Date(t.due_date); due.setHours(0, 0, 0, 0);
+              const now = new Date(); now.setHours(0, 0, 0, 0);
+              const diff = Math.round((due.getTime() - now.getTime()) / 86400000);
+              const isOverdue = diff < 0;
+              return (
+                <div key={t.id} className={`flex items-center justify-between rounded-lg px-3 py-1.5 text-xs ${isOverdue ? 'bg-red-100 text-red-800' : 'bg-amber-100 text-amber-800'}`}>
+                  <span className="font-medium">{t.title}</span>
+                  <span className={`font-bold ${isOverdue ? 'text-red-600' : 'text-amber-700'}`}>
+                    {isOverdue ? `متأخرة ${Math.abs(diff)} يوم` : diff === 0 ? 'موعدها اليوم!' : `بعد ${diff} يوم`}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* ── Filter tabs + search ── */}
       <div className="flex items-center gap-3 mb-5 flex-wrap">
