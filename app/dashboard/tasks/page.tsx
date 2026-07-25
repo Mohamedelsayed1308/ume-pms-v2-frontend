@@ -96,6 +96,8 @@ export default function TasksPage() {
       setShowForm(false);
       setForm(emptyForm());
       setEditId(null);
+    } catch (err: any) {
+      alert('خطأ: ' + (err?.response?.data?.message || err?.message || 'فشل الحفظ'));
     } finally { setSaving(false); }
   }
 
