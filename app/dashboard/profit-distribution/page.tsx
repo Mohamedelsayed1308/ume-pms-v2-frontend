@@ -553,18 +553,101 @@ export default function ProfitDistributionPage() {
               </div>
             </Section>
 
-            {/* معاينة الحساب */}
+            {/* معاينة الحساب الكاملة */}
             <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 mb-4">
-              <p className="text-xs font-semibold text-emerald-700 mb-2">معاينة الحساب</p>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+              <p className="text-xs font-semibold text-emerald-700 mb-3">معاينة الحساب</p>
+
+              {/* صف الإيراد والإيجار */}
+              <div className="grid grid-cols-3 gap-2 text-xs mb-3">
                 <CalcItem label="إجمالي الإيراد" val={`$${fmt(calc.totalRevenue)}`} />
-                <CalcItem label="الإيجار" val={`$${fmt(calc.totalRent)}`} />
-                <CalcItem label="Over Pax بدوي" val={`$${fmt(calc.overPaxBadawi)}`} color="amber" />
-                <CalcItem label="Over Pax اتحاد" val={`$${fmt(calc.overPaxIttihad)}`} color="amber" />
-                <CalcItem label="نتيجة نشاط بدوي" val={`$${fmt(calc.activityBadawi)}`} color="blue" />
-                <CalcItem label="نتيجة نشاط الاتحاد" val={`$${fmt(calc.activityIttihad)}`} color="blue" />
-                <CalcItem label="رصيد بدوي" val={`$${fmt(calc.balanceBadawi)}`} color={calc.balanceBadawi >= 0 ? 'green' : 'red'} />
-                <CalcItem label="رصيد الاتحاد" val={`$${fmt(calc.balanceIttihad)}`} color={calc.balanceIttihad >= 0 ? 'green' : 'red'} />
+                <CalcItem label="إجمالي الإيجار" val={`$${fmt(calc.totalRent)}`} color="red" />
+                <CalcItem label="أساس التوزيع" val={`$${fmt(calc.netForDistribution)}`} />
+              </div>
+
+              {/* Over Pax — نسب التوزيع */}
+              {(Number(form.poseidon_over_pax) > 0 || Number(form.amal_over_pax) > 0 || Number(form.daleela_over_pax) > 0) && (
+                <div className="bg-amber-50 border border-amber-200 rounded p-2 mb-3 text-xs">
+                  <p className="font-semibold text-amber-700 mb-1">توزيع Over Pax</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <p className="text-amber-600 font-medium">بدوي</p>
+                      {Number(form.poseidon_over_pax) > 0 && <p>Poseidon × 66.67% = <span className="font-mono">${fmt(Number(form.poseidon_over_pax) * 2/3)}</span></p>}
+                      {Number(form.daleela_over_pax)  > 0 && <p>Daleela × 33.33% = <span className="font-mono">${fmt(Number(form.daleela_over_pax)  * 1/3)}</span></p>}
+                      <p className="font-bold border-t mt-1 pt-1">= ${fmt(calc.overPaxBadawi)}</p>
+                    </div>
+                    <div>
+                      <p className="text-amber-600 font-medium">الاتحاد</p>
+                      {Number(form.poseidon_over_pax) > 0 && <p>Poseidon × 33.33% = <span className="font-mono">${fmt(Number(form.poseidon_over_pax) * 1/3)}</span></p>}
+                      {Number(form.amal_over_pax)     > 0 && <p>Amal × 100% = <span className="font-mono">${fmt(Number(form.amal_over_pax))}</span></p>}
+                      {Number(form.daleela_over_pax)  > 0 && <p>Daleela × 66.67% = <span className="font-mono">${fmt(Number(form.daleela_over_pax) * 2/3)}</span></p>}
+                      <p className="font-bold border-t mt-1 pt-1">= ${fmt(calc.overPaxIttihad)}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* الحساب التفصيلي لكل طرف */}
+              <div className="grid grid-cols-2 gap-3 text-xs">
+                {[
+                  {
+                    name: 'بدوي', color: 'text-blue-700',
+                    rows: [
+                      { label: `توزيع (${form.ratio_badawi}%)`, val: calc.distributionBadawi, sign: '' },
+                      { label: 'كاش سفاجا', val: -Number(form.cash_safaga_badawi), sign: '-', color: 'text-red-500' },
+                      { label: 'Over Pax', val: calc.overPaxBadawi, sign: '+', color: 'text-amber-600', hide: calc.overPaxBadawi === 0 },
+                      { label: 'إيجار Poseidon', val: calc.poseidonRent, sign: '+', color: 'text-emerald-600' },
+                      { label: 'بنكر', val: Number(form.bunker_badawi), sign: '+', color: 'text-emerald-600', hide: Number(form.bunker_badawi) === 0 },
+                    ],
+                    activity: calc.activityBadawi,
+                    transfer: Number(form.transfers_badawi),
+                    prev: Number(form.balance_prev_badawi),
+                    balance: calc.balanceBadawi,
+                  },
+                  {
+                    name: 'الاتحاد', color: 'text-purple-700',
+                    rows: [
+                      { label: `توزيع (${form.ratio_ittihad}%)`, val: calc.distributionIttihad, sign: '' },
+                      { label: 'كاش سفاجا', val: -Number(form.cash_safaga_ittihad), sign: '-', color: 'text-red-500' },
+                      { label: 'Over Pax', val: calc.overPaxIttihad, sign: '+', color: 'text-amber-600', hide: calc.overPaxIttihad === 0 },
+                      { label: 'إيجار Amal+Daleela', val: calc.amalRent + calc.daleelaRent, sign: '+', color: 'text-emerald-600' },
+                      { label: 'بنكر', val: Number(form.bunker_ittihad), sign: '+', color: 'text-emerald-600', hide: Number(form.bunker_ittihad) === 0 },
+                    ],
+                    activity: calc.activityIttihad,
+                    transfer: Number(form.transfers_ittihad),
+                    prev: Number(form.balance_prev_ittihad),
+                    balance: calc.balanceIttihad,
+                  },
+                ].map((side) => (
+                  <div key={side.name} className="bg-white rounded border p-2 space-y-0.5">
+                    <p className={`font-bold text-sm mb-1 ${side.color}`}>{side.name}</p>
+                    {side.rows.filter(r => !r.hide).map((r, i) => (
+                      <div key={i} className="flex justify-between">
+                        <span className="text-gray-500">{r.sign} {r.label}</span>
+                        <span className={`font-mono ${r.color || 'text-gray-700'}`}>${fmt(Math.abs(r.val))}</span>
+                      </div>
+                    ))}
+                    <div className="border-t pt-1 flex justify-between font-semibold">
+                      <span>نتيجة النشاط</span>
+                      <span className={`font-mono ${side.color}`}>${fmt(side.activity)}</span>
+                    </div>
+                    {side.transfer > 0 && (
+                      <div className="flex justify-between text-red-500">
+                        <span>- تحويلات</span>
+                        <span className="font-mono">${fmt(side.transfer)}</span>
+                      </div>
+                    )}
+                    {side.prev !== 0 && (
+                      <div className="flex justify-between text-gray-500">
+                        <span>+ رصيد سابق</span>
+                        <span className="font-mono">${fmt(side.prev)}</span>
+                      </div>
+                    )}
+                    <div className={`border-t pt-1 flex justify-between font-bold text-sm ${side.balance >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>
+                      <span>الرصيد</span>
+                      <span className="font-mono">${fmt(side.balance)}</span>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
 
