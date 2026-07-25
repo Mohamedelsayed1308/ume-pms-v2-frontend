@@ -104,6 +104,8 @@ export default function ProfitDistributionPage() {
   const [voyageFrom, setVoyageFrom] = useState('');
   const [voyageTo, setVoyageTo] = useState('');
   const [fetchingVoyage, setFetchingVoyage] = useState(false);
+  const [confirmedVoyFrom, setConfirmedVoyFrom] = useState<number | null>(null);
+  const [confirmedVoyTo, setConfirmedVoyTo] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     const res = await api.get('/api/profit-periods');
@@ -150,6 +152,8 @@ export default function ProfitDistributionPage() {
       });
       if (res.data.error) { alert(res.data.error); return; }
       setForm((prev) => ({ ...prev, date_from: res.data.date_from, date_to: res.data.date_to }));
+      setConfirmedVoyFrom(res.data.voy_from ?? Number(voyageFrom));
+      setConfirmedVoyTo(res.data.voy_to ?? Number(voyageTo));
     } catch (e: any) {
       alert('خطأ: ' + (e?.response?.data?.message || e?.message));
     } finally {
@@ -163,6 +167,9 @@ export default function ProfitDistributionPage() {
     try {
       const res = await api.post('/api/profit-periods/fetch-excel', {
         file_id: driveId, date_from: form.date_from, date_to: form.date_to,
+        ...(confirmedVoyFrom != null && confirmedVoyTo != null
+          ? { voy_from: confirmedVoyFrom, voy_to: confirmedVoyTo }
+          : {}),
       });
       const d = res.data;
       setForm((prev) => ({
