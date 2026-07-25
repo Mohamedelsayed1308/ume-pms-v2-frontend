@@ -50,7 +50,7 @@ const DAILY_RATES = { poseidon: 14000, amal: 13000, daleela: 12000 };
 
 function calcRent(f: Pick<Omit<Period,'id'>, 'date_from'|'date_to'|'daleela_revenue'>) {
   const days = f.date_from && f.date_to
-    ? Math.round((new Date(f.date_to).getTime() - new Date(f.date_from).getTime()) / 86400000) + 1
+    ? Math.max(0, Math.round((new Date(f.date_to).getTime() - new Date(f.date_from).getTime()) / 86400000) + 1)
     : 0;
   const poseidon = days * DAILY_RATES.poseidon;
   const amal     = days * DAILY_RATES.amal;
