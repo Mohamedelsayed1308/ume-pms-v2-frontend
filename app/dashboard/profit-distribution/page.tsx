@@ -86,7 +86,7 @@ export default function ProfitDistributionPage() {
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(false);
   const [error, setError] = useState('');
-  const [driveId, setDriveId] = useState('');
+  const [driveId, setDriveId] = useState('1xBNKsoDdlh2q6uEoKNEf49Q3UdIR6cJz');
   const [selected, setSelected] = useState<Period | null>(null);
   const [voyageFrom, setVoyageFrom] = useState('');
   const [voyageTo, setVoyageTo] = useState('');
