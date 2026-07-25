@@ -50,6 +50,8 @@ const emptyForm = (): Omit<Period, 'id'> => ({
 const fmt = (n: number) =>
   new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n || 0);
 
+const r2 = (n: number) => Math.round((n || 0) * 100) / 100;
+
 const DAILY_RATES = { poseidon: 14000, amal: 13000, daleela: 12000 };
 
 function calcRent(f: Pick<Omit<Period,'id'>, 'date_from'|'date_to'|'daleela_revenue'>) {
@@ -438,13 +440,13 @@ export default function ProfitDistributionPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs text-gray-500 mb-1">بنكر بدوي (Poseidon — عمود Z)</label>
-                  <input type="number" value={form.bunker_badawi}
+                  <input type="number" value={r2(form.bunker_badawi)}
                     onChange={(e) => setNum('bunker_badawi', e.target.value)}
                     className="w-full border rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-400 font-mono" />
                 </div>
                 <div>
                   <label className="block text-xs text-gray-500 mb-1">بنكر الاتحاد (Amal+Daleela — عمود W)</label>
-                  <input type="number" value={form.bunker_ittihad}
+                  <input type="number" value={r2(form.bunker_ittihad)}
                     onChange={(e) => setNum('bunker_ittihad', e.target.value)}
                     className="w-full border rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-400 font-mono" />
                 </div>
@@ -481,7 +483,7 @@ export default function ProfitDistributionPage() {
                 <label className="block text-xs text-gray-500 mb-1">
                   العمولة $ — تُجلب تلقائياً من الشيت (للعرض فقط — لا تؤثر على التوزيع)
                 </label>
-                <input type="number" value={form.commission_amount}
+                <input type="number" value={r2(form.commission_amount)}
                   onChange={(e) => setNum('commission_amount', e.target.value)}
                   className="w-full border rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-400 font-mono" />
               </div>
@@ -510,25 +512,25 @@ export default function ProfitDistributionPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs text-gray-500 mb-1">كاش سفاجا — بدوي</label>
-                  <input type="number" value={form.cash_safaga_badawi}
+                  <input type="number" value={r2(form.cash_safaga_badawi)}
                     onChange={(e) => setNum('cash_safaga_badawi', e.target.value)}
                     className="w-full border rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-400" />
                 </div>
                 <div>
                   <label className="block text-xs text-gray-500 mb-1">كاش سفاجا — الاتحاد</label>
-                  <input type="number" value={form.cash_safaga_ittihad}
+                  <input type="number" value={r2(form.cash_safaga_ittihad)}
                     onChange={(e) => setNum('cash_safaga_ittihad', e.target.value)}
                     className="w-full border rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-400" />
                 </div>
                 <div>
                   <label className="block text-xs text-gray-500 mb-1">تحويلات — بدوي</label>
-                  <input type="number" value={form.transfers_badawi}
+                  <input type="number" value={r2(form.transfers_badawi)}
                     onChange={(e) => setNum('transfers_badawi', e.target.value)}
                     className="w-full border rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-400" />
                 </div>
                 <div>
                   <label className="block text-xs text-gray-500 mb-1">تحويلات — الاتحاد</label>
-                  <input type="number" value={form.transfers_ittihad}
+                  <input type="number" value={r2(form.transfers_ittihad)}
                     onChange={(e) => setNum('transfers_ittihad', e.target.value)}
                     className="w-full border rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-400" />
                 </div>
@@ -540,13 +542,13 @@ export default function ProfitDistributionPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs text-gray-500 mb-1">رصيد بدوي السابق</label>
-                  <input type="number" value={form.balance_prev_badawi}
+                  <input type="number" value={r2(form.balance_prev_badawi)}
                     onChange={(e) => setNum('balance_prev_badawi', e.target.value)}
                     className="w-full border rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-400" />
                 </div>
                 <div>
                   <label className="block text-xs text-gray-500 mb-1">رصيد الاتحاد السابق</label>
-                  <input type="number" value={form.balance_prev_ittihad}
+                  <input type="number" value={r2(form.balance_prev_ittihad)}
                     onChange={(e) => setNum('balance_prev_ittihad', e.target.value)}
                     className="w-full border rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-400" />
                 </div>
@@ -689,7 +691,7 @@ function VesselRow({ label, revenue, onRev, voyages, onVoy, overPax, onOver }: {
       <span className="text-sm font-medium text-gray-700">{label}</span>
       <div>
         <label className="block text-xs text-gray-400 mb-0.5">إيراد $</label>
-        <input type="number" value={revenue} onChange={(e) => onRev(e.target.value)}
+        <input type="number" value={r2(revenue)} onChange={(e) => onRev(e.target.value)}
           className="w-full border rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-400" />
       </div>
       <div>
@@ -699,7 +701,7 @@ function VesselRow({ label, revenue, onRev, voyages, onVoy, overPax, onOver }: {
       </div>
       <div>
         <label className="block text-xs text-gray-400 mb-0.5">Over Pax $ (يدوي)</label>
-        <input type="number" value={overPax} onChange={(e) => onOver(e.target.value)}
+        <input type="number" value={r2(overPax)} onChange={(e) => onOver(e.target.value)}
           className="w-full border rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-amber-400" />
       </div>
     </div>
