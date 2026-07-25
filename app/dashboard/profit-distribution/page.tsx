@@ -50,7 +50,10 @@ const emptyForm = (): Omit<Period, 'id'> => ({
 const fmt = (n: number) =>
   new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n || 0);
 
-const r2 = (n: number) => Math.round((n || 0) * 100) / 100;
+const r2 = (n: any): number => {
+  const num = parseFloat(String(n ?? 0));
+  return isNaN(num) ? 0 : parseFloat(num.toFixed(2));
+};
 
 const DAILY_RATES = { poseidon: 14000, amal: 13000, daleela: 12000 };
 
@@ -483,7 +486,7 @@ export default function ProfitDistributionPage() {
                 <label className="block text-xs text-gray-500 mb-1">
                   العمولة $ — تُجلب تلقائياً من الشيت (للعرض فقط — لا تؤثر على التوزيع)
                 </label>
-                <input type="number" value={r2(form.commission_amount)}
+                <input type="number" value={r2(form.commission_amount)} step="0.01"
                   onChange={(e) => setNum('commission_amount', e.target.value)}
                   className="w-full border rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-400 font-mono" />
               </div>
