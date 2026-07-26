@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState, useCallback } from 'react';
 import api from '@/lib/api';
+import TaskAssistant from './TaskAssistant';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Comment { id: string; author: string; body: string; created_at: string; }
@@ -534,6 +535,9 @@ export default function TasksPage() {
           </div>
         </div>
       )}
+
+      {/* ── AI Assistant ── */}
+      <TaskAssistant onChanged={load} />
     </div>
   );
 }
