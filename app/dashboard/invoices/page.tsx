@@ -3,6 +3,7 @@ import { useEffect, useState, useRef, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import api from '@/lib/api';
 import { CURRENCIES } from '@/lib/currencies';
+import InvoiceAssistant from './InvoiceAssistant';
 
 const VESSEL_PREFIX: Record<string, string> = {
   '06': 'Alcudia Express',
@@ -1125,6 +1126,9 @@ function InvoicesContent() {
           </div>
         </div>
       )}
+
+      {/* ── AI Financial Assistant ── */}
+      <InvoiceAssistant onChanged={load} />
     </div>
   );
 }
