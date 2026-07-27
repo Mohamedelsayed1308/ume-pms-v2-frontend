@@ -15,6 +15,9 @@ interface UserReport {
   by_vessel: { vessel: string; count: number }[];
 }
 
+interface StatementSec { supplierId: string; supplierName: string; transactions: any[]; summary: { total_debit: number; total_credit: number; balance: number }; }
+interface UnpaidSec { supplierId: string; supplierName: string; invoices: any[]; }
+
 function exportToExcel(rows: any[], filename: string) {
   const ws = XLSX.utils.json_to_sheet(rows);
   const wb = XLSX.utils.book_new();
@@ -22,11 +25,27 @@ function exportToExcel(rows: any[], filename: string) {
   XLSX.writeFile(wb, `${filename}.xlsx`);
 }
 
+// كل مورد في شيت منفصل داخل نفس الملف
+function exportMultiToExcel(sheets: { name: string; rows: any[] }[], filename: string) {
+  const wb = XLSX.utils.book_new();
+  const used: Record<string, number> = {};
+  sheets.forEach((s) => {
+    const ws = XLSX.utils.json_to_sheet(s.rows.length ? s.rows : [{}]);
+    let safe = (s.name || 'مورد').replace(/[\\/?*[\]:]/g, ' ').slice(0, 28) || 'مورد';
+    if (used[safe] != null) { used[safe]++; safe = `${safe} ${used[safe]}`; } else { used[safe] = 0; }
+    XLSX.utils.book_append_sheet(wb, ws, safe);
+  });
+  XLSX.writeFile(wb, `${filename}.xlsx`);
+}
+
+const num = (n: any) => Number(n || 0).toLocaleString();
+
 export default function ReportsPage() {
   const [reportType, setReportType] = useState<ReportType>('due-alerts');
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [vessels, setVessels] = useState<any[]>([]);
-  const [selectedSupplier, setSelectedSupplier] = useState('');
+  const [selectedSuppliers, setSelectedSuppliers] = useState<string[]>([]);
+  const [supplierSearch, setSupplierSearch] = useState('');
   const [selectedVessel, setSelectedVessel] = useState('');
   const [daysAhead, setDaysAhead] = useState('30');
   const [data, setData] = useState<any>(null);
@@ -52,17 +71,44 @@ export default function ReportsPage() {
     setAttachments(map);
   }
 
+  const nameOf = (id: string) => suppliers.find((s) => s.id === id)?.name || '—';
+
   async function runReport() {
     setLoading(true);
     setData(null);
     setAttachments({});
     try {
+      // ── تقارير متعددة الموردين ──
+      if (reportType === 'supplier-statement' || reportType === 'unpaid-supplier') {
+        if (selectedSuppliers.length === 0) { alert('اختر موردًا واحدًا على الأقل'); return; }
+
+        if (reportType === 'supplier-statement') {
+          const results = await Promise.all(selectedSuppliers.map((id) =>
+            api.get(`/api/invoices/statement/supplier/${id}`).then((r) => ({ id, d: r.data }))));
+          const sections: StatementSec[] = results.map(({ id, d }) => ({
+            supplierId: id,
+            supplierName: d?.supplier?.name || nameOf(id),
+            transactions: d?.transactions || [],
+            summary: d?.summary || { total_debit: 0, total_credit: 0, balance: 0 },
+          }));
+          setData({ multi: 'statement', sections });
+        } else {
+          const results = await Promise.all(selectedSuppliers.map((id) =>
+            api.get(`/api/invoices/unpaid/by-supplier/${id}`).then((r) => ({ id, d: r.data }))));
+          const sections: UnpaidSec[] = results.map(({ id, d }) => ({
+            supplierId: id,
+            supplierName: nameOf(id),
+            invoices: Array.isArray(d) ? d : [],
+          }));
+          setData({ multi: 'unpaid', sections });
+          loadAttachments(sections.flatMap((s) => s.invoices));
+        }
+        return;
+      }
+
+      // ── باقي التقارير (كما هي) ──
       let res;
-      if (reportType === 'supplier-statement' && selectedSupplier) {
-        res = await api.get(`/api/invoices/statement/supplier/${selectedSupplier}`);
-      } else if (reportType === 'unpaid-supplier' && selectedSupplier) {
-        res = await api.get(`/api/invoices/unpaid/by-supplier/${selectedSupplier}`);
-      } else if (reportType === 'unpaid-vessel' && selectedVessel) {
+      if (reportType === 'unpaid-vessel' && selectedVessel) {
         res = await api.get(`/api/invoices/unpaid/by-vessel/${selectedVessel}`);
       } else if (reportType === 'vessel-suppliers' && selectedVessel) {
         res = await api.get(`/api/vessels/${selectedVessel}/suppliers`);
@@ -75,8 +121,7 @@ export default function ReportsPage() {
       }
       if (res) {
         setData(res.data);
-        // Load attachments for invoice-based reports
-        if (['unpaid-supplier', 'unpaid-vessel', 'due-alerts', 'dept-delays'].includes(reportType) && Array.isArray(res.data)) {
+        if (['unpaid-vessel', 'due-alerts', 'dept-delays'].includes(reportType) && Array.isArray(res.data)) {
           loadAttachments(res.data);
         }
       }
@@ -100,6 +145,11 @@ export default function ReportsPage() {
   const needsDays = reportType === 'due-alerts';
   const noFilter = reportType === 'user-activity' || reportType === 'dept-delays';
 
+  const filteredSuppliers = suppliers.filter((s) =>
+    (s.name || '').toLowerCase().includes(supplierSearch.toLowerCase()));
+  const toggleSupplier = (id: string) =>
+    setSelectedSuppliers((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
+
   function AttachmentCell({ invoiceId }: { invoiceId: string }) {
     const files = attachments[invoiceId];
     if (!files) return <span className="text-gray-300 text-xs">...</span>;
@@ -116,6 +166,28 @@ export default function ReportsPage() {
     );
   }
 
+  // ── صفوف Excel ──
+  const statementRows = (transactions: any[]) => transactions.map((t: any) => ({
+    'التاريخ': t.date?.slice(0, 10),
+    'البيان': t.description,
+    'السفينة': t.vessel || '—',
+    'مدين': t.debit || 0,
+    'دائن': t.credit || 0,
+    'الرصيد': t.running_balance,
+  }));
+  const unpaidRows = (invoices: any[], supplierName: string) => invoices.map((inv: any) => ({
+    'المورد': supplierName,
+    'رقم الفاتورة': inv.invoice_number,
+    'السفينة': inv.vessel?.name || '—',
+    'المبلغ': inv.total_amount,
+    'العملة': inv.currency,
+    'المدفوع': inv.paid_amount,
+    'المتبقي': +inv.total_amount - +inv.paid_amount,
+    'الاستحقاق': inv.due_date?.slice(0, 10) || '—',
+    'الحالة': statusLabel[inv.status],
+    'المرفقات': (attachments[inv.id] || []).map((f: any) => f.file_url).join(' | '),
+  }));
+
   return (
     <div>
       <h2 className="text-2xl font-bold text-gray-800 mb-6">التقارير</h2>
@@ -131,15 +203,30 @@ export default function ReportsPage() {
       </div>
 
       {/* Filters */}
-      <div className="bg-white rounded-xl shadow p-4 mb-6 flex items-end gap-4">
+      <div className="bg-white rounded-xl shadow p-4 mb-6 flex items-end gap-4 flex-wrap">
         {needsSupplier && (
-          <div className="flex-1">
-            <label className="block text-sm text-gray-600 mb-1">المورد</label>
-            <select value={selectedSupplier} onChange={(e) => setSelectedSupplier(e.target.value)}
-              className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
-              <option value="">— اختر المورد —</option>
-              {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </select>
+          <div className="flex-1 min-w-[280px]">
+            <label className="block text-sm text-gray-600 mb-1">
+              الموردون (اختيار متعدد) — <span className="text-blue-600 font-medium">{selectedSuppliers.length}</span> مختار
+            </label>
+            <input value={supplierSearch} onChange={(e) => setSupplierSearch(e.target.value)}
+              placeholder="بحث عن مورد..."
+              className="w-full border rounded-lg px-3 py-1.5 text-sm mb-1 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            <div className="border rounded-lg max-h-44 overflow-y-auto p-2">
+              <div className="flex gap-3 mb-1 pb-1 border-b text-xs">
+                <button type="button" onClick={() => setSelectedSuppliers(filteredSuppliers.map((s) => s.id))}
+                  className="text-blue-600 hover:underline">تحديد الكل</button>
+                <button type="button" onClick={() => setSelectedSuppliers([])}
+                  className="text-gray-500 hover:underline">إلغاء الكل</button>
+              </div>
+              {filteredSuppliers.map((s) => (
+                <label key={s.id} className="flex items-center gap-2 py-1 px-1 hover:bg-gray-50 rounded cursor-pointer text-sm">
+                  <input type="checkbox" checked={selectedSuppliers.includes(s.id)} onChange={() => toggleSupplier(s.id)} />
+                  <span>{s.name}</span>
+                </label>
+              ))}
+              {filteredSuppliers.length === 0 && <p className="text-xs text-gray-400 py-2 text-center">لا يوجد مورد بهذا الاسم</p>}
+            </div>
           </div>
         )}
         {needsVessel && (
@@ -173,8 +260,155 @@ export default function ReportsPage() {
         </button>
       </div>
 
-      {/* Results */}
-      {data && (
+      {/* ══ نتائج متعددة الموردين — كشف حساب ══ */}
+      {data?.multi === 'statement' && (
+        <div className="space-y-5">
+          {(() => {
+            const secs = data.sections as StatementSec[];
+            const gD = secs.reduce((s, x) => s + Number(x.summary.total_debit), 0);
+            const gC = secs.reduce((s, x) => s + Number(x.summary.total_credit), 0);
+            return (
+              <div className="bg-white rounded-xl shadow p-4 flex items-center justify-between flex-wrap gap-3">
+                <h3 className="font-bold text-gray-700">📒 كشف حساب — {secs.length} مورد</h3>
+                <div className="flex items-center gap-4 flex-wrap">
+                  <div className="flex gap-5 text-sm">
+                    <span className="text-red-600">إجمالي مدين: <strong>{num(gD)}</strong></span>
+                    <span className="text-green-600">إجمالي دائن: <strong>{num(gC)}</strong></span>
+                    <span className={gD - gC > 0 ? 'text-red-700 font-bold' : 'text-green-700 font-bold'}>الرصيد الكلي: {num(gD - gC)}</span>
+                  </div>
+                  <button onClick={() => exportMultiToExcel(secs.map((sec) => ({ name: sec.supplierName, rows: statementRows(sec.transactions) })), 'كشف-حساب-موردين')}
+                    className="bg-green-700 text-white text-sm px-4 py-1.5 rounded-lg hover:bg-green-800 flex items-center gap-2">📥 تصدير الكل</button>
+                </div>
+              </div>
+            );
+          })()}
+
+          {(data.sections as StatementSec[]).map((sec) => (
+            <div key={sec.supplierId} className="bg-white rounded-xl shadow p-4">
+              <div className="flex justify-between items-center mb-3 flex-wrap gap-2">
+                <h4 className="font-bold text-gray-800">📒 {sec.supplierName}</h4>
+                <div className="flex items-center gap-4 flex-wrap">
+                  <div className="flex gap-5 text-sm">
+                    <span className="text-red-600">مدين: <strong>{num(sec.summary.total_debit)}</strong></span>
+                    <span className="text-green-600">دائن: <strong>{num(sec.summary.total_credit)}</strong></span>
+                    <span className={sec.summary.balance > 0 ? 'text-red-700 font-bold' : 'text-green-700 font-bold'}>الرصيد: {num(sec.summary.balance)}</span>
+                  </div>
+                  <button onClick={() => exportToExcel(statementRows(sec.transactions), `كشف-حساب-${sec.supplierName}`)}
+                    className="bg-green-600 text-white text-sm px-3 py-1.5 rounded-lg hover:bg-green-700">📥 Excel</button>
+                </div>
+              </div>
+              {sec.transactions.length === 0 ? (
+                <p className="text-center py-4 text-gray-400 text-sm">لا توجد حركات لهذا المورد</p>
+              ) : (
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 text-gray-600 text-right">
+                    <tr>
+                      <th className="px-4 py-2">التاريخ</th>
+                      <th className="px-4 py-2">البيان</th>
+                      <th className="px-4 py-2">السفينة</th>
+                      <th className="px-4 py-2">مدين</th>
+                      <th className="px-4 py-2">دائن</th>
+                      <th className="px-4 py-2">الرصيد</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sec.transactions.map((t: any, i: number) => (
+                      <tr key={i} className={`border-t ${t.type === 'debit' ? 'bg-red-50/30' : 'bg-green-50/30'}`}>
+                        <td className="px-4 py-2 text-gray-500">{t.date?.slice(0, 10)}</td>
+                        <td className="px-4 py-2">{t.description}</td>
+                        <td className="px-4 py-2 text-gray-500">{t.vessel || '—'}</td>
+                        <td className="px-4 py-2 text-red-600 font-medium">{t.debit > 0 ? num(t.debit) : '—'}</td>
+                        <td className="px-4 py-2 text-green-600 font-medium">{t.credit > 0 ? num(t.credit) : '—'}</td>
+                        <td className={`px-4 py-2 font-bold ${t.running_balance > 0 ? 'text-red-700' : 'text-green-700'}`}>{num(t.running_balance)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ══ نتائج متعددة الموردين — مستحقات ══ */}
+      {data?.multi === 'unpaid' && (
+        <div className="space-y-5">
+          {(() => {
+            const secs = data.sections as UnpaidSec[];
+            const all = secs.flatMap((s) => s.invoices);
+            const total = all.reduce((s, i: any) => s + +i.total_amount, 0);
+            const remaining = all.reduce((s, i: any) => s + (+i.total_amount - +i.paid_amount), 0);
+            return (
+              <div className="bg-white rounded-xl shadow p-4 flex items-center justify-between flex-wrap gap-3">
+                <div>
+                  <h3 className="font-bold text-gray-700">🔴 مستحقات — {secs.length} مورد · {all.length} فاتورة</h3>
+                  <div className="flex gap-6 text-sm mt-1">
+                    <span className="text-gray-600">إجمالي: <strong>{num(total)}</strong></span>
+                    <span className="text-red-600">المتبقي: <strong>{num(remaining)}</strong></span>
+                  </div>
+                </div>
+                <button onClick={() => exportMultiToExcel(secs.map((sec) => ({ name: sec.supplierName, rows: unpaidRows(sec.invoices, sec.supplierName) })), 'مستحقات-موردين')}
+                  className="bg-green-700 text-white text-sm px-4 py-1.5 rounded-lg hover:bg-green-800 flex items-center gap-2">📥 تصدير الكل</button>
+              </div>
+            );
+          })()}
+
+          {(data.sections as UnpaidSec[]).map((sec) => {
+            const total = sec.invoices.reduce((s, i: any) => s + +i.total_amount, 0);
+            const remaining = sec.invoices.reduce((s, i: any) => s + (+i.total_amount - +i.paid_amount), 0);
+            return (
+              <div key={sec.supplierId} className="bg-white rounded-xl shadow p-4">
+                <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+                  <div>
+                    <h4 className="font-bold text-gray-800">🔴 {sec.supplierName} — {sec.invoices.length} فاتورة</h4>
+                    <div className="flex gap-6 text-sm mt-1">
+                      <span className="text-gray-600">إجمالي: <strong>{num(total)}</strong></span>
+                      <span className="text-red-600">المتبقي: <strong>{num(remaining)}</strong></span>
+                    </div>
+                  </div>
+                  <button onClick={() => exportToExcel(unpaidRows(sec.invoices, sec.supplierName), `مستحقات-${sec.supplierName}`)}
+                    className="bg-green-600 text-white text-sm px-3 py-1.5 rounded-lg hover:bg-green-700">📥 Excel</button>
+                </div>
+                {sec.invoices.length === 0 ? (
+                  <p className="text-center py-4 text-gray-400 text-sm">لا توجد فواتير مستحقة لهذا المورد</p>
+                ) : (
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50 text-gray-600 text-right">
+                      <tr>
+                        <th className="px-4 py-2">رقم الفاتورة</th>
+                        <th className="px-4 py-2">السفينة</th>
+                        <th className="px-4 py-2">المبلغ</th>
+                        <th className="px-4 py-2">المدفوع</th>
+                        <th className="px-4 py-2">المتبقي</th>
+                        <th className="px-4 py-2">الاستحقاق</th>
+                        <th className="px-4 py-2">الحالة</th>
+                        <th className="px-4 py-2">المرفقات</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sec.invoices.map((inv: any) => (
+                        <tr key={inv.id} className="border-t">
+                          <td className="px-4 py-2 font-mono text-blue-700">{inv.invoice_number}</td>
+                          <td className="px-4 py-2">{inv.vessel?.name || '—'}</td>
+                          <td className="px-4 py-2">{num(inv.total_amount)} {inv.currency}</td>
+                          <td className="px-4 py-2 text-green-600">{num(inv.paid_amount)}</td>
+                          <td className="px-4 py-2 text-red-600 font-bold">{num(+inv.total_amount - +inv.paid_amount)}</td>
+                          <td className="px-4 py-2 text-gray-500">{inv.due_date?.slice(0, 10) || '—'}</td>
+                          <td className="px-4 py-2"><span className={`px-2 py-1 rounded-full text-xs ${statusColor[inv.status]}`}>{statusLabel[inv.status]}</span></td>
+                          <td className="px-4 py-2"><AttachmentCell invoiceId={inv.id} /></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* ══ باقي التقارير (مورد/مركب واحد) ══ */}
+      {data && !data.multi && (
         <div className="bg-white rounded-xl shadow p-4">
 
           {/* Due Alerts */}
@@ -215,8 +449,8 @@ export default function ReportsPage() {
                       <td className="px-4 py-2 font-mono text-blue-700">{inv.invoice_number}</td>
                       <td className="px-4 py-2">{inv.supplier?.name}</td>
                       <td className="px-4 py-2">{inv.vessel?.name || '—'}</td>
-                      <td className="px-4 py-2">{Number(inv.total_amount).toLocaleString()} {inv.currency}</td>
-                      <td className="px-4 py-2 text-red-600 font-medium">{(+inv.total_amount - +inv.paid_amount).toLocaleString()}</td>
+                      <td className="px-4 py-2">{num(inv.total_amount)} {inv.currency}</td>
+                      <td className="px-4 py-2 text-red-600 font-medium">{num(+inv.total_amount - +inv.paid_amount)}</td>
                       <td className="px-4 py-2">{inv.due_date?.slice(0, 10)}</td>
                       <td className="px-4 py-2">
                         <span className={`px-2 py-1 rounded-full text-xs ${inv.is_overdue ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`}>
@@ -232,80 +466,15 @@ export default function ReportsPage() {
             </>
           )}
 
-          {/* Supplier Statement */}
-          {reportType === 'supplier-statement' && data.supplier && (
-            <>
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="font-bold text-gray-700">📒 كشف حساب — {data.supplier.name}</h3>
-                <div className="flex items-center gap-4">
-                  <div className="flex gap-6 text-sm">
-                    <span className="text-red-600">إجمالي مدين: <strong>{Number(data.summary.total_debit).toLocaleString()}</strong></span>
-                    <span className="text-green-600">إجمالي دائن: <strong>{Number(data.summary.total_credit).toLocaleString()}</strong></span>
-                    <span className={data.summary.balance > 0 ? 'text-red-700 font-bold' : 'text-green-700 font-bold'}>
-                      الرصيد: {Number(data.summary.balance).toLocaleString()}
-                    </span>
-                  </div>
-                  <button onClick={() => exportToExcel(data.transactions.map((t: any) => ({
-                    'التاريخ': t.date?.slice(0, 10),
-                    'البيان': t.description,
-                    'السفينة': t.vessel || '—',
-                    'مدين': t.debit || 0,
-                    'دائن': t.credit || 0,
-                    'الرصيد': t.running_balance,
-                  })), `كشف-حساب-${data.supplier.name}`)}
-                    className="bg-green-600 text-white text-sm px-4 py-1.5 rounded-lg hover:bg-green-700 flex items-center gap-2">
-                    📥 Excel
-                  </button>
-                </div>
-              </div>
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50 text-gray-600 text-right">
-                  <tr>
-                    <th className="px-4 py-2">التاريخ</th>
-                    <th className="px-4 py-2">البيان</th>
-                    <th className="px-4 py-2">السفينة</th>
-                    <th className="px-4 py-2">مدين</th>
-                    <th className="px-4 py-2">دائن</th>
-                    <th className="px-4 py-2">الرصيد</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.transactions.map((t: any, i: number) => (
-                    <tr key={i} className={`border-t ${t.type === 'debit' ? 'bg-red-50/30' : 'bg-green-50/30'}`}>
-                      <td className="px-4 py-2 text-gray-500">{t.date?.slice(0, 10)}</td>
-                      <td className="px-4 py-2">{t.description}</td>
-                      <td className="px-4 py-2 text-gray-500">{t.vessel || '—'}</td>
-                      <td className="px-4 py-2 text-red-600 font-medium">{t.debit > 0 ? Number(t.debit).toLocaleString() : '—'}</td>
-                      <td className="px-4 py-2 text-green-600 font-medium">{t.credit > 0 ? Number(t.credit).toLocaleString() : '—'}</td>
-                      <td className={`px-4 py-2 font-bold ${t.running_balance > 0 ? 'text-red-700' : 'text-green-700'}`}>
-                        {Number(t.running_balance).toLocaleString()}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-                <tfoot className="bg-gray-100 font-bold">
-                  <tr>
-                    <td colSpan={3} className="px-4 py-2 text-right">الإجمالي</td>
-                    <td className="px-4 py-2 text-red-700">{Number(data.summary.total_debit).toLocaleString()}</td>
-                    <td className="px-4 py-2 text-green-700">{Number(data.summary.total_credit).toLocaleString()}</td>
-                    <td className={`px-4 py-2 ${data.summary.balance > 0 ? 'text-red-700' : 'text-green-700'}`}>
-                      {Number(data.summary.balance).toLocaleString()}
-                    </td>
-                  </tr>
-                </tfoot>
-              </table>
-            </>
-          )}
-
-          {/* Unpaid by Supplier or Vessel */}
-          {(reportType === 'unpaid-supplier' || reportType === 'unpaid-vessel') && Array.isArray(data) && (
+          {/* Unpaid by Vessel */}
+          {reportType === 'unpaid-vessel' && Array.isArray(data) && (
             <>
               <div className="flex items-center justify-between mb-4">
                 <div>
                   <h3 className="font-bold text-gray-700 mb-1">🔴 الفواتير غير المسددة — {data.length} فاتورة</h3>
                   <div className="flex gap-6 text-sm">
-                    <span className="text-gray-600">إجمالي: <strong>{data.reduce((s: number, i: any) => s + +i.total_amount, 0).toLocaleString()}</strong></span>
-                    <span className="text-red-600">المتبقي: <strong>{data.reduce((s: number, i: any) => s + (+i.total_amount - +i.paid_amount), 0).toLocaleString()}</strong></span>
+                    <span className="text-gray-600">إجمالي: <strong>{num(data.reduce((s: number, i: any) => s + +i.total_amount, 0))}</strong></span>
+                    <span className="text-red-600">المتبقي: <strong>{num(data.reduce((s: number, i: any) => s + (+i.total_amount - +i.paid_amount), 0))}</strong></span>
                   </div>
                 </div>
                 <button onClick={() => exportToExcel(data.map((inv: any) => ({
@@ -319,7 +488,7 @@ export default function ReportsPage() {
                   'الاستحقاق': inv.due_date?.slice(0, 10) || '—',
                   'الحالة': statusLabel[inv.status],
                   'المرفقات': (attachments[inv.id] || []).map((f: any) => f.file_url).join(' | '),
-                })), reportType === 'unpaid-supplier' ? 'مستحقات-مورد' : 'مستحقات-مركب')}
+                })), 'مستحقات-مركب')}
                   className="bg-green-600 text-white text-sm px-4 py-1.5 rounded-lg hover:bg-green-700 flex items-center gap-2">
                   📥 Excel
                 </button>
@@ -328,8 +497,7 @@ export default function ReportsPage() {
                 <thead className="bg-gray-50 text-gray-600 text-right">
                   <tr>
                     <th className="px-4 py-2">رقم الفاتورة</th>
-                    {reportType === 'unpaid-vessel' && <th className="px-4 py-2">المورد</th>}
-                    {reportType === 'unpaid-supplier' && <th className="px-4 py-2">السفينة</th>}
+                    <th className="px-4 py-2">المورد</th>
                     <th className="px-4 py-2">المبلغ</th>
                     <th className="px-4 py-2">المدفوع</th>
                     <th className="px-4 py-2">المتبقي</th>
@@ -342,11 +510,10 @@ export default function ReportsPage() {
                   {data.map((inv: any) => (
                     <tr key={inv.id} className="border-t">
                       <td className="px-4 py-2 font-mono text-blue-700">{inv.invoice_number}</td>
-                      {reportType === 'unpaid-vessel' && <td className="px-4 py-2">{inv.supplier?.name}</td>}
-                      {reportType === 'unpaid-supplier' && <td className="px-4 py-2">{inv.vessel?.name || '—'}</td>}
-                      <td className="px-4 py-2">{Number(inv.total_amount).toLocaleString()} {inv.currency}</td>
-                      <td className="px-4 py-2 text-green-600">{Number(inv.paid_amount).toLocaleString()}</td>
-                      <td className="px-4 py-2 text-red-600 font-bold">{(+inv.total_amount - +inv.paid_amount).toLocaleString()}</td>
+                      <td className="px-4 py-2">{inv.supplier?.name}</td>
+                      <td className="px-4 py-2">{num(inv.total_amount)} {inv.currency}</td>
+                      <td className="px-4 py-2 text-green-600">{num(inv.paid_amount)}</td>
+                      <td className="px-4 py-2 text-red-600 font-bold">{num(+inv.total_amount - +inv.paid_amount)}</td>
                       <td className="px-4 py-2 text-gray-500">{inv.due_date?.slice(0, 10) || '—'}</td>
                       <td className="px-4 py-2">
                         <span className={`px-2 py-1 rounded-full text-xs ${statusColor[inv.status]}`}>{statusLabel[inv.status]}</span>
@@ -391,9 +558,9 @@ export default function ReportsPage() {
                     <tr key={i} className="border-t">
                       <td className="px-4 py-2 font-medium">{row.supplier_name}</td>
                       <td className="px-4 py-2 text-center">{row.total_invoices}</td>
-                      <td className="px-4 py-2">{Number(row.total_amount).toLocaleString()}</td>
-                      <td className="px-4 py-2 text-green-600">{Number(row.paid_amount).toLocaleString()}</td>
-                      <td className="px-4 py-2 text-red-600 font-bold">{(+row.total_amount - +row.paid_amount).toLocaleString()}</td>
+                      <td className="px-4 py-2">{num(row.total_amount)}</td>
+                      <td className="px-4 py-2 text-green-600">{num(row.paid_amount)}</td>
+                      <td className="px-4 py-2 text-red-600 font-bold">{num(+row.total_amount - +row.paid_amount)}</td>
                     </tr>
                   ))}
                   {data.length === 0 && <tr><td colSpan={5} className="text-center py-6 text-gray-400">لا توجد بيانات</td></tr>}
@@ -451,7 +618,7 @@ export default function ReportsPage() {
                         <td className="px-4 py-2 font-mono text-blue-700">{inv.invoice_number}</td>
                         <td className="px-4 py-2">{inv.supplier || '—'}</td>
                         <td className="px-4 py-2">{inv.vessel || '—'}</td>
-                        <td className="px-4 py-2">{Number(inv.total_amount).toLocaleString()} {inv.currency}</td>
+                        <td className="px-4 py-2">{num(inv.total_amount)} {inv.currency}</td>
                         <td className="px-4 py-2">
                           <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                             inv.approval_status === 'waiting_po' ? 'bg-orange-100 text-orange-700' :
