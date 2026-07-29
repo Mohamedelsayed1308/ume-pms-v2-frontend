@@ -97,6 +97,8 @@ export default function VesselProfitReport() {
   const [voyages, setVoyages] = useState<Voyage[]>([]);
   const [month, setMonth] = useState('');
   const [error, setError] = useState('');
+  const [openingBunker, setOpeningBunker] = useState(''); // رصيد أول المدة (يدوي)
+  const [closingBunker, setClosingBunker] = useState(''); // مخزون آخر المدة (يدوي)
 
   async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -125,18 +127,25 @@ export default function VesselProfitReport() {
     const revE = sideRevenue(E), revI = sideRevenue(I);
     const expE = Object.values(E.exp).reduce((a, b) => a + b, 0);
     const expI = Object.values(I.exp).reduce((a, b) => a + b, 0);
-    const bunker = sel.reduce((s, v) => s + v.bunker, 0);
-    const net = sel.reduce((s, v) => s + v.net, 0);       // Balance column (authoritative)
-    const O = sel.reduce((s, v) => s + v.O, 0);            // البسّام collections
-    const P = sel.reduce((s, v) => s + v.P, 0);            // total collections
+    const supplies = sel.reduce((s, v) => s + v.bunker, 0); // تموينات الشهر (Excel col X)
+    const netBalance = sel.reduce((s, v) => s + v.net, 0);  // Balance column (subtracts supplies)
+    const O = sel.reduce((s, v) => s + v.O, 0);             // البسّام collections
+    const P = sel.reduce((s, v) => s + v.P, 0);             // total collections
+    const revenue = revE + revI;
+    // البنكر المستهلك = رصيد أول المدة + تموينات − مخزون آخر المدة
+    const opening = parseFloat(openingBunker) || 0;
+    const closing = parseFloat(closingBunker) || 0;
+    const bunkerCost = opening + supplies - closing;
+    // الصافي كان يطرح التموينات فقط؛ نصحّحه ليطرح البنكر المستهلك
+    const net = netBalance - opening + closing;
     return {
-      E, I, revE, revI, expE, expI, bunker, net, O, P,
-      revenue: revE + revI,
-      expenses: (revE + revI) - net,                       // keep revenue - expenses = net
+      E, I, revE, revI, expE, expI, supplies, opening, closing, bunkerCost,
+      net, O, P, revenue,
+      expenses: revenue - net,                             // revenue - expenses = net
       liqBassam: O,
       liqIttihad: P - O,
     };
-  }, [sel]);
+  }, [sel, openingBunker, closingBunker]);
 
   function exportExcel() {
     if (!data) return;
@@ -144,7 +153,10 @@ export default function VesselProfitReport() {
       { البند: 'صافي ربح الشهر', القيمة: data.net },
       { البند: 'إجمالي الإيراد', القيمة: data.revenue },
       { البند: 'إجمالي المصروفات', القيمة: data.expenses },
-      { البند: 'بنكر', القيمة: data.bunker },
+      { البند: 'بنكر — رصيد أول المدة', القيمة: data.opening },
+      { البند: 'بنكر — تموينات الشهر', القيمة: data.supplies },
+      { البند: 'بنكر — مخزون آخر المدة', القيمة: data.closing },
+      { البند: 'بنكر — المستهلك', القيمة: data.bunkerCost },
       { البند: 'سيولة الاتحاد (P−O)', القيمة: data.liqIttihad },
       { البند: 'سيولة البسّام (O)', القيمة: data.liqBassam },
       { البند: 'إجمالي التحصيل (P)', القيمة: data.P },
@@ -202,7 +214,7 @@ export default function VesselProfitReport() {
             <div className="bg-white rounded-xl shadow p-4">
               <p className="text-xs text-gray-500">إجمالي المصروفات</p>
               <p className="text-xl font-bold text-red-600 mt-1">{fmt(data.expenses)}</p>
-              <p className="text-[11px] text-gray-400 mt-1">بنكر منها: {fmt(data.bunker)}</p>
+              <p className="text-[11px] text-gray-400 mt-1">بنكر منها: {fmt(data.bunkerCost)}</p>
             </div>
             <div className="bg-white rounded-xl shadow p-4">
               <p className="text-xs text-gray-500">السيولة عند الوكلاء</p>
@@ -255,13 +267,32 @@ export default function VesselProfitReport() {
             ))}
           </div>
 
-          {/* Bunker — voyage-level shared expense */}
-          <div className="bg-white rounded-xl shadow p-4 flex items-center justify-between">
-            <div>
-              <span className="font-medium text-gray-700">⛽ بنكر (على مستوى الرحلة — مشترك صادر/وارد)</span>
-              <p className="text-[11px] text-gray-400 mt-0.5">مطروح بالفعل ضمن الصافي وإجمالي المصروفات</p>
+          {/* Bunker — inventory (opening + supplies − closing) */}
+          <div className="bg-white rounded-xl shadow p-4">
+            <h3 className="font-bold text-gray-700 mb-3">⛽ البنكر (مخزون)</h3>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 items-end text-sm">
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">رصيد أول المدة (يدوي)</label>
+                <input value={openingBunker} onChange={(e) => setOpeningBunker(e.target.value)} inputMode="decimal" placeholder="0"
+                  className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 mb-1">+ تموينات الشهر (من الإكسيل)</p>
+                <p className="border rounded-lg px-3 py-2 bg-gray-50 font-medium">{fmt(data.supplies)}</p>
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">− مخزون آخر المدة (يدوي)</label>
+                <input value={closingBunker} onChange={(e) => setClosingBunker(e.target.value)} inputMode="decimal" placeholder="0"
+                  className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 mb-1">= البنكر المستهلك</p>
+                <p className="border rounded-lg px-3 py-2 bg-red-50 font-bold text-red-700">{fmt(data.bunkerCost)}</p>
+              </div>
             </div>
-            <span className="font-bold text-red-600 text-lg">{fmt(data.bunker)}</span>
+            <p className="text-[11px] text-gray-400 mt-2">
+              البنكر المستهلك مطروح ضمن الصافي. لو سِبت الخانتين فاضيين (٠)، البنكر = تموينات الشهر فقط.
+            </p>
           </div>
 
           {/* Liquidity */}
