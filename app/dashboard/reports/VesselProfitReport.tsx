@@ -255,6 +255,15 @@ export default function VesselProfitReport() {
             ))}
           </div>
 
+          {/* Bunker — voyage-level shared expense */}
+          <div className="bg-white rounded-xl shadow p-4 flex items-center justify-between">
+            <div>
+              <span className="font-medium text-gray-700">⛽ بنكر (على مستوى الرحلة — مشترك صادر/وارد)</span>
+              <p className="text-[11px] text-gray-400 mt-0.5">مطروح بالفعل ضمن الصافي وإجمالي المصروفات</p>
+            </div>
+            <span className="font-bold text-red-600 text-lg">{fmt(data.bunker)}</span>
+          </div>
+
           {/* Liquidity */}
           <div className="bg-white rounded-xl shadow p-4">
             <h3 className="font-bold text-gray-700 mb-3">السيولة عند كل وكيل</h3>
