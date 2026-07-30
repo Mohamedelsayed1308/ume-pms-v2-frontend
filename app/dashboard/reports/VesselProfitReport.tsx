@@ -1,6 +1,9 @@
 'use client';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import * as XLSX from 'xlsx';
+import api from '@/lib/api';
+
+const VESSEL = 'Pelagos';
 
 // ── column indices in "Mv-Pelagoss Express" sheet ──
 const C = {
@@ -97,9 +100,43 @@ export default function VesselProfitReport() {
   const [voyages, setVoyages] = useState<Voyage[]>([]);
   const [month, setMonth] = useState('');
   const [error, setError] = useState('');
-  const [openingBunker, setOpeningBunker] = useState(''); // رصيد أول المدة (يدوي)
-  const [closingBunker, setClosingBunker] = useState(''); // مخزون آخر المدة (يدوي)
-  const [salaries, setSalaries] = useState('');           // مرتبات الشهر (يدوي)
+  // القيم اليدوية لكل شهر: { [month]: { opening, closing, salaries } }
+  const [manual, setManual] = useState<Record<string, { opening: string; closing: string; salaries: string }>>({});
+  const [saving, setSaving] = useState(false);
+  const [savedMsg, setSavedMsg] = useState('');
+
+  const cur = manual[month] || { opening: '', closing: '', salaries: '' };
+  const setCur = (patch: Partial<{ opening: string; closing: string; salaries: string }>) =>
+    setManual((m) => ({ ...m, [month]: { ...(m[month] || { opening: '', closing: '', salaries: '' }), ...patch } }));
+
+  // تحميل المحفوظ من السيرفر عند الفتح
+  useEffect(() => {
+    api.get(`/api/vessel-profit/${VESSEL}`).then((res) => {
+      const d = res.data;
+      if (d && Array.isArray(d.voyages) && d.voyages.length) {
+        setVoyages(d.voyages as Voyage[]);
+        setManual(d.manual || {});
+        const ms = [...new Set((d.voyages as Voyage[]).map((v) => v.month!))].sort();
+        setMonth(ms[0]);
+        setFileName('محفوظ في السيرفر');
+      }
+    }).catch(() => {});
+  }, []);
+
+  async function save() {
+    if (!voyages.length) return;
+    setSaving(true);
+    setSavedMsg('');
+    try {
+      await api.put(`/api/vessel-profit/${VESSEL}`, { voyages, manual });
+      setSavedMsg('تم الحفظ ✅');
+      setTimeout(() => setSavedMsg(''), 2500);
+    } catch {
+      setSavedMsg('فشل الحفظ');
+    } finally {
+      setSaving(false);
+    }
+  }
 
   async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -133,11 +170,13 @@ export default function VesselProfitReport() {
     const O = sel.reduce((s, v) => s + v.O, 0);             // البسّام collections
     const P = sel.reduce((s, v) => s + v.P, 0);             // total collections
     const revenue = revE + revI;
+    // القيم اليدوية للشهر الحالي
+    const mm = manual[month] || { opening: '', closing: '', salaries: '' };
     // البنكر المستهلك = رصيد أول المدة + تموينات − مخزون آخر المدة
-    const opening = parseFloat(openingBunker) || 0;
-    const closing = parseFloat(closingBunker) || 0;
+    const opening = parseFloat(mm.opening) || 0;
+    const closing = parseFloat(mm.closing) || 0;
     const bunkerCost = opening + supplies - closing;
-    const salariesN = parseFloat(salaries) || 0;           // مرتبات الشهر (يدوي)
+    const salariesN = parseFloat(mm.salaries) || 0;        // مرتبات الشهر (يدوي)
     // الصافي كان يطرح التموينات فقط؛ نصحّحه ليطرح البنكر المستهلك، ثم نطرح المرتبات
     const net = netBalance - opening + closing - salariesN;
     return {
@@ -147,7 +186,7 @@ export default function VesselProfitReport() {
       liqBassam: O,
       liqIttihad: P - O,
     };
-  }, [sel, openingBunker, closingBunker, salaries]);
+  }, [sel, manual, month]);
 
   const PRINT_CSS = `@media print {
     @page { size: A4 landscape; margin: 9mm; }
@@ -219,7 +258,11 @@ export default function VesselProfitReport() {
           </div>
         )}
         {data && (
-          <div className="mr-auto flex gap-2">
+          <div className="mr-auto flex items-center gap-2">
+            {savedMsg && <span className="text-xs text-emerald-600 font-medium">{savedMsg}</span>}
+            <button onClick={save} disabled={saving} className="bg-blue-600 text-white text-sm px-4 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50">
+              {saving ? 'جاري الحفظ...' : '💾 حفظ'}
+            </button>
             <button onClick={exportExcel} className="bg-green-600 text-white text-sm px-4 py-2 rounded-lg hover:bg-green-700">📥 تصدير Excel</button>
             <button onClick={() => window.print()} className="bg-gray-700 text-white text-sm px-4 py-2 rounded-lg hover:bg-gray-800">🖨️ طباعة / PDF</button>
           </div>
@@ -329,7 +372,7 @@ export default function VesselProfitReport() {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 items-end text-sm">
               <div>
                 <label className="block text-xs text-gray-500 mb-1">رصيد أول المدة (يدوي)</label>
-                <input value={openingBunker} onChange={(e) => setOpeningBunker(e.target.value)} inputMode="decimal" placeholder="0"
+                <input value={cur.opening} onChange={(e) => setCur({ opening: e.target.value })} inputMode="decimal" placeholder="0"
                   className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
               <div>
@@ -338,7 +381,7 @@ export default function VesselProfitReport() {
               </div>
               <div>
                 <label className="block text-xs text-gray-500 mb-1">− مخزون آخر المدة (يدوي)</label>
-                <input value={closingBunker} onChange={(e) => setClosingBunker(e.target.value)} inputMode="decimal" placeholder="0"
+                <input value={cur.closing} onChange={(e) => setCur({ closing: e.target.value })} inputMode="decimal" placeholder="0"
                   className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
               <div>
@@ -355,7 +398,7 @@ export default function VesselProfitReport() {
           <div className="bg-white rounded-xl shadow p-4 flex items-end justify-between flex-wrap gap-3">
             <div>
               <label className="block text-xs text-gray-500 mb-1">مرتبات الشهر (يدوي)</label>
-              <input value={salaries} onChange={(e) => setSalaries(e.target.value)} inputMode="decimal" placeholder="0"
+              <input value={cur.salaries} onChange={(e) => setCur({ salaries: e.target.value })} inputMode="decimal" placeholder="0"
                 className="border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
             <div className="text-right">
