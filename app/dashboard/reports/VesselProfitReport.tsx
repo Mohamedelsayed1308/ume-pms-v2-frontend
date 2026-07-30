@@ -140,12 +140,19 @@ export default function VesselProfitReport() {
     const net = netBalance - opening + closing;
     return {
       E, I, revE, revI, expE, expI, supplies, opening, closing, bunkerCost,
-      net, O, P, revenue,
+      net, O, P, revenue, count: sel.length,
       expenses: revenue - net,                             // revenue - expenses = net
       liqBassam: O,
       liqIttihad: P - O,
     };
   }, [sel, openingBunker, closingBunker]);
+
+  const PRINT_CSS = `@media print {
+    @page { size: A4; margin: 10mm; }
+    body * { visibility: hidden !important; }
+    #pelagos-print, #pelagos-print * { visibility: visible !important; }
+    #pelagos-print { position: absolute; left: 0; top: 0; width: 100%; }
+  }`;
 
   function exportExcel() {
     if (!data) return;
@@ -187,7 +194,10 @@ export default function VesselProfitReport() {
           </div>
         )}
         {data && (
-          <button onClick={exportExcel} className="mr-auto bg-green-600 text-white text-sm px-4 py-2 rounded-lg hover:bg-green-700">📥 تصدير Excel</button>
+          <div className="mr-auto flex gap-2">
+            <button onClick={exportExcel} className="bg-green-600 text-white text-sm px-4 py-2 rounded-lg hover:bg-green-700">📥 تصدير Excel</button>
+            <button onClick={() => window.print()} className="bg-gray-700 text-white text-sm px-4 py-2 rounded-lg hover:bg-gray-800">🖨️ طباعة / PDF</button>
+          </div>
         )}
       </div>
 
@@ -199,7 +209,12 @@ export default function VesselProfitReport() {
       )}
 
       {data && (
-        <>
+        <div id="pelagos-print" className="space-y-4">
+          <style>{PRINT_CSS}</style>
+          <div className="hidden print:block text-center mb-2">
+            <h2 className="text-xl font-bold">تقرير صافي ربح المركب — Pelagos</h2>
+            <p className="text-sm text-gray-600">{monthLabel(month)} · {sel.length} رحلة</p>
+          </div>
           {/* KPI header */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <div className="bg-emerald-600 text-white rounded-xl p-4">
@@ -267,6 +282,25 @@ export default function VesselProfitReport() {
             ))}
           </div>
 
+          {/* Statistics */}
+          <div className="bg-white rounded-xl shadow p-4">
+            <h3 className="font-bold text-gray-700 mb-3">📊 الإحصائيات</h3>
+            <div className="inline-block bg-emerald-50 rounded-lg px-4 py-2 mb-3">
+              <span className="text-xs text-emerald-700">متوسط ربح الرحلة</span>
+              <span className="font-bold text-emerald-800 text-lg mr-2">{fmt(data.net / data.count)}</span>
+            </div>
+            <table className="w-full text-sm max-w-md">
+              <thead className="text-gray-500 text-xs">
+                <tr><th className="text-right py-1">متوسط لكل رحلة</th><th className="text-right py-1">صادر</th><th className="text-right py-1">وارد</th></tr>
+              </thead>
+              <tbody>
+                <tr className="border-t"><td className="py-1">شاحنات</td><td className="py-1 font-medium">{fmt(data.E.truckC / data.count)}</td><td className="py-1 font-medium">{fmt(data.I.truckC / data.count)}</td></tr>
+                <tr className="border-t"><td className="py-1">سيارات</td><td className="py-1 font-medium">{fmt(data.E.vehC / data.count)}</td><td className="py-1 font-medium">{fmt(data.I.vehC / data.count)}</td></tr>
+                <tr className="border-t"><td className="py-1">ركاب</td><td className="py-1 font-medium">{fmt(data.E.passC / data.count)}</td><td className="py-1 font-medium">{fmt(data.I.passC / data.count)}</td></tr>
+              </tbody>
+            </table>
+          </div>
+
           {/* Bunker — inventory (opening + supplies − closing) */}
           <div className="bg-white rounded-xl shadow p-4">
             <h3 className="font-bold text-gray-700 mb-3">⛽ البنكر (مخزون)</h3>
@@ -313,7 +347,7 @@ export default function VesselProfitReport() {
               </div>
             </div>
           </div>
-        </>
+        </div>
       )}
     </div>
   );
