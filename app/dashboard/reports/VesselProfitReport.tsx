@@ -150,11 +150,32 @@ export default function VesselProfitReport() {
   }, [sel, openingBunker, closingBunker, salaries]);
 
   const PRINT_CSS = `@media print {
-    @page { size: A4 landscape; margin: 8mm; }
+    @page { size: A4 landscape; margin: 9mm; }
     body * { visibility: hidden !important; }
-    #pelagos-print, #pelagos-print * { visibility: visible !important; }
-    #pelagos-print { position: absolute; left: 0; top: 0; width: 100%; }
-    #pelagos-print .shadow { box-shadow: none !important; }
+    #pelagos-doc, #pelagos-doc * { visibility: visible !important; }
+    #pelagos-doc { position: absolute; left: 0; top: 0; width: 100%; color: #0f172a;
+      font-family: 'Segoe UI', Tahoma, Arial, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    #pelagos-doc .dh { display:flex; align-items:center; justify-content:space-between;
+      border-bottom: 2.5pt solid #1d4ed8; padding-bottom: 6px; margin-bottom: 10px; }
+    #pelagos-doc .dh .brand { font-size: 13pt; font-weight: 800; color:#0f172a; }
+    #pelagos-doc .dh .brand span { color:#1d4ed8; }
+    #pelagos-doc .dh .meta { text-align:left; font-size: 9pt; color:#475569; line-height:1.5; }
+    #pelagos-doc .dt { text-align:center; font-size: 15pt; font-weight: 800; color:#1d4ed8; margin: 2px 0 10px; }
+    #pelagos-doc .kpis { display:flex; gap:8px; margin-bottom:12px; }
+    #pelagos-doc .kpi { flex:1; border:1pt solid #cbd5e1; border-radius:6px; padding:7px 6px; text-align:center; }
+    #pelagos-doc .kpi .l { font-size:8pt; color:#64748b; display:block; margin-bottom:2px; }
+    #pelagos-doc .kpi .v { font-size:13pt; font-weight:800; }
+    #pelagos-doc .kpi.main { background:#059669; color:#fff; border-color:#047857; }
+    #pelagos-doc .kpi.main .l { color:#d1fae5; }
+    #pelagos-doc h3 { font-size:10.5pt; color:#1d4ed8; margin: 12px 0 5px; padding-right:7px; border-right:3.5pt solid #1d4ed8; }
+    #pelagos-doc table { width:100%; border-collapse:collapse; font-size:8.8pt; margin-bottom:4px; }
+    #pelagos-doc th, #pelagos-doc td { border:0.6pt solid #cbd5e1; padding:3.5px 7px; text-align:right; white-space:nowrap; }
+    #pelagos-doc th { background:#eef2ff; color:#1e3a8a; font-weight:700; }
+    #pelagos-doc td.n { font-variant-numeric: tabular-nums; }
+    #pelagos-doc tr.tot td { background:#f1f5f9; font-weight:800; }
+    #pelagos-doc .cols { display:flex; gap:14px; align-items:flex-start; }
+    #pelagos-doc .cols > div { flex:1; }
+    #pelagos-doc .foot { margin-top:10px; border-top:0.6pt solid #cbd5e1; padding-top:5px; font-size:7.5pt; color:#94a3b8; text-align:center; }
   }`;
 
   function exportExcel() {
@@ -213,12 +234,9 @@ export default function VesselProfitReport() {
       )}
 
       {data && (
-        <div id="pelagos-print" className="space-y-4">
+        <>
           <style>{PRINT_CSS}</style>
-          <div className="hidden print:block text-center mb-2">
-            <h2 className="text-xl font-bold">تقرير صافي ربح المركب — Pelagos</h2>
-            <p className="text-sm text-gray-600">{monthLabel(month)} · {sel.length} رحلة</p>
-          </div>
+          <div className="space-y-4 print:hidden">
           {/* KPI header */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <div className="bg-emerald-600 text-white rounded-xl p-4">
@@ -364,7 +382,113 @@ export default function VesselProfitReport() {
               </div>
             </div>
           </div>
-        </div>
+          </div>
+
+          {/* ── Professional print-only document ── */}
+          <div id="pelagos-doc" dir="rtl" className="hidden print:block">
+            <div className="dh">
+              <div className="brand">UME <span>Holding</span></div>
+              <div className="meta">
+                المركب: Pelagos<br />
+                الفترة: {monthLabel(month)}<br />
+                عدد الرحلات: {sel.length}
+              </div>
+            </div>
+            <div className="dt">تقرير صافي ربح المركب</div>
+
+            <div className="kpis">
+              <div className="kpi main"><span className="l">صافي ربح الشهر</span><span className="v">{fmt(data.net)}</span></div>
+              <div className="kpi"><span className="l">إجمالي الإيراد</span><span className="v">{fmt(data.revenue)}</span></div>
+              <div className="kpi"><span className="l">إجمالي المصروفات</span><span className="v">{fmt(data.expenses)}</span></div>
+              <div className="kpi"><span className="l">متوسط ربح الرحلة</span><span className="v">{fmt(data.net / data.count)}</span></div>
+            </div>
+
+            <h3>الإيرادات</h3>
+            <table>
+              <thead><tr>
+                <th>البند</th><th>صادر — عدد</th><th>صادر — مبلغ</th><th>وارد — عدد</th><th>وارد — مبلغ</th><th>الإجمالي</th>
+              </tr></thead>
+              <tbody>
+                {REV_ROWS.map((r) => {
+                  const eC = (data.E as any)[r.cKey], eA = (data.E as any)[r.key], iC = (data.I as any)[r.cKey], iA = (data.I as any)[r.key];
+                  return (
+                    <tr key={r.key}>
+                      <td>{r.label}</td>
+                      <td className="n">{eC || '—'}</td><td className="n">{fmt(eA)}</td>
+                      <td className="n">{iC || '—'}</td><td className="n">{fmt(iA)}</td>
+                      <td className="n">{fmt(eA + iA)}</td>
+                    </tr>
+                  );
+                })}
+                <tr>
+                  <td>إذن الشحن</td><td className="n">—</td><td className="n">{fmt(data.E.discharge)}</td>
+                  <td className="n">—</td><td className="n">{fmt(data.I.discharge)}</td><td className="n">{fmt(data.E.discharge + data.I.discharge)}</td>
+                </tr>
+                <tr className="tot">
+                  <td>إجمالي الإيراد</td><td></td><td className="n">{fmt(data.revE)}</td>
+                  <td></td><td className="n">{fmt(data.revI)}</td><td className="n">{fmt(data.revenue)}</td>
+                </tr>
+              </tbody>
+            </table>
+
+            <div className="cols">
+              <div>
+                <h3>مصروفات الصادر (الاتحاد)</h3>
+                <table>
+                  <thead><tr><th>المصروف</th><th>المبلغ</th></tr></thead>
+                  <tbody>
+                    {Object.entries(data.E.exp).map(([k, v]) => (<tr key={k}><td>{EXP_LABEL[k] || k}</td><td className="n">{fmt(v)}</td></tr>))}
+                    <tr className="tot"><td>إجمالي المصروفات</td><td className="n">{fmt(data.expE)}</td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <div>
+                <h3>مصروفات الوارد (البسّام)</h3>
+                <table>
+                  <thead><tr><th>المصروف</th><th>المبلغ</th></tr></thead>
+                  <tbody>
+                    {Object.entries(data.I.exp).map(([k, v]) => (<tr key={k}><td>{EXP_LABEL[k] || k}</td><td className="n">{fmt(v)}</td></tr>))}
+                    <tr className="tot"><td>إجمالي المصروفات</td><td className="n">{fmt(data.expI)}</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="cols">
+              <div>
+                <h3>البنكر (مخزون)</h3>
+                <table>
+                  <thead><tr><th>رصيد أول المدة</th><th>+ تموينات الشهر</th><th>− مخزون آخر المدة</th><th>= المستهلك</th></tr></thead>
+                  <tbody><tr>
+                    <td className="n">{fmt(data.opening)}</td><td className="n">{fmt(data.supplies)}</td><td className="n">{fmt(data.closing)}</td><td className="n">{fmt(data.bunkerCost)}</td>
+                  </tr></tbody>
+                </table>
+                <h3>مصروفات أخرى</h3>
+                <table><tbody><tr><td>مرتبات الشهر</td><td className="n">{fmt(data.salaries)}</td></tr></tbody></table>
+              </div>
+              <div>
+                <h3>السيولة عند الوكلاء</h3>
+                <table>
+                  <thead><tr><th>وكيل الاتحاد (P−O)</th><th>وكيل البسّام (O)</th><th>إجمالي التحصيل (P)</th></tr></thead>
+                  <tbody><tr>
+                    <td className="n">{fmt(data.liqIttihad)}</td><td className="n">{fmt(data.liqBassam)}</td><td className="n">{fmt(data.P)}</td>
+                  </tr></tbody>
+                </table>
+                <h3>متوسط الأعداد لكل رحلة</h3>
+                <table>
+                  <thead><tr><th>البند</th><th>صادر</th><th>وارد</th></tr></thead>
+                  <tbody>
+                    <tr><td>شاحنات</td><td className="n">{fmt(data.E.truckC / data.count)}</td><td className="n">{fmt(data.I.truckC / data.count)}</td></tr>
+                    <tr><td>سيارات</td><td className="n">{fmt(data.E.vehC / data.count)}</td><td className="n">{fmt(data.I.vehC / data.count)}</td></tr>
+                    <tr><td>ركاب</td><td className="n">{fmt(data.E.passC / data.count)}</td><td className="n">{fmt(data.I.passC / data.count)}</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="foot">UME Holding — نظام PMS · تقرير Pelagos · {monthLabel(month)}</div>
+          </div>
+        </>
       )}
     </div>
   );
