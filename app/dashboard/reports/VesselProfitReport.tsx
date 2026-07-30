@@ -99,6 +99,7 @@ export default function VesselProfitReport() {
   const [error, setError] = useState('');
   const [openingBunker, setOpeningBunker] = useState(''); // رصيد أول المدة (يدوي)
   const [closingBunker, setClosingBunker] = useState(''); // مخزون آخر المدة (يدوي)
+  const [salaries, setSalaries] = useState('');           // مرتبات الشهر (يدوي)
 
   async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -136,16 +137,17 @@ export default function VesselProfitReport() {
     const opening = parseFloat(openingBunker) || 0;
     const closing = parseFloat(closingBunker) || 0;
     const bunkerCost = opening + supplies - closing;
-    // الصافي كان يطرح التموينات فقط؛ نصحّحه ليطرح البنكر المستهلك
-    const net = netBalance - opening + closing;
+    const salariesN = parseFloat(salaries) || 0;           // مرتبات الشهر (يدوي)
+    // الصافي كان يطرح التموينات فقط؛ نصحّحه ليطرح البنكر المستهلك، ثم نطرح المرتبات
+    const net = netBalance - opening + closing - salariesN;
     return {
-      E, I, revE, revI, expE, expI, supplies, opening, closing, bunkerCost,
+      E, I, revE, revI, expE, expI, supplies, opening, closing, bunkerCost, salaries: salariesN,
       net, O, P, revenue, count: sel.length,
       expenses: revenue - net,                             // revenue - expenses = net
       liqBassam: O,
       liqIttihad: P - O,
     };
-  }, [sel, openingBunker, closingBunker]);
+  }, [sel, openingBunker, closingBunker, salaries]);
 
   const PRINT_CSS = `@media print {
     @page { size: A4; margin: 10mm; }
@@ -164,6 +166,7 @@ export default function VesselProfitReport() {
       { البند: 'بنكر — تموينات الشهر', القيمة: data.supplies },
       { البند: 'بنكر — مخزون آخر المدة', القيمة: data.closing },
       { البند: 'بنكر — المستهلك', القيمة: data.bunkerCost },
+      { البند: 'مرتبات الشهر', القيمة: data.salaries },
       { البند: 'سيولة الاتحاد (P−O)', القيمة: data.liqIttihad },
       { البند: 'سيولة البسّام (O)', القيمة: data.liqBassam },
       { البند: 'إجمالي التحصيل (P)', القيمة: data.P },
@@ -327,6 +330,19 @@ export default function VesselProfitReport() {
             <p className="text-[11px] text-gray-400 mt-2">
               البنكر المستهلك مطروح ضمن الصافي. لو سِبت الخانتين فاضيين (٠)، البنكر = تموينات الشهر فقط.
             </p>
+          </div>
+
+          {/* Salaries — manual monthly expense */}
+          <div className="bg-white rounded-xl shadow p-4 flex items-end justify-between flex-wrap gap-3">
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">مرتبات الشهر (يدوي)</label>
+              <input value={salaries} onChange={(e) => setSalaries(e.target.value)} inputMode="decimal" placeholder="0"
+                className="border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <div className="text-right">
+              <p className="text-xs text-gray-500">المبلغ المطروح من الصافي</p>
+              <p className="font-bold text-red-600 text-lg">{fmt(data.salaries)}</p>
+            </div>
           </div>
 
           {/* Liquidity */}
