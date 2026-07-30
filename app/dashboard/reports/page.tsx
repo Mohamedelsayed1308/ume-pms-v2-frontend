@@ -2,12 +2,12 @@
 import { useEffect, useState } from 'react';
 import api from '@/lib/api';
 import * as XLSX from 'xlsx';
-import VesselProfitReport from './VesselProfitReport';
+import VesselProfitReport, { PELAGOS, ALCUDIA } from './VesselProfitReport';
 
 const statusLabel: Record<string, string> = { unpaid: 'غير مدفوعة', partial: 'جزئي', paid: 'مدفوعة', cancelled: 'ملغاة' };
 const statusColor: Record<string, string> = { unpaid: 'bg-red-100 text-red-700', partial: 'bg-yellow-100 text-yellow-700', paid: 'bg-green-100 text-green-700', cancelled: 'bg-gray-100 text-gray-500' };
 
-type ReportType = 'supplier-statement' | 'unpaid-supplier' | 'unpaid-vessel' | 'vessel-suppliers' | 'due-alerts' | 'user-activity' | 'dept-delays' | 'vessel-profit';
+type ReportType = 'supplier-statement' | 'unpaid-supplier' | 'unpaid-vessel' | 'vessel-suppliers' | 'due-alerts' | 'user-activity' | 'dept-delays' | 'vessel-profit' | 'alcudia-profit';
 
 interface UserReport {
   user_id: string;
@@ -139,7 +139,8 @@ export default function ReportsPage() {
     { id: 'vessel-suppliers', label: '📊 موردو المركب', desc: 'حجم تعامل كل مورد على المركب' },
     { id: 'user-activity', label: '👤 نشاط المستخدمين', desc: 'عدد الفواتير لكل مستخدم حسب السفينة' },
     { id: 'dept-delays', label: '🔔 تأخرات الأقسام', desc: 'فواتير تجاوزت 3 أيام بدون إجراء' },
-    { id: 'vessel-profit', label: '🚢💰 صافي ربح المركب', desc: 'إيرادات ومصروفات وسيولة بيلاجوس شهرياً' },
+    { id: 'vessel-profit', label: '🚢💰 ربح Pelagos', desc: 'إيرادات ومصروفات وسيولة بيلاجوس شهرياً' },
+    { id: 'alcudia-profit', label: '🚢💰 ربح Alcudia', desc: 'إيرادات ومصروفات وسيولة الكوديا شهرياً' },
   ];
 
   const needsSupplier = ['supplier-statement', 'unpaid-supplier'].includes(reportType);
@@ -204,11 +205,12 @@ export default function ReportsPage() {
         ))}
       </div>
 
-      {/* Vessel profit (Pelagos) — self-contained report */}
-      {reportType === 'vessel-profit' && <VesselProfitReport />}
+      {/* Vessel profit — self-contained reports */}
+      {reportType === 'vessel-profit' && <VesselProfitReport config={PELAGOS} />}
+      {reportType === 'alcudia-profit' && <VesselProfitReport config={ALCUDIA} />}
 
       {/* Filters */}
-      {reportType !== 'vessel-profit' && (
+      {reportType !== 'vessel-profit' && reportType !== 'alcudia-profit' && (
       <div className="bg-white rounded-xl shadow p-4 mb-6 flex items-end gap-4 flex-wrap">
         {needsSupplier && (
           <div className="flex-1 min-w-[280px]">
