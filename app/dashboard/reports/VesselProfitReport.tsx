@@ -150,10 +150,11 @@ export default function VesselProfitReport() {
   }, [sel, openingBunker, closingBunker, salaries]);
 
   const PRINT_CSS = `@media print {
-    @page { size: A4; margin: 10mm; }
+    @page { size: A4 landscape; margin: 8mm; }
     body * { visibility: hidden !important; }
     #pelagos-print, #pelagos-print * { visibility: visible !important; }
     #pelagos-print { position: absolute; left: 0; top: 0; width: 100%; }
+    #pelagos-print .shadow { box-shadow: none !important; }
   }`;
 
   function exportExcel() {
