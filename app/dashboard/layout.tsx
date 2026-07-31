@@ -3,22 +3,7 @@ import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { getUser, logout } from '@/lib/auth';
-
-const navItems = [
-  { href: '/dashboard', label: 'الرئيسية', icon: '🏠' },
-  { href: '/dashboard/vessels', label: 'السفن', icon: '🚢' },
-  { href: '/dashboard/suppliers', label: 'الموردين', icon: '🏭' },
-  { href: '/dashboard/purchase-orders', label: 'أوامر الشراء', icon: '📋' },
-  { href: '/dashboard/invoices', label: 'الفواتير', icon: '🧾' },
-  { href: '/dashboard/payments', label: 'المدفوعات', icon: '💳' },
-  { href: '/dashboard/reports', label: 'التقارير', icon: '📊' },
-  { href: '/dashboard/customers', label: 'العملاء', icon: '🤝' },
-  { href: '/dashboard/hire-invoices', label: 'فواتير الإيجار', icon: '🚢💰' },
-  { href: '/dashboard/shipping-companies', label: 'شركات الشحن', icon: '🏢' },
-  { href: '/dashboard/management-invoices', label: 'فواتير الإدارة', icon: '📄' },
-  { href: '/dashboard/profit-distribution', label: 'توزيع الأرباح', icon: '💰' },
-  { href: '/dashboard/tasks', label: 'مهام الفريق', icon: '✅' },
-];
+import { SCREENS, canAccess } from '@/lib/screens';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -30,6 +15,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     if (!token) { router.push('/login'); return; }
     setUser(getUser());
   }, [router]);
+
+  const navItems = SCREENS.filter((s) => canAccess(user, s));
 
   return (
     <div className="flex h-screen bg-gray-100" dir="rtl">

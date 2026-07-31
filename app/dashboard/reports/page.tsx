@@ -132,17 +132,41 @@ export default function ReportsPage() {
     }
   }
 
-  const reports = [
-    { id: 'due-alerts', label: '⚠️ تنبيهات الاستحقاق', desc: 'فواتير مستحقة خلال فترة محددة' },
-    { id: 'supplier-statement', label: '📒 كشف حساب مورد', desc: 'مدين / دائن / رصيد متراكم' },
-    { id: 'unpaid-supplier', label: '🔴 مستحقات مورد', desc: 'الفواتير غير المدفوعة أو الجزئية لمورد' },
-    { id: 'unpaid-vessel', label: '🚢 مستحقات مركب', desc: 'الفواتير غير المدفوعة على مركب معين' },
-    { id: 'vessel-suppliers', label: '📊 موردو المركب', desc: 'حجم تعامل كل مورد على المركب' },
-    { id: 'user-activity', label: '👤 نشاط المستخدمين', desc: 'عدد الفواتير لكل مستخدم حسب السفينة' },
-    { id: 'dept-delays', label: '🔔 تأخرات الأقسام', desc: 'فواتير تجاوزت 3 أيام بدون إجراء' },
-    { id: 'vessel-profit', label: '🚢💰 ربح Pelagos', desc: 'إيرادات ومصروفات وسيولة بيلاجوس شهرياً' },
-    { id: 'alcudia-profit', label: '🚢💰 ربح Alcudia', desc: 'إيرادات ومصروفات وسيولة الكوديا شهرياً' },
-    { id: 'exchange-rates', label: '💱 أسعار الصرف', desc: 'أسعار العملات مقابل الدولار لكل شهر' },
+  const reportGroups = [
+    {
+      title: 'المستحقات والتنبيهات', dot: 'bg-red-500',
+      sel: 'border-red-500 bg-red-50 ring-1 ring-red-200', idle: 'border-gray-200 bg-white hover:border-red-300',
+      items: [
+        { id: 'due-alerts', label: '⚠️ تنبيهات الاستحقاق', desc: 'فواتير مستحقة خلال فترة محددة' },
+        { id: 'unpaid-supplier', label: '🔴 مستحقات مورد', desc: 'الفواتير غير المدفوعة أو الجزئية لمورد' },
+        { id: 'unpaid-vessel', label: '🚢 مستحقات مركب', desc: 'الفواتير غير المدفوعة على مركب معين' },
+        { id: 'dept-delays', label: '🔔 تأخرات الأقسام', desc: 'فواتير تجاوزت 3 أيام بدون إجراء' },
+      ],
+    },
+    {
+      title: 'كشوف الحسابات', dot: 'bg-blue-500',
+      sel: 'border-blue-500 bg-blue-50 ring-1 ring-blue-200', idle: 'border-gray-200 bg-white hover:border-blue-300',
+      items: [
+        { id: 'supplier-statement', label: '📒 كشف حساب مورد', desc: 'مدين / دائن / رصيد متراكم' },
+        { id: 'vessel-suppliers', label: '📊 موردو المركب', desc: 'حجم تعامل كل مورد على المركب' },
+        { id: 'user-activity', label: '👤 نشاط المستخدمين', desc: 'عدد الفواتير لكل مستخدم حسب السفينة' },
+      ],
+    },
+    {
+      title: 'أرباح المراكب', dot: 'bg-emerald-500',
+      sel: 'border-emerald-500 bg-emerald-50 ring-1 ring-emerald-200', idle: 'border-gray-200 bg-white hover:border-emerald-300',
+      items: [
+        { id: 'vessel-profit', label: '🚢💰 ربح Pelagos', desc: 'إيرادات ومصروفات وسيولة بيلاجوس شهرياً' },
+        { id: 'alcudia-profit', label: '🚢💰 ربح Alcudia', desc: 'إيرادات ومصروفات ومشتريات الكوديا شهرياً' },
+      ],
+    },
+    {
+      title: 'أدوات وإعدادات', dot: 'bg-purple-500',
+      sel: 'border-purple-500 bg-purple-50 ring-1 ring-purple-200', idle: 'border-gray-200 bg-white hover:border-purple-300',
+      items: [
+        { id: 'exchange-rates', label: '💱 أسعار الصرف', desc: 'أسعار العملات مقابل الدولار لكل شهر' },
+      ],
+    },
   ];
 
   const needsSupplier = ['supplier-statement', 'unpaid-supplier'].includes(reportType);
@@ -197,13 +221,23 @@ export default function ReportsPage() {
     <div>
       <h2 className="text-2xl font-bold text-gray-800 mb-6">التقارير</h2>
 
-      <div className="grid grid-cols-3 md:grid-cols-6 gap-3 mb-6">
-        {reports.map((r) => (
-          <button key={r.id} onClick={() => { setReportType(r.id as ReportType); setData(null); }}
-            className={`p-3 rounded-xl border text-right transition-all ${reportType === r.id ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-white hover:border-blue-300'}`}>
-            <div className="font-medium text-sm">{r.label}</div>
-            <div className="text-xs text-gray-500 mt-1">{r.desc}</div>
-          </button>
+      <div className="space-y-5 mb-6">
+        {reportGroups.map((g) => (
+          <div key={g.title}>
+            <div className="flex items-center gap-2 mb-2">
+              <span className={`w-1.5 h-1.5 rounded-full ${g.dot}`} />
+              <span className="text-sm font-medium text-gray-500">{g.title}</span>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {g.items.map((r) => (
+                <button key={r.id} onClick={() => { setReportType(r.id as ReportType); setData(null); }}
+                  className={`p-3 rounded-xl border text-right transition-all ${reportType === r.id ? g.sel : g.idle}`}>
+                  <div className="font-medium text-sm">{r.label}</div>
+                  <div className="text-xs text-gray-500 mt-1">{r.desc}</div>
+                </button>
+              ))}
+            </div>
+          </div>
         ))}
       </div>
 
