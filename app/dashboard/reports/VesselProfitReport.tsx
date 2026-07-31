@@ -10,6 +10,8 @@ export interface VesselConfig {
   sheetKey: string;    // UPPERCASE token to locate the data sheet
   agentExport: string; // e.g. وكيل الاتحاد
   agentImport: string; // e.g. وكيل البسّام
+  linkInvoices?: boolean;  // اربط فواتير المشتريات واطرحها من صافي التشغيل
+  dbVesselName?: string;   // اسم السفينة في قاعدة البيانات (لجلب فواتيرها)
   col: {
     type: number; ref: number; date: number; collection: number;
     truckC: number; truck: number; vehC: number; veh: number;
@@ -44,6 +46,7 @@ export const PELAGOS: VesselConfig = {
 
 export const ALCUDIA: VesselConfig = {
   vessel: 'Alcudia', sheetKey: 'ALCUDIA', agentExport: 'وكيل الاتحاد', agentImport: 'وكيل البسّام',
+  linkInvoices: true, dbVesselName: 'Alcudia Express',
   col: { type: 0, ref: 1, date: 3, collection: 4, truckC: 5, truck: 6, vehC: 7, veh: 8, passC: 9, pass: 10, houryaC: 11, discharge: 12, O: 14, P: 15, bunker: 25, balance: 35 },
   exportExp: [
     { key: 'otherExpsE', label: 'Other EXPS', col: 24 },
@@ -77,6 +80,11 @@ const serialToMonth = (s: any): string | null => {
 const MONTH_AR = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
 const monthLabel = (m: string) => { const [y, mm] = m.split('-'); return `${MONTH_AR[+mm - 1]} ${y}`; };
 const fmt = (n: number) => Number(n || 0).toLocaleString('en-US', { maximumFractionDigits: 2 });
+// فرق الشهور: b − a (بالشهور)
+const monthDiff = (a: string, b: string) => {
+  const [ay, am] = a.split('-').map(Number); const [by, bm] = b.split('-').map(Number);
+  return (by * 12 + bm) - (ay * 12 + am);
+};
 
 interface Side {
   truckC: number; truck: number; vehC: number; veh: number; passC: number; pass: number; houryaC: number; discharge: number;
@@ -157,6 +165,10 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
   const [saving, setSaving] = useState(false);
   const [savedMsg, setSavedMsg] = useState('');
 
+  // فواتير المشتريات + أسعار الصرف (لو المركب مربوط بالفواتير)
+  const [invoices, setInvoices] = useState<any[]>([]);
+  const [rates, setRates] = useState<Record<string, Record<string, number>>>({});
+
   const cur = manual[month] || { opening: '', closing: '', salaries: '' };
   const setCur = (patch: Partial<{ opening: string; closing: string; salaries: string }>) =>
     setManual((m) => ({ ...m, [month]: { ...(m[month] || { opening: '', closing: '', salaries: '' }), ...patch } }));
@@ -175,6 +187,20 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
       }
     }).catch(() => {});
   }, [cfg.vessel]);
+
+  // جلب فواتير المركب + أسعار الصرف
+  useEffect(() => {
+    if (!cfg.linkInvoices || !cfg.dbVesselName) { setInvoices([]); setRates({}); return; }
+    (async () => {
+      try {
+        const [vs, rt] = await Promise.all([api.get('/api/vessels'), api.get('/api/exchange-rates')]);
+        setRates(rt.data || {});
+        const v = (vs.data || []).find((x: any) => x.name === cfg.dbVesselName);
+        if (v) { const inv = await api.get(`/api/invoices/by-vessel/${v.id}`); setInvoices(inv.data || []); }
+        else setInvoices([]);
+      } catch { /* تجاهل — المركب هيشتغل من غير فواتير */ }
+    })();
+  }, [cfg.linkInvoices, cfg.dbVesselName]);
 
   async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -231,6 +257,33 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
       liqBassam: O, liqIttihad: P - O,
     };
   }, [sel, manual, month]);
+
+  // بند المشتريات (فواتير المركب) — قسط ثابت بالدولار محوّل بسعر صرف شهر الشراء
+  const purchases = useMemo(() => {
+    if (!cfg.linkInvoices || !month) return null;
+    const items = invoices
+      .map((inv) => {
+        const pm = (inv.invoice_date || '').slice(0, 7);
+        if (!pm) return null;
+        const nMonths = inv.depreciation_months && inv.depreciation_months > 1 ? inv.depreciation_months : 1;
+        const diff = monthDiff(pm, month);
+        if (diff < 0 || diff >= nMonths) return null; // خارج فترة الإهلاك للشهر المختار
+        const curr = inv.currency || 'USD';
+        const rate = curr === 'USD' ? 1 : Number(rates[pm]?.[curr]);
+        const missing = !(rate > 0);
+        const usdTotal = missing ? 0 : Number(inv.total_amount) / rate;
+        const installment = usdTotal / nMonths;
+        return {
+          id: inv.id, number: inv.invoice_number, supplier: inv.supplier?.name || '—',
+          amount: Number(inv.total_amount), currency: curr, nMonths, purchaseMonth: pm,
+          rate, missing, usdTotal, installment, seq: diff + 1,
+        };
+      })
+      .filter(Boolean) as any[];
+    const total = items.reduce((s, i) => s + i.installment, 0);
+    const missingList = items.filter((i) => i.missing);
+    return { items, total, missingList };
+  }, [cfg.linkInvoices, invoices, rates, month]);
 
   const PRINT_CSS = `@media print {
     @page { size: A4 landscape; margin: 9mm; }
@@ -385,6 +438,40 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
               <div className="text-right"><p className="text-xs text-gray-500">المبلغ المطروح من الصافي</p><p className="font-bold text-red-600 text-lg">{fmt(data.salaries)}</p></div>
             </div>
 
+            {purchases && (
+              <div className="bg-white rounded-xl shadow p-4">
+                <h3 className="font-bold text-gray-700 mb-3">🧾 المشتريات (فواتير المركب) — بالدولار</h3>
+                {purchases.missingList.length > 0 && (
+                  <div className="bg-amber-50 border border-amber-200 text-amber-800 text-sm rounded-lg px-3 py-2 mb-3">
+                    ⚠️ فواتير سعر صرفها ناقص لشهر الشراء — مش محتسبة لحد ما تدخل السعر في كارت أسعار الصرف:
+                    {purchases.missingList.map((i) => ` ${i.number} (${i.currency} — ${monthLabel(i.purchaseMonth)})`).join('،')}
+                  </div>
+                )}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3 text-sm">
+                  <div className="bg-emerald-50 rounded-lg p-3"><p className="text-emerald-600 text-xs">صافي قبل المشتريات</p><p className="text-lg font-bold text-emerald-800">{fmt(data.net)}</p></div>
+                  <div className="bg-red-50 rounded-lg p-3"><p className="text-red-600 text-xs">إجمالي المشتريات (قسط الشهر)</p><p className="text-lg font-bold text-red-700">{fmt(purchases.total)}</p></div>
+                  <div className="bg-blue-600 text-white rounded-lg p-3"><p className="text-xs opacity-80">صافي نهائي بعد المشتريات</p><p className="text-lg font-bold">{fmt(data.net - purchases.total)}</p></div>
+                </div>
+                {purchases.items.length ? (
+                  <table className="w-full text-sm">
+                    <thead className="text-gray-500 text-xs"><tr><th className="text-right py-1">رقم الفاتورة</th><th className="text-right py-1">المورد</th><th className="text-right py-1">المبلغ الأصلي</th><th className="text-right py-1">شهور الإهلاك</th><th className="text-right py-1">القسط الشهري (USD)</th></tr></thead>
+                    <tbody>
+                      {purchases.items.map((i) => (
+                        <tr key={i.id} className="border-t">
+                          <td className="py-1">{i.number}</td>
+                          <td className="py-1">{i.supplier}</td>
+                          <td className="py-1">{fmt(i.amount)} {i.currency}</td>
+                          <td className="py-1 text-gray-500">{i.nMonths > 1 ? `${i.seq}/${i.nMonths}` : 'كامل'}</td>
+                          <td className="py-1 font-medium text-red-600">{i.missing ? '⚠️ سعر ناقص' : fmt(i.installment)}</td>
+                        </tr>
+                      ))}
+                      <tr className="border-t bg-gray-50 font-bold"><td className="py-1" colSpan={4}>إجمالي المشتريات</td><td className="py-1 text-red-700">{fmt(purchases.total)}</td></tr>
+                    </tbody>
+                  </table>
+                ) : <p className="text-gray-400 text-sm">لا توجد فواتير على المركب في {monthLabel(month)}.</p>}
+              </div>
+            )}
+
             <div className="bg-white rounded-xl shadow p-4">
               <h3 className="font-bold text-gray-700 mb-3">السيولة عند كل وكيل</h3>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
@@ -441,6 +528,24 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
                 </tbody></table>
               </div>
             </div>
+            {purchases && (
+              <>
+                <h3>المشتريات (فواتير المركب) — بالدولار</h3>
+                <table>
+                  <thead><tr><th>رقم الفاتورة</th><th>المورد</th><th>المبلغ الأصلي</th><th>شهور الإهلاك</th><th>القسط الشهري (USD)</th></tr></thead>
+                  <tbody>
+                    {purchases.items.length ? purchases.items.map((i) => (
+                      <tr key={i.id}><td>{i.number}</td><td>{i.supplier}</td><td>{fmt(i.amount)} {i.currency}</td><td>{i.nMonths > 1 ? `${i.seq}/${i.nMonths}` : 'كامل'}</td><td>{i.missing ? 'سعر ناقص' : fmt(i.installment)}</td></tr>
+                    )) : (<tr><td colSpan={5}>لا توجد فواتير على المركب في هذا الشهر</td></tr>)}
+                    <tr className="tot"><td colSpan={4}>إجمالي المشتريات</td><td>{fmt(purchases.total)}</td></tr>
+                  </tbody>
+                </table>
+                <table>
+                  <thead><tr><th>صافي قبل المشتريات</th><th>إجمالي المشتريات</th><th>صافي نهائي بعد المشتريات</th></tr></thead>
+                  <tbody><tr className="tot"><td>{fmt(data.net)}</td><td>{fmt(purchases.total)}</td><td>{fmt(data.net - purchases.total)}</td></tr></tbody>
+                </table>
+              </>
+            )}
             <div className="foot">UME Holding — نظام PMS · تقرير {cfg.vessel} · {monthLabel(month)}</div>
           </div>
         </>

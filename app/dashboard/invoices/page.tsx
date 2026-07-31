@@ -40,6 +40,7 @@ interface Invoice {
   invoice_date: string;
   due_date: string;
   description: string;
+  depreciation_months?: number | null;
   created_by_name: string;
   supplier: { id: string; name: string };
   vessel: { id: string; name: string };
@@ -51,6 +52,7 @@ const empty = {
   type: 'preliminary', currency: 'USD', total_amount: '',
   invoice_date: '', due_date: '', description: '', notes: '',
   approval_status: '', approval_status_date: '', comment: '',
+  depreciation_months: '',
 };
 
 const approvalLabel: Record<string, string> = {
@@ -171,6 +173,7 @@ function InvoicesContent() {
       approval_status: inv.approval_status || '',
       approval_status_date: inv.approval_status_date?.slice(0, 10) || '',
       comment: inv.comment || '',
+      depreciation_months: inv.depreciation_months ? String(inv.depreciation_months) : '',
     });
     setError('');
     setShowModal(true);
@@ -210,6 +213,7 @@ function InvoicesContent() {
         po_id: resolvedPoId || null,
         invoice_date: form.invoice_date || null,
         due_date: form.due_date || null,
+        depreciation_months: form.depreciation_months ? parseInt(form.depreciation_months) : null,
       };
       if (editing) {
         await api.put(`/api/invoices/${editing.id}`, data);
@@ -805,6 +809,13 @@ function InvoicesContent() {
                 <label className="block text-sm text-gray-600 mb-1">تاريخ الاستحقاق</label>
                 <input type="date" value={form.due_date} onChange={(e) => setForm({ ...form, due_date: e.target.value })}
                   className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">عدد شهور الإهلاك</label>
+                <input type="number" min="1" step="1" placeholder="فارغ = تُحمّل كاملة في شهرها"
+                  value={form.depreciation_months} onChange={(e) => setForm({ ...form, depreciation_months: e.target.value })}
+                  className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                <p className="text-xs text-gray-400 mt-1">لقطع الغيار والأصول: يوزّع المبلغ على عدد الشهور بقيمة ثابتة</p>
               </div>
               <div className="col-span-2">
                 <label className="block text-sm text-gray-600 mb-1">الوصف</label>

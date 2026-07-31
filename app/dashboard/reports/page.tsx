@@ -3,11 +3,12 @@ import { useEffect, useState } from 'react';
 import api from '@/lib/api';
 import * as XLSX from 'xlsx';
 import VesselProfitReport, { PELAGOS, ALCUDIA } from './VesselProfitReport';
+import ExchangeRatesCard from './ExchangeRatesCard';
 
 const statusLabel: Record<string, string> = { unpaid: 'غير مدفوعة', partial: 'جزئي', paid: 'مدفوعة', cancelled: 'ملغاة' };
 const statusColor: Record<string, string> = { unpaid: 'bg-red-100 text-red-700', partial: 'bg-yellow-100 text-yellow-700', paid: 'bg-green-100 text-green-700', cancelled: 'bg-gray-100 text-gray-500' };
 
-type ReportType = 'supplier-statement' | 'unpaid-supplier' | 'unpaid-vessel' | 'vessel-suppliers' | 'due-alerts' | 'user-activity' | 'dept-delays' | 'vessel-profit' | 'alcudia-profit';
+type ReportType = 'supplier-statement' | 'unpaid-supplier' | 'unpaid-vessel' | 'vessel-suppliers' | 'due-alerts' | 'user-activity' | 'dept-delays' | 'vessel-profit' | 'alcudia-profit' | 'exchange-rates';
 
 interface UserReport {
   user_id: string;
@@ -141,6 +142,7 @@ export default function ReportsPage() {
     { id: 'dept-delays', label: '🔔 تأخرات الأقسام', desc: 'فواتير تجاوزت 3 أيام بدون إجراء' },
     { id: 'vessel-profit', label: '🚢💰 ربح Pelagos', desc: 'إيرادات ومصروفات وسيولة بيلاجوس شهرياً' },
     { id: 'alcudia-profit', label: '🚢💰 ربح Alcudia', desc: 'إيرادات ومصروفات وسيولة الكوديا شهرياً' },
+    { id: 'exchange-rates', label: '💱 أسعار الصرف', desc: 'أسعار العملات مقابل الدولار لكل شهر' },
   ];
 
   const needsSupplier = ['supplier-statement', 'unpaid-supplier'].includes(reportType);
@@ -208,9 +210,10 @@ export default function ReportsPage() {
       {/* Vessel profit — self-contained reports */}
       {reportType === 'vessel-profit' && <VesselProfitReport config={PELAGOS} />}
       {reportType === 'alcudia-profit' && <VesselProfitReport config={ALCUDIA} />}
+      {reportType === 'exchange-rates' && <ExchangeRatesCard />}
 
       {/* Filters */}
-      {reportType !== 'vessel-profit' && reportType !== 'alcudia-profit' && (
+      {reportType !== 'vessel-profit' && reportType !== 'alcudia-profit' && reportType !== 'exchange-rates' && (
       <div className="bg-white rounded-xl shadow p-4 mb-6 flex items-end gap-4 flex-wrap">
         {needsSupplier && (
           <div className="flex-1 min-w-[280px]">
