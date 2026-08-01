@@ -566,14 +566,36 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
                 <tr className="tot"><td>إجمالي الإيراد</td><td></td><td>{fmt(data.revE)}</td><td></td><td>{fmt(data.revI)}</td><td>{fmt(data.revenue)}</td></tr>
               </tbody>
             </table>
-            <h3>أعداد المنقولات خلال الشهر</h3>
+            <h3>أعداد المنقولات خلال الشهر ومتوسطها لكل رحلة</h3>
             <table>
-              <thead><tr><th>البند</th><th>صادر</th><th>وارد</th><th>الإجمالي</th></tr></thead>
+              <thead><tr>
+                <th>البند</th>
+                <th>صادر — إجمالي</th><th>وارد — إجمالي</th><th>الإجمالي</th>
+                <th>متوسط صادر / رحلة</th><th>متوسط وارد / رحلة</th>
+              </tr></thead>
               <tbody>
-                <tr><td>شاحنات</td><td>{data.E.truckC.toLocaleString()}</td><td>{data.I.truckC.toLocaleString()}</td><td>{(data.E.truckC + data.I.truckC).toLocaleString()}</td></tr>
-                <tr><td>سيارات</td><td>{data.E.vehC.toLocaleString()}</td><td>{data.I.vehC.toLocaleString()}</td><td>{(data.E.vehC + data.I.vehC).toLocaleString()}</td></tr>
-                <tr><td>ركاب</td><td>{data.E.passC.toLocaleString()}</td><td>{data.I.passC.toLocaleString()}</td><td>{(data.E.passC + data.I.passC).toLocaleString()}</td></tr>
-                <tr className="tot"><td>الإجمالي</td><td>{(data.E.truckC + data.E.vehC + data.E.passC).toLocaleString()}</td><td>{(data.I.truckC + data.I.vehC + data.I.passC).toLocaleString()}</td><td>{(data.E.truckC + data.E.vehC + data.E.passC + data.I.truckC + data.I.vehC + data.I.passC).toLocaleString()}</td></tr>
+                {([
+                  { label: 'شاحنات', e: data.E.truckC, i: data.I.truckC },
+                  { label: 'سيارات', e: data.E.vehC, i: data.I.vehC },
+                  { label: 'ركاب', e: data.E.passC, i: data.I.passC },
+                ] as const).map((r) => (
+                  <tr key={r.label}>
+                    <td>{r.label}</td>
+                    <td>{r.e.toLocaleString()}</td>
+                    <td>{r.i.toLocaleString()}</td>
+                    <td>{(r.e + r.i).toLocaleString()}</td>
+                    <td>{fmt(r.e / data.count)}</td>
+                    <td>{fmt(r.i / data.count)}</td>
+                  </tr>
+                ))}
+                <tr className="tot">
+                  <td>الإجمالي</td>
+                  <td>{(data.E.truckC + data.E.vehC + data.E.passC).toLocaleString()}</td>
+                  <td>{(data.I.truckC + data.I.vehC + data.I.passC).toLocaleString()}</td>
+                  <td>{(data.E.truckC + data.E.vehC + data.E.passC + data.I.truckC + data.I.vehC + data.I.passC).toLocaleString()}</td>
+                  <td>{fmt((data.E.truckC + data.E.vehC + data.E.passC) / data.count)}</td>
+                  <td>{fmt((data.I.truckC + data.I.vehC + data.I.passC) / data.count)}</td>
+                </tr>
               </tbody>
             </table>
             <div className="cols">
@@ -589,12 +611,6 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
               <div>
                 <h3>السيولة عند الوكلاء</h3>
                 <table><thead><tr><th>{cfg.agentExport} (P−O)</th><th>{cfg.agentImport} (O)</th><th>إجمالي التحصيل (P)</th></tr></thead><tbody><tr><td>{fmt(data.liqIttihad)}</td><td>{fmt(data.liqBassam)}</td><td>{fmt(data.P)}</td></tr></tbody></table>
-                <h3>متوسط الأعداد لكل رحلة</h3>
-                <table><thead><tr><th>البند</th><th>صادر</th><th>وارد</th></tr></thead><tbody>
-                  <tr><td>شاحنات</td><td>{fmt(data.E.truckC / data.count)}</td><td>{fmt(data.I.truckC / data.count)}</td></tr>
-                  <tr><td>سيارات</td><td>{fmt(data.E.vehC / data.count)}</td><td>{fmt(data.I.vehC / data.count)}</td></tr>
-                  <tr><td>ركاب</td><td>{fmt(data.E.passC / data.count)}</td><td>{fmt(data.I.passC / data.count)}</td></tr>
-                </tbody></table>
               </div>
             </div>
             {purchases && (
