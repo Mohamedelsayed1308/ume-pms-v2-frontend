@@ -401,6 +401,28 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
               <div className="bg-white rounded-xl shadow p-4"><p className="text-xs text-gray-500">السيولة عند الوكلاء</p><p className="text-sm font-semibold text-indigo-700 mt-1">{cfg.agentExport}: {fmt(data.liqIttihad)}</p><p className="text-sm font-semibold text-purple-700">{cfg.agentImport}: {fmt(data.liqBassam)}</p></div>
             </div>
 
+            <div className="bg-white rounded-xl shadow p-4">
+              <h3 className="font-bold text-gray-700 mb-3">🚚 أعداد المنقولات خلال الشهر</h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                {([
+                  { label: 'شاحنات', icon: '🚛', e: data.E.truckC, i: data.I.truckC, box: 'bg-blue-50 border-blue-200', num: 'text-blue-700' },
+                  { label: 'سيارات', icon: '🚗', e: data.E.vehC, i: data.I.vehC, box: 'bg-emerald-50 border-emerald-200', num: 'text-emerald-700' },
+                  { label: 'ركاب', icon: '👥', e: data.E.passC, i: data.I.passC, box: 'bg-amber-50 border-amber-200', num: 'text-amber-700' },
+                ] as const).map((c) => (
+                  <div key={c.label} className={`rounded-lg border p-3 ${c.box}`}>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-600">{c.icon} {c.label}</span>
+                      <span className={`text-2xl font-bold ${c.num}`}>{(c.e + c.i).toLocaleString()}</span>
+                    </div>
+                    <div className="flex gap-4 mt-2 text-xs text-gray-500">
+                      <span>صادر: <strong className="text-gray-700">{c.e.toLocaleString()}</strong></span>
+                      <span>وارد: <strong className="text-gray-700">{c.i.toLocaleString()}</strong></span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
             <div className="grid md:grid-cols-2 gap-4">
               {([
                 { key: 'E', label: `صادر — ${cfg.agentExport}`, rev: data.revE, exp: data.expE, side: data.E, color: 'indigo' },
@@ -542,6 +564,16 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
                 })}
                 <tr><td>إذن الشحن</td><td>—</td><td>{fmt(data.E.discharge)}</td><td>—</td><td>{fmt(data.I.discharge)}</td><td>{fmt(data.E.discharge + data.I.discharge)}</td></tr>
                 <tr className="tot"><td>إجمالي الإيراد</td><td></td><td>{fmt(data.revE)}</td><td></td><td>{fmt(data.revI)}</td><td>{fmt(data.revenue)}</td></tr>
+              </tbody>
+            </table>
+            <h3>أعداد المنقولات خلال الشهر</h3>
+            <table>
+              <thead><tr><th>البند</th><th>صادر</th><th>وارد</th><th>الإجمالي</th></tr></thead>
+              <tbody>
+                <tr><td>شاحنات</td><td>{data.E.truckC.toLocaleString()}</td><td>{data.I.truckC.toLocaleString()}</td><td>{(data.E.truckC + data.I.truckC).toLocaleString()}</td></tr>
+                <tr><td>سيارات</td><td>{data.E.vehC.toLocaleString()}</td><td>{data.I.vehC.toLocaleString()}</td><td>{(data.E.vehC + data.I.vehC).toLocaleString()}</td></tr>
+                <tr><td>ركاب</td><td>{data.E.passC.toLocaleString()}</td><td>{data.I.passC.toLocaleString()}</td><td>{(data.E.passC + data.I.passC).toLocaleString()}</td></tr>
+                <tr className="tot"><td>الإجمالي</td><td>{(data.E.truckC + data.E.vehC + data.E.passC).toLocaleString()}</td><td>{(data.I.truckC + data.I.vehC + data.I.passC).toLocaleString()}</td><td>{(data.E.truckC + data.E.vehC + data.E.passC + data.I.truckC + data.I.vehC + data.I.passC).toLocaleString()}</td></tr>
               </tbody>
             </table>
             <div className="cols">
