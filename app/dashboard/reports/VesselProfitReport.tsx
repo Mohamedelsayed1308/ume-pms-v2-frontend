@@ -79,7 +79,7 @@ const serialToMonth = (s: any): string | null => {
 };
 const MONTH_AR = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
 const monthLabel = (m: string) => { const [y, mm] = m.split('-'); return `${MONTH_AR[+mm - 1]} ${y}`; };
-const fmt = (n: number) => Number(n || 0).toLocaleString('en-US', { maximumFractionDigits: 2 });
+const fmt = (n: number) => Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 // فرق الشهور: b − a (بالشهور)
 const monthDiff = (a: string, b: string) => {
   const [ay, am] = a.split('-').map(Number); const [by, bm] = b.split('-').map(Number);
@@ -286,27 +286,38 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
   }, [cfg.linkInvoices, invoices, rates, month]);
 
   const PRINT_CSS = `@media print {
-    @page { size: A4 landscape; margin: 9mm; }
+    @page { size: A4 landscape; margin: 11mm 10mm; }
     body * { visibility: hidden !important; }
     #vp-doc, #vp-doc * { visibility: visible !important; }
     #vp-doc { position: absolute; left: 0; top: 0; width: 100%; color: #0f172a;
-      font-family: 'Segoe UI', Tahoma, Arial, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    #vp-doc .dh { display:flex; align-items:center; justify-content:space-between; border-bottom: 2.5pt solid #1d4ed8; padding-bottom: 6px; margin-bottom: 10px; }
-    #vp-doc .dh .brand { font-size: 13pt; font-weight: 800; } #vp-doc .dh .brand span { color:#1d4ed8; }
-    #vp-doc .dh .meta { text-align:left; font-size: 9pt; color:#475569; line-height:1.5; }
-    #vp-doc .dt { text-align:center; font-size: 15pt; font-weight: 800; color:#1d4ed8; margin: 2px 0 10px; }
-    #vp-doc .kpis { display:flex; gap:8px; margin-bottom:12px; }
-    #vp-doc .kpi { flex:1; border:1pt solid #cbd5e1; border-radius:6px; padding:7px 6px; text-align:center; }
-    #vp-doc .kpi .l { font-size:8pt; color:#64748b; display:block; margin-bottom:2px; }
-    #vp-doc .kpi .v { font-size:13pt; font-weight:800; }
-    #vp-doc .kpi.main { background:#059669; color:#fff; border-color:#047857; } #vp-doc .kpi.main .l { color:#d1fae5; }
-    #vp-doc h3 { font-size:10.5pt; color:#1d4ed8; margin: 12px 0 5px; padding-right:7px; border-right:3.5pt solid #1d4ed8; }
-    #vp-doc table { width:100%; border-collapse:collapse; font-size:8.8pt; margin-bottom:4px; }
-    #vp-doc th, #vp-doc td { border:.6pt solid #cbd5e1; padding:3.5px 7px; text-align:right; white-space:nowrap; }
-    #vp-doc th { background:#eef2ff; color:#1e3a8a; font-weight:700; }
-    #vp-doc tr.tot td { background:#f1f5f9; font-weight:800; }
-    #vp-doc .cols { display:flex; gap:14px; align-items:flex-start; } #vp-doc .cols > div { flex:1; }
-    #vp-doc .foot { margin-top:10px; border-top:.6pt solid #cbd5e1; padding-top:5px; font-size:7.5pt; color:#94a3b8; text-align:center; }
+      font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 9pt; line-height: 1.35;
+      -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    #vp-doc .dh { display:flex; align-items:center; justify-content:space-between; border-bottom: 2.5pt solid #0f2c5c; padding-bottom: 8px; margin-bottom: 10px; }
+    #vp-doc .dh .brand { font-size: 17pt; font-weight: 800; color:#0f2c5c; letter-spacing:.3pt; }
+    #vp-doc .dh .brand span { color:#c8102e; }
+    #vp-doc .dh .brand small { display:block; font-size:7.5pt; font-weight:600; color:#64748b; letter-spacing:1.5pt; margin-top:1px; }
+    #vp-doc .dh .meta { text-align:left; font-size: 8.5pt; color:#475569; line-height:1.7; }
+    #vp-doc .dh .meta b { color:#0f172a; font-weight:700; }
+    #vp-doc .dt { text-align:center; font-size: 13pt; font-weight: 800; color:#fff; background:#0f2c5c;
+      padding:7px 0; margin: 0 0 12px; border-radius:4px; letter-spacing:.5pt; }
+    #vp-doc .kpis { display:flex; gap:9px; margin-bottom:14px; }
+    #vp-doc .kpi { flex:1; border:1pt solid #e2e8f0; border-radius:6px; padding:8px 6px; text-align:center; background:#f8fafc; }
+    #vp-doc .kpi .l { font-size:7.5pt; color:#64748b; display:block; margin-bottom:3px; font-weight:600; }
+    #vp-doc .kpi .v { font-size:13.5pt; font-weight:800; color:#0f172a; }
+    #vp-doc .kpi.main { background:#047857; border-color:#065f46; }
+    #vp-doc .kpi.main .l { color:#d1fae5; } #vp-doc .kpi.main .v { color:#fff; }
+    #vp-doc .kpi.danger .v { color:#b91c1c; }
+    #vp-doc h3 { font-size:10pt; font-weight:700; color:#0f2c5c; background:#eef2ff;
+      margin: 13px 0 6px; padding:5px 10px; border-radius:3px; border-right:4pt solid #1d4ed8; }
+    #vp-doc table { width:100%; border-collapse:collapse; font-size:8.6pt; margin-bottom:6px; }
+    #vp-doc th { background:#0f2c5c; color:#fff; font-weight:700; padding:5px 8px; text-align:right; white-space:nowrap; }
+    #vp-doc td { padding:4px 8px; text-align:right; white-space:nowrap; border-bottom:.5pt solid #e5e9f0; }
+    #vp-doc tbody tr:nth-child(even) td { background:#f8fafc; }
+    #vp-doc tr.tot td { background:#dbe4ff; color:#0f2c5c; font-weight:800; border-top:1pt solid #94a3b8; border-bottom:none; }
+    #vp-doc .cols { display:flex; gap:16px; align-items:flex-start; } #vp-doc .cols > div { flex:1; }
+    #vp-doc .foot { margin-top:12px; border-top:.75pt solid #cbd5e1; padding-top:6px; font-size:7.5pt; color:#94a3b8;
+      display:flex; justify-content:space-between; }
+    #vp-doc table, #vp-doc .cols { page-break-inside: avoid; }
   }`;
 
   function exportExcel() {
@@ -328,6 +339,16 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'ملخص');
     XLSX.writeFile(wb, `ربح-${cfg.vessel}-${month}.xlsx`);
+  }
+
+  // اسم مستند احترافي وقت الطباعة (يظهر في ترويسة المتصفح بدل "Create Next App")
+  function printReport() {
+    const prev = document.title;
+    document.title = `تقرير صافي ربح ${cfg.vessel} — ${monthLabel(month)}`;
+    const restore = () => { document.title = prev; window.removeEventListener('afterprint', restore); };
+    window.addEventListener('afterprint', restore);
+    window.print();
+    setTimeout(restore, 1500);
   }
 
   return (
@@ -353,7 +374,7 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
             {savedMsg && <span className="text-xs text-emerald-600 font-medium">{savedMsg}</span>}
             <button onClick={save} disabled={saving} className="bg-blue-600 text-white text-sm px-4 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50">{saving ? 'جاري الحفظ...' : '💾 حفظ'}</button>
             <button onClick={exportExcel} className="bg-green-600 text-white text-sm px-4 py-2 rounded-lg hover:bg-green-700">📥 تصدير Excel</button>
-            <button onClick={() => window.print()} className="bg-gray-700 text-white text-sm px-4 py-2 rounded-lg hover:bg-gray-800">🖨️ طباعة / PDF</button>
+            <button onClick={printReport} className="bg-gray-700 text-white text-sm px-4 py-2 rounded-lg hover:bg-gray-800">🖨️ طباعة / PDF</button>
           </div>
         )}
       </div>
@@ -485,15 +506,31 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
           {/* ── print-only document ── */}
           <div id="vp-doc" dir="rtl" className="hidden print:block">
             <div className="dh">
-              <div className="brand">UME <span>Holding</span></div>
-              <div className="meta">المركب: {cfg.vessel}<br />الفترة: {monthLabel(month)}<br />عدد الرحلات: {sel.length}</div>
+              <div className="brand">UME <span>Holding</span><small>MARITIME · PMS</small></div>
+              <div className="meta">
+                المركب: <b>{cfg.vessel}</b><br />
+                الفترة: <b>{monthLabel(month)}</b><br />
+                عدد الرحلات: <b>{sel.length}</b> · العملة: <b>USD</b>
+              </div>
             </div>
             <div className="dt">تقرير صافي ربح المركب</div>
             <div className="kpis">
-              <div className="kpi main"><span className="l">صافي ربح الشهر</span><span className="v">{fmt(data.net)}</span></div>
-              <div className="kpi"><span className="l">إجمالي الإيراد</span><span className="v">{fmt(data.revenue)}</span></div>
-              <div className="kpi"><span className="l">إجمالي المصروفات</span><span className="v">{fmt(data.expenses)}</span></div>
-              <div className="kpi"><span className="l">متوسط ربح الرحلة</span><span className="v">{fmt(data.net / data.count)}</span></div>
+              {purchases ? (
+                <>
+                  <div className="kpi main"><span className="l">صافي نهائي بعد المشتريات</span><span className="v">{fmt(data.net - purchases.total)}</span></div>
+                  <div className="kpi"><span className="l">صافي قبل المشتريات</span><span className="v">{fmt(data.net)}</span></div>
+                  <div className="kpi danger"><span className="l">بند المشتريات</span><span className="v">{fmt(purchases.total)}</span></div>
+                  <div className="kpi"><span className="l">إجمالي الإيراد</span><span className="v">{fmt(data.revenue)}</span></div>
+                  <div className="kpi danger"><span className="l">إجمالي المصروفات</span><span className="v">{fmt(data.expenses)}</span></div>
+                </>
+              ) : (
+                <>
+                  <div className="kpi main"><span className="l">صافي ربح الشهر</span><span className="v">{fmt(data.net)}</span></div>
+                  <div className="kpi"><span className="l">إجمالي الإيراد</span><span className="v">{fmt(data.revenue)}</span></div>
+                  <div className="kpi danger"><span className="l">إجمالي المصروفات</span><span className="v">{fmt(data.expenses)}</span></div>
+                  <div className="kpi"><span className="l">متوسط ربح الرحلة</span><span className="v">{fmt(data.net / data.count)}</span></div>
+                </>
+              )}
             </div>
             <h3>الإيرادات</h3>
             <table>
@@ -546,7 +583,10 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
                 </table>
               </>
             )}
-            <div className="foot">UME Holding — نظام PMS · تقرير {cfg.vessel} · {monthLabel(month)}</div>
+            <div className="foot">
+              <span>UME Holding — نظام PMS · تقرير {cfg.vessel} · {monthLabel(month)}</span>
+              <span>مستند داخلي — سري · جميع القيم بالدولار الأمريكي</span>
+            </div>
           </div>
         </>
       )}
