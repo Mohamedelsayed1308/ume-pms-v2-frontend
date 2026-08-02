@@ -308,7 +308,7 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
       .sort((a, b) => Number(a.ref) - Number(b.ref))
       .map((v) => {
         const rev = sideRevenue(v.E) + sideRevenue(v.I);
-        return { ref: String(v.ref), revenue: rev, net: v.net, expenses: rev - v.net };
+        return { ref: String(v.ref), revenue: rev, net: v.net, expenses: rev - v.net, supplies: v.bunker };
       });
     const costLines: { key: string; label: string; value: number }[] = [];
     costLines.push({ key: 'fuel', label: 'الوقود (بنكر)', value: data.bunkerCost });
@@ -327,6 +327,8 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
       opExpenses: data.expenses,
       opNet: data.net,
       purchasesTotal,
+      bunkerCost: data.bunkerCost,
+      salaries: data.salaries,
       count: data.count,
       costLines,
       defaultBuckets: COST_BUCKET_DEFAULTS,

@@ -3,19 +3,22 @@ import { useMemo, useState } from 'react';
 import type { VesselConfig } from './VesselProfitReport';
 
 export interface ExecLine { key: string; label: string; value: number }
-export interface ExecVoyage { ref: string; revenue: number; expenses: number; net: number }
+export interface ExecVoyage { ref: string; revenue: number; expenses: number; net: number; supplies: number }
 export interface ExecData {
   perVoyage: ExecVoyage[];
   revenue: number;
   opExpenses: number;   // إجمالي مصروفات التشغيل (الإيراد − الصافي التشغيلي)
   opNet: number;        // الصافي التشغيلي (عمود Balance)
   purchasesTotal: number;
+  bunkerCost: number;   // إجمالي تكلفة البنكر المستهلك (أول + تموينات − آخر)
+  salaries: number;     // إجمالي مرتبات الشهر
   count: number;
   costLines: ExecLine[];        // بنود مصروفات التشغيل + المشتريات
   defaultBuckets: Record<string, string>;
 }
 
 type Lang = 'ar' | 'en' | 'both';
+type Alloc = 'mixed' | 'revenue' | 'equal';
 
 const BUCKETS = [
   { id: 'fuel', ar: 'الوقود (بنكر)', en: 'Fuel (bunker)', color: '#1e3a5f' },
@@ -41,6 +44,7 @@ export default function VesselExecReport({
   cfg, month, monthLabel, exec, onClose,
 }: { cfg: VesselConfig; month: string; monthLabel: string; exec: ExecData; onClose: () => void }) {
   const [lang, setLang] = useState<Lang>('both');
+  const [alloc, setAlloc] = useState<Alloc>('mixed');
   const [showMap, setShowMap] = useState(false);
   const [buckets, setBuckets] = useState<Record<string, string>>(() => {
     const b: Record<string, string> = {};
@@ -54,6 +58,23 @@ export default function VesselExecReport({
   const totalExpenses = exec.opExpenses + exec.purchasesTotal;
   const finalNet = exec.opNet - exec.purchasesTotal;
   const margin = exec.revenue ? (finalNet / exec.revenue) * 100 : 0;
+
+  // توزيع البنكر والمرتبات والمشتريات على الرحلات → صافي أقرب للحقيقة (مجموعه = الصافي النهائي)
+  const allocVoyages = useMemo(() => {
+    const per = exec.perVoyage;
+    const n = per.length || 1;
+    const sumRev = per.reduce((s, v) => s + v.revenue, 0);
+    const sumSup = per.reduce((s, v) => s + (v.supplies || 0), 0);
+    const ovh = exec.salaries + exec.purchasesTotal; // مرتبات + مشتريات
+    return per.map((v) => {
+      let bW: number, oW: number;
+      if (alloc === 'equal') { bW = 1 / n; oW = 1 / n; }
+      else if (alloc === 'revenue') { bW = sumRev ? v.revenue / sumRev : 1 / n; oW = bW; }
+      else { bW = sumSup ? (v.supplies || 0) / sumSup : 1 / n; oW = sumRev ? v.revenue / sumRev : 1 / n; }
+      const net = (v.net + (v.supplies || 0)) - exec.bunkerCost * bW - ovh * oW;
+      return { ...v, net, expenses: v.revenue - net };
+    });
+  }, [exec, alloc]);
 
   // تجميع التكاليف حسب المجموعة (مع بند تسوية داخل "أخرى" ليطابق إجمالي المصروفات)
   const cost = useMemo(() => {
@@ -76,7 +97,7 @@ export default function VesselExecReport({
   }, [buckets, exec, totalExpenses]);
 
   const bestHalfNote = useMemo(() => {
-    const v = exec.perVoyage;
+    const v = allocVoyages;
     if (v.length < 4) return '';
     const mid = Math.ceil(v.length / 2);
     const avg = (arr: ExecVoyage[]) => arr.reduce((s, x) => s + x.net, 0) / (arr.length || 1);
@@ -85,10 +106,10 @@ export default function VesselExecReport({
       `The second half of the month outperformed the first — averaging ${fmtAbbr(h2)} net vs ${fmtAbbr(h1)}.`);
     return L(`النصف الأول من الشهر تفوّق على الثاني — بمتوسط ${fmtAbbr(h1)} مقابل ${fmtAbbr(h2)} للرحلة.`,
       `The first half of the month outperformed the second — averaging ${fmtAbbr(h1)} net vs ${fmtAbbr(h2)}.`);
-  }, [exec.perVoyage, lang]);
+  }, [allocVoyages, lang]);
 
-  const peak = exec.perVoyage.reduce((a, b) => (b.net > a.net ? b : a), exec.perVoyage[0]);
-  const low = exec.perVoyage.reduce((a, b) => (b.net < a.net ? b : a), exec.perVoyage[0]);
+  const peak = allocVoyages.reduce((a, b) => (b.net > a.net ? b : a), allocVoyages[0]);
+  const low = allocVoyages.reduce((a, b) => (b.net < a.net ? b : a), allocVoyages[0]);
 
   return (
     <div className="fixed inset-0 z-50 bg-black/40 overflow-auto print:bg-white print:static print:overflow-visible">
@@ -106,6 +127,13 @@ export default function VesselExecReport({
           ))}
         </div>
         <button onClick={() => setShowMap((v) => !v)} className="text-sm px-3 py-1.5 rounded-lg border hover:bg-gray-50">🎛️ تعديل توزيع التكاليف</button>
+        <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1 text-xs" title="أساس توزيع البنكر والمرتبات والمشتريات على الرحلات">
+          <span className="text-gray-500 px-1">توزيع التكلفة:</span>
+          {([['mixed', 'مختلط'], ['revenue', 'حسب الإيراد'], ['equal', 'بالتساوي']] as [Alloc, string][]).map(([a, l]) => (
+            <button key={a} onClick={() => setAlloc(a)}
+              className={`px-2 py-1 rounded-md ${alloc === a ? 'bg-white shadow text-blue-700 font-medium' : 'text-gray-500'}`}>{l}</button>
+          ))}
+        </div>
         <div className="mr-auto flex gap-2">
           <button onClick={() => window.print()} className="bg-gray-800 text-white text-sm px-4 py-2 rounded-lg hover:bg-black">🖨️ طباعة / PDF</button>
           <button onClick={onClose} className="border text-sm px-4 py-2 rounded-lg hover:bg-gray-50">إغلاق</button>
@@ -158,10 +186,10 @@ export default function VesselExecReport({
         {/* Slide 2 — Net Profit by Voyage */}
         <Slide>
           <SlideTitle title={L('صافي الربح لكل رحلة', 'Net Profit by Voyage')}
-            sub={L('بالدولار — الصافي التشغيلي (قبل المشتريات)', 'USD — operating net per voyage (before purchases)')} />
+            sub={L('بالدولار — بعد توزيع البنكر والمرتبات والمشتريات على الرحلات', 'USD — after allocating bunker, salaries and purchases to voyages')} />
           <div className="flex gap-4 mt-4">
             <div className="flex-1">
-              <BarChart data={exec.perVoyage.map((v) => ({ label: v.ref, value: v.net }))} color="#5b9e77" />
+              <BarChart data={allocVoyages.map((v) => ({ label: v.ref, value: v.net }))} color="#5b9e77" />
             </div>
             <div className="w-44 flex flex-col gap-3 justify-center">
               <div className="bg-gray-50 rounded-xl p-3">
@@ -186,7 +214,7 @@ export default function VesselExecReport({
             <span className="flex items-center gap-2"><span className="w-3 h-3 rounded-sm inline-block" style={{ background: '#1e3a5f' }} />{L('الإيراد', 'Revenue')}</span>
             <span className="flex items-center gap-2"><span className="w-3 h-3 rounded-sm inline-block" style={{ background: '#5b9e77' }} />{L('المصروف', 'Expenses')}</span>
           </div>
-          <GroupedBarChart data={exec.perVoyage.map((v) => ({ label: v.ref, a: v.revenue, b: v.expenses }))} colorA="#1e3a5f" colorB="#5b9e77" />
+          <GroupedBarChart data={allocVoyages.map((v) => ({ label: v.ref, a: v.revenue, b: v.expenses }))} colorA="#1e3a5f" colorB="#5b9e77" />
         </Slide>
 
         {/* Slide 4 — Cost Structure */}
