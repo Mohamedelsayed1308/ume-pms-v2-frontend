@@ -363,13 +363,13 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
     };
   }, [data, sel, purchases, labelOf]);
 
-  // صافي كل رحلة بعد توزيع البنكر والمرتبات والمشتريات (للكارت والطباعة) — أساس مختلط
+  // صافي كل رحلة بعد توزيع البنكر والمرتبات والمشتريات على كل الرحلات (حسب الإيراد)
   const allocVoy = useMemo(() => {
     if (!execData) return [];
     return allocateVoyageNets(
       execData.perVoyage,
       { bunkerCost: execData.bunkerCost, salaries: execData.salaries, purchasesTotal: execData.purchasesTotal },
-      'mixed',
+      'revenue',
     );
   }, [execData]);
   const allocFinalNet = useMemo(() => allocVoy.reduce((s, v) => s + v.net, 0), [allocVoy]);
@@ -618,7 +618,7 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
             {allocVoy.length > 0 && (
               <div className="bg-white rounded-xl shadow p-4 overflow-x-auto">
                 <h3 className="font-bold text-gray-700 mb-1">صافي الربح لكل رحلة بعد توزيع التكاليف</h3>
-                <p className="text-xs text-gray-400 mb-3">توزيع البنكر (حسب تموين كل رحلة) والمرتبات والمشتريات (حسب الإيراد) — مجموع الصافي = الصافي النهائي {fmt(allocFinalNet)}</p>
+                <p className="text-xs text-gray-400 mb-3">توزيع البنكر والمرتبات والمشتريات على كل الرحلات حسب إيراد كل رحلة — مجموع الصافي = الصافي النهائي {fmt(allocFinalNet)}</p>
                 <table className="w-full text-sm whitespace-nowrap">
                   <thead className="text-gray-500 text-xs">
                     <tr>

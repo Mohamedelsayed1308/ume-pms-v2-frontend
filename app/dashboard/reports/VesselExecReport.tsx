@@ -45,7 +45,7 @@ export default function VesselExecReport({
   cfg, month, monthLabel, exec, onClose,
 }: { cfg: VesselConfig; month: string; monthLabel: string; exec: ExecData; onClose: () => void }) {
   const [lang, setLang] = useState<Lang>('both');
-  const [alloc, setAlloc] = useState<Alloc>('mixed');
+  const [alloc, setAlloc] = useState<Alloc>('revenue');
   const [showMap, setShowMap] = useState(false);
   const [buckets, setBuckets] = useState<Record<string, string>>(() => {
     const b: Record<string, string> = {};
