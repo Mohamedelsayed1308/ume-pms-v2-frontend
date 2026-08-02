@@ -52,7 +52,7 @@ const empty = {
   type: 'preliminary', currency: 'USD', total_amount: '',
   invoice_date: '', due_date: '', description: '', notes: '',
   approval_status: '', approval_status_date: '', comment: '',
-  depreciation_months: '',
+  charge_type: '', depreciation_months: '',
 };
 
 const approvalLabel: Record<string, string> = {
@@ -173,7 +173,8 @@ function InvoicesContent() {
       approval_status: inv.approval_status || '',
       approval_status_date: inv.approval_status_date?.slice(0, 10) || '',
       comment: inv.comment || '',
-      depreciation_months: inv.depreciation_months ? String(inv.depreciation_months) : '',
+      charge_type: inv.depreciation_months && inv.depreciation_months > 1 ? 'depreciate' : 'month',
+      depreciation_months: inv.depreciation_months && inv.depreciation_months > 1 ? String(inv.depreciation_months) : '',
     });
     setError('');
     setShowModal(true);
@@ -183,6 +184,11 @@ function InvoicesContent() {
     if (!form.invoice_number.trim()) { setError('رقم الفاتورة مطلوب'); return; }
     if (!form.supplier_id) { setError('المورد مطلوب'); return; }
     if (!form.total_amount) { setError('المبلغ مطلوب'); return; }
+    if (!form.charge_type) { setError('اختر نوع التحميل: تخص شهرها أم تُهلك على شهور'); return; }
+    if (form.charge_type === 'depreciate') {
+      const m = parseInt(form.depreciation_months);
+      if (!m || m < 2) { setError('أدخل عدد شهور الإهلاك (شهرين أو أكثر)'); return; }
+    }
     setLoading(true);
     try {
       // إنشاء PO يدوي إن وُجد رقم مؤقت لم يُحفظ بعد
@@ -206,14 +212,15 @@ function InvoicesContent() {
         setPoManualNumber('');
       }
 
+      const { charge_type, ...rest } = form;
       const data = {
-        ...form,
+        ...rest,
         total_amount: parseFloat(form.total_amount),
         vessel_id: form.vessel_id || null,
         po_id: resolvedPoId || null,
         invoice_date: form.invoice_date || null,
         due_date: form.due_date || null,
-        depreciation_months: form.depreciation_months ? parseInt(form.depreciation_months) : null,
+        depreciation_months: charge_type === 'depreciate' ? parseInt(form.depreciation_months) : null,
       };
       if (editing) {
         await api.put(`/api/invoices/${editing.id}`, data);
@@ -811,10 +818,22 @@ function InvoicesContent() {
                   className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
               <div>
-                <label className="block text-sm text-gray-600 mb-1">عدد شهور الإهلاك</label>
-                <input type="number" min="1" step="1" placeholder="فارغ = تُحمّل كاملة في شهرها"
+                <label className="block text-sm text-gray-600 mb-1">نوع التحميل *</label>
+                <select value={form.charge_type}
+                  onChange={(e) => setForm({ ...form, charge_type: e.target.value, depreciation_months: e.target.value === 'depreciate' ? form.depreciation_months : '' })}
+                  className={`w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 ${!form.charge_type ? 'border-red-300' : ''}`}>
+                  <option value="">— اختر —</option>
+                  <option value="month">تخص شهرها (تُحمّل كاملة)</option>
+                  <option value="depreciate">تُهلك على شهور</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">عدد شهور الإهلاك {form.charge_type === 'depreciate' ? '*' : ''}</label>
+                <input type="number" min="2" step="1"
+                  placeholder={form.charge_type === 'depreciate' ? 'مثال: 36' : 'غير مطلوب'}
+                  disabled={form.charge_type !== 'depreciate'}
                   value={form.depreciation_months} onChange={(e) => setForm({ ...form, depreciation_months: e.target.value })}
-                  className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-400" />
                 <p className="text-xs text-gray-400 mt-1">لقطع الغيار والأصول: يوزّع المبلغ على عدد الشهور بقيمة ثابتة</p>
               </div>
               <div className="col-span-2">
