@@ -2,6 +2,21 @@
 import { useEffect, useMemo, useState } from 'react';
 import * as XLSX from 'xlsx';
 import api from '@/lib/api';
+import VesselExecReport, { ExecData } from './VesselExecReport';
+
+// التوزيع الافتراضي لبنود المصروفات على مجموعات هيكل التكاليف (مفتاح البند → المجموعة)
+const COST_BUCKET_DEFAULTS: Record<string, string> = {
+  fuel: 'fuel', salaries: 'fixed', telcome: 'fixed', purchases: 'purchases',
+  // صادر (Alcudia)
+  otherExpsE: 'other', dischargeOrderTax: 'port', disShiOrder60: 'agent', frtDep: 'agent',
+  vehicle12: 'agent', pks12: 'agent', broker: 'agent', egyPort: 'port',
+  // وارد (Alcudia)
+  comm10: 'agent', commVehicle: 'agent', comm20: 'agent', fw: 'port', specialDisc: 'other',
+  elbassam: 'agent', otherExpsI: 'other', ksaPort: 'port',
+  // Pelagos-specific
+  comm15: 'agent', shipOrder60: 'agent', freeZone2: 'other', toursVeh12: 'agent',
+  toursPks12: 'agent', cargo: 'port', others: 'other',
+};
 
 // ── per-vessel configuration ──
 export interface ExpItem { key: string; label: string; col: number }
@@ -164,6 +179,7 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
   const [manual, setManual] = useState<Record<string, { opening: string; closing: string; salaries: string }>>({});
   const [saving, setSaving] = useState(false);
   const [savedMsg, setSavedMsg] = useState('');
+  const [showExec, setShowExec] = useState(false);
 
   // فواتير المشتريات + أسعار الصرف (لو المركب مربوط بالفواتير)
   const [invoices, setInvoices] = useState<any[]>([]);
@@ -285,6 +301,38 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
     return { items, total, missingList };
   }, [cfg.linkInvoices, invoices, rates, month]);
 
+  // بيانات التقرير الإداري (شرائح العرض)
+  const execData = useMemo<ExecData | null>(() => {
+    if (!data) return null;
+    const perVoyage = [...sel]
+      .sort((a, b) => Number(a.ref) - Number(b.ref))
+      .map((v) => {
+        const rev = sideRevenue(v.E) + sideRevenue(v.I);
+        return { ref: String(v.ref), revenue: rev, net: v.net, expenses: rev - v.net };
+      });
+    const costLines: { key: string; label: string; value: number }[] = [];
+    costLines.push({ key: 'fuel', label: 'الوقود (بنكر)', value: data.bunkerCost });
+    const expKeys = new Set([...Object.keys(data.E.exp), ...Object.keys(data.I.exp)]);
+    for (const k of expKeys) {
+      const v = (data.E.exp[k] || 0) + (data.I.exp[k] || 0);
+      if (Math.abs(v) < 0.5) continue;
+      costLines.push({ key: k, label: labelOf[k] || k, value: v });
+    }
+    if (data.salaries > 0) costLines.push({ key: 'salaries', label: 'مرتبات', value: data.salaries });
+    const purchasesTotal = purchases?.total || 0;
+    if (purchasesTotal > 0) costLines.push({ key: 'purchases', label: 'المشتريات', value: purchasesTotal });
+    return {
+      perVoyage,
+      revenue: data.revenue,
+      opExpenses: data.expenses,
+      opNet: data.net,
+      purchasesTotal,
+      count: data.count,
+      costLines,
+      defaultBuckets: COST_BUCKET_DEFAULTS,
+    };
+  }, [data, sel, purchases, labelOf]);
+
   const PRINT_CSS = `@media print {
     @page { size: A4 landscape; margin: 11mm 10mm; }
     body * { visibility: hidden !important; }
@@ -374,6 +422,7 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
             {savedMsg && <span className="text-xs text-emerald-600 font-medium">{savedMsg}</span>}
             <button onClick={save} disabled={saving} className="bg-blue-600 text-white text-sm px-4 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50">{saving ? 'جاري الحفظ...' : '💾 حفظ'}</button>
             <button onClick={exportExcel} className="bg-green-600 text-white text-sm px-4 py-2 rounded-lg hover:bg-green-700">📥 تصدير Excel</button>
+            <button onClick={() => setShowExec(true)} className="bg-indigo-600 text-white text-sm px-4 py-2 rounded-lg hover:bg-indigo-700">📊 تقرير إداري</button>
             <button onClick={printReport} className="bg-gray-700 text-white text-sm px-4 py-2 rounded-lg hover:bg-gray-800">🖨️ طباعة / PDF</button>
           </div>
         )}
@@ -525,8 +574,8 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
             </div>
           </div>
 
-          {/* ── print-only document ── */}
-          <div id="vp-doc" dir="rtl" className="hidden print:block">
+          {/* ── print-only document (hidden while the executive report is open) ── */}
+          <div id="vp-doc" dir="rtl" className={showExec ? 'hidden' : 'hidden print:block'}>
             <div className="dh">
               <div className="brand">UME <span>Holding</span><small>MARITIME · PMS</small></div>
               <div className="meta">
@@ -637,6 +686,10 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
             </div>
           </div>
         </>
+      )}
+
+      {showExec && execData && (
+        <VesselExecReport cfg={cfg} month={month} monthLabel={monthLabel(month)} exec={execData} onClose={() => setShowExec(false)} />
       )}
     </div>
   );
