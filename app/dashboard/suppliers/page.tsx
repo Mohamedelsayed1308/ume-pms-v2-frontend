@@ -18,6 +18,26 @@ const empty = { name: '', contact_person: '', email: '', phone: '', address: '',
 // توحيد الاسم للمقارنة: حروف/أرقام فقط (يتجاهل المسافات وعلامات الترقيم وحالة الأحرف)
 const norm = (s: string) => (s || '').toLowerCase().replace(/[^a-z0-9؀-ۿ]/g, '');
 
+// لواحق الشركات المتجاهلة عند البحث عن التشابه
+const CORP = new Set(['ltd', 'limited', 'co', 'company', 'corp', 'corporation', 'inc', 'sa', 'sl', 'sae', 'fze', 'llc', 'gmbh', 'ab', 'as', 'dmcc', 'plc', 'bv', 'nv', 'pte', 'srl', 'est', 'group']);
+const looseSig = (name: string) =>
+  [...new Set(
+    (name || '').toLowerCase().replace(/[^a-z0-9؀-ۿ\s]/g, ' ').split(/\s+/)
+      .filter((t) => t && t.length > 1 && !CORP.has(t))
+  )].sort().join(' ');
+
+function findDuplicates(list: Supplier[]) {
+  const exactMap: Record<string, Supplier[]> = {};
+  for (const s of list) { const k = norm(s.name); if (!k) continue; (exactMap[k] ||= []).push(s); }
+  const exactGroups = Object.values(exactMap).filter((g) => g.length > 1);
+
+  const looseMap: Record<string, Supplier[]> = {};
+  for (const s of list) { const k = looseSig(s.name); if (!k) continue; (looseMap[k] ||= []).push(s); }
+  const similarGroups = Object.values(looseMap).filter((g) => g.length > 1 && new Set(g.map((s) => norm(s.name))).size > 1);
+
+  return { exactGroups, similarGroups };
+}
+
 export default function SuppliersPage() {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [showModal, setShowModal] = useState(false);
@@ -25,6 +45,7 @@ export default function SuppliersPage() {
   const [form, setForm] = useState(empty);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [showDup, setShowDup] = useState(false);
 
   async function load() {
     const res = await api.get('/api/suppliers');
@@ -91,10 +112,53 @@ export default function SuppliersPage() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-2xl font-bold text-gray-800">الموردين</h2>
-        <button onClick={openAdd} className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">
-          + إضافة مورد
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={() => setShowDup((v) => !v)}
+            className={`px-4 py-2 rounded-lg border ${showDup ? 'bg-amber-100 border-amber-300 text-amber-800' : 'border-gray-300 hover:bg-gray-50'}`}>
+            🔎 كشف المكررات
+          </button>
+          <button onClick={openAdd} className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">
+            + إضافة مورد
+          </button>
+        </div>
       </div>
+
+      {showDup && (() => {
+        const { exactGroups, similarGroups } = findDuplicates(suppliers);
+        const none = exactGroups.length === 0 && similarGroups.length === 0;
+        const Group = ({ g, kind }: { g: Supplier[]; kind: 'exact' | 'similar' }) => (
+          <div className={`rounded-lg border p-3 ${kind === 'exact' ? 'border-red-200 bg-red-50' : 'border-amber-200 bg-amber-50'}`}>
+            {g.map((s) => (
+              <div key={s.id} className="flex items-center justify-between py-1 border-b last:border-0 border-black/5">
+                <span className="font-medium text-gray-800">{s.name}</span>
+                <span className="flex gap-3">
+                  <button onClick={() => openEdit(s)} className="text-blue-600 hover:underline text-xs">تعديل</button>
+                  <button onClick={() => handleDelete(s.id, s.name)} className="text-red-500 hover:underline text-xs">حذف</button>
+                </span>
+              </div>
+            ))}
+          </div>
+        );
+        return (
+          <div className="bg-white rounded-xl shadow p-4 mb-6">
+            <h3 className="font-bold text-gray-700 mb-3">🔎 كشف الموردين المكررين</h3>
+            {none && <p className="text-emerald-600 text-sm">لا يوجد تكرار 🎉</p>}
+            {exactGroups.length > 0 && (
+              <div className="mb-4">
+                <p className="text-sm font-medium text-red-700 mb-2">تكرار مؤكد ({exactGroups.length} مجموعة) — نفس الاسم بفروق في الرموز أو المسافات:</p>
+                <div className="space-y-2">{exactGroups.map((g, i) => <Group key={i} g={g} kind="exact" />)}</div>
+              </div>
+            )}
+            {similarGroups.length > 0 && (
+              <div>
+                <p className="text-sm font-medium text-amber-700 mb-2">تشابه محتمل ({similarGroups.length} مجموعة) — راجعها يدوياً، قد تكون نفس المورد:</p>
+                <div className="space-y-2">{similarGroups.map((g, i) => <Group key={i} g={g} kind="similar" />)}</div>
+              </div>
+            )}
+            <p className="text-xs text-gray-400 mt-3">احذف المكرر أو عدّل الاسم لتوحيده. الحذف لا يعمل لو للمورد فواتير/أوامر مرتبطة — وحّد الاسم في الحالة دي.</p>
+          </div>
+        );
+      })()}
 
       <div className="bg-white rounded-xl shadow overflow-hidden">
         <table className="w-full text-sm">
