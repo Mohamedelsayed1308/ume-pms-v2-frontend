@@ -42,6 +42,7 @@ interface Invoice {
   description: string;
   depreciation_months?: number | null;
   created_by_name: string;
+  created_at?: string;
   supplier: { id: string; name: string };
   vessel: { id: string; name: string };
   purchase_order: { id: string; po_number: string };
@@ -93,6 +94,7 @@ function InvoicesContent() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
+  const [sort, setSort] = useState<{ key: string; dir: 'asc' | 'desc' }>({ key: 'created', dir: 'desc' });
   const [attachModal, setAttachModal] = useState<Invoice | null>(null);
   const [attachments, setAttachments] = useState<any[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -529,9 +531,41 @@ function InvoicesContent() {
     return '📎';
   }
 
+  const SORT_GETTERS: Record<string, (i: Invoice) => number | string> = {
+    invoice_number: (i) => (i.invoice_number || '').toLowerCase(),
+    supplier: (i) => (i.supplier?.name || '').toLowerCase(),
+    vessel: (i) => (i.vessel?.name || '').toLowerCase(),
+    type: (i) => i.type || '',
+    total_amount: (i) => +i.total_amount || 0,
+    paid_amount: (i) => +i.paid_amount || 0,
+    remaining: (i) => (+i.total_amount || 0) - (+i.paid_amount || 0),
+    due_date: (i) => (i.due_date ? new Date(i.due_date).getTime() : 0),
+    status: (i) => i.status || '',
+    approval_status: (i) => i.approval_status || '',
+    created_by_name: (i) => (i.created_by_name || '').toLowerCase(),
+    created: (i) => (i.created_at ? new Date(i.created_at).getTime() : 0),
+  };
+  const toggleSort = (key: string) =>
+    setSort((s) => (s.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' }));
+
   const displayed = invoices
     .filter((i) => !filterStatus || i.status === filterStatus)
     .filter((i) => !filterPoId || i.purchase_order?.id === filterPoId);
+
+  const sortGetter = SORT_GETTERS[sort.key];
+  const sorted = sortGetter
+    ? [...displayed].sort((a, b) => {
+        const va = sortGetter(a), vb = sortGetter(b);
+        const c = typeof va === 'number' && typeof vb === 'number' ? va - vb : String(va).localeCompare(String(vb), 'ar');
+        return sort.dir === 'asc' ? c : -c;
+      })
+    : displayed;
+
+  const SortTh = ({ k, label }: { k: string; label: string }) => (
+    <th className="px-4 py-3 cursor-pointer select-none hover:text-blue-600 whitespace-nowrap" onClick={() => toggleSort(k)}>
+      {label}<span className="text-blue-500">{sort.key === k ? (sort.dir === 'asc' ? ' ▲' : ' ▼') : ''}</span>
+    </th>
+  );
 
   return (
     <div>
@@ -568,23 +602,23 @@ function InvoicesContent() {
         <table className="w-full text-sm">
           <thead className="bg-gray-50 text-gray-600 text-right">
             <tr>
-              <th className="px-4 py-3">رقم الفاتورة</th>
-              <th className="px-4 py-3">المورد</th>
-              <th className="px-4 py-3">السفينة</th>
-              <th className="px-4 py-3">النوع</th>
-              <th className="px-4 py-3">المبلغ</th>
-              <th className="px-4 py-3">المدفوع</th>
-              <th className="px-4 py-3">المتبقي</th>
-              <th className="px-4 py-3">الاستحقاق</th>
-              <th className="px-4 py-3">الحالة</th>
-              <th className="px-4 py-3">حالة الموافقة</th>
-              <th className="px-4 py-3">أضافها</th>
+              <SortTh k="invoice_number" label="رقم الفاتورة" />
+              <SortTh k="supplier" label="المورد" />
+              <SortTh k="vessel" label="السفينة" />
+              <SortTh k="type" label="النوع" />
+              <SortTh k="total_amount" label="المبلغ" />
+              <SortTh k="paid_amount" label="المدفوع" />
+              <SortTh k="remaining" label="المتبقي" />
+              <SortTh k="due_date" label="الاستحقاق" />
+              <SortTh k="status" label="الحالة" />
+              <SortTh k="approval_status" label="حالة الموافقة" />
+              <SortTh k="created_by_name" label="أضافها" />
               <th className="px-4 py-3">تعليق</th>
               <th className="px-4 py-3">إجراءات</th>
             </tr>
           </thead>
           <tbody>
-            {displayed.map((inv) => {
+            {sorted.map((inv) => {
               const remaining = +inv.total_amount - +inv.paid_amount;
               return (
                 <tr key={inv.id} className="border-t hover:bg-gray-50">
