@@ -1,6 +1,7 @@
 'use client';
 import { useMemo, useState } from 'react';
 import type { VesselConfig } from './VesselProfitReport';
+import { allocateVoyageNets } from './VesselProfitReport';
 
 export interface ExecLine { key: string; label: string; value: number }
 export interface ExecVoyage { ref: string; revenue: number; expenses: number; net: number; supplies: number }
@@ -60,21 +61,11 @@ export default function VesselExecReport({
   const margin = exec.revenue ? (finalNet / exec.revenue) * 100 : 0;
 
   // توزيع البنكر والمرتبات والمشتريات على الرحلات → صافي أقرب للحقيقة (مجموعه = الصافي النهائي)
-  const allocVoyages = useMemo(() => {
-    const per = exec.perVoyage;
-    const n = per.length || 1;
-    const sumRev = per.reduce((s, v) => s + v.revenue, 0);
-    const sumSup = per.reduce((s, v) => s + (v.supplies || 0), 0);
-    const ovh = exec.salaries + exec.purchasesTotal; // مرتبات + مشتريات
-    return per.map((v) => {
-      let bW: number, oW: number;
-      if (alloc === 'equal') { bW = 1 / n; oW = 1 / n; }
-      else if (alloc === 'revenue') { bW = sumRev ? v.revenue / sumRev : 1 / n; oW = bW; }
-      else { bW = sumSup ? (v.supplies || 0) / sumSup : 1 / n; oW = sumRev ? v.revenue / sumRev : 1 / n; }
-      const net = (v.net + (v.supplies || 0)) - exec.bunkerCost * bW - ovh * oW;
-      return { ...v, net, expenses: v.revenue - net };
-    });
-  }, [exec, alloc]);
+  const allocVoyages = useMemo(
+    () => allocateVoyageNets(exec.perVoyage,
+      { bunkerCost: exec.bunkerCost, salaries: exec.salaries, purchasesTotal: exec.purchasesTotal }, alloc)
+      .map((v) => ({ ...v, expenses: v.revenue - v.net })),
+    [exec, alloc]);
 
   // تجميع التكاليف حسب المجموعة (مع بند تسوية داخل "أخرى" ليطابق إجمالي المصروفات)
   const cost = useMemo(() => {

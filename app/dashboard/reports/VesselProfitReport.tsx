@@ -18,6 +18,34 @@ const COST_BUCKET_DEFAULTS: Record<string, string> = {
   toursPks12: 'agent', cargo: 'port', others: 'other',
 };
 
+// توزيع البنكر والمرتبات والمشتريات على الرحلات — مجموع الصافي = الصافي النهائي دائماً
+export type AllocMethod = 'mixed' | 'revenue' | 'equal';
+export interface AllocVoyage {
+  ref: string; revenue: number; supplies: number; before: number;
+  allocBunker: number; allocSalaries: number; allocPurchases: number; net: number;
+}
+export function allocateVoyageNets(
+  per: { ref: string; revenue: number; net: number; supplies: number }[],
+  totals: { bunkerCost: number; salaries: number; purchasesTotal: number },
+  method: AllocMethod = 'mixed',
+): AllocVoyage[] {
+  const n = per.length || 1;
+  const sumRev = per.reduce((s, v) => s + v.revenue, 0);
+  const sumSup = per.reduce((s, v) => s + (v.supplies || 0), 0);
+  return per.map((v) => {
+    let bW: number, oW: number;
+    if (method === 'equal') { bW = 1 / n; oW = 1 / n; }
+    else if (method === 'revenue') { bW = sumRev ? v.revenue / sumRev : 1 / n; oW = bW; }
+    else { bW = sumSup ? (v.supplies || 0) / sumSup : 1 / n; oW = sumRev ? v.revenue / sumRev : 1 / n; }
+    const allocBunker = totals.bunkerCost * bW;
+    const allocSalaries = totals.salaries * oW;
+    const allocPurchases = totals.purchasesTotal * oW;
+    const before = v.net + (v.supplies || 0);
+    const net = before - allocBunker - allocSalaries - allocPurchases;
+    return { ref: v.ref, revenue: v.revenue, supplies: v.supplies || 0, before, allocBunker, allocSalaries, allocPurchases, net };
+  });
+}
+
 // ── per-vessel configuration ──
 export interface ExpItem { key: string; label: string; col: number }
 export interface VesselConfig {
@@ -335,6 +363,18 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
     };
   }, [data, sel, purchases, labelOf]);
 
+  // صافي كل رحلة بعد توزيع البنكر والمرتبات والمشتريات (للكارت والطباعة) — أساس مختلط
+  const allocVoy = useMemo(() => {
+    if (!execData) return [];
+    return allocateVoyageNets(
+      execData.perVoyage,
+      { bunkerCost: execData.bunkerCost, salaries: execData.salaries, purchasesTotal: execData.purchasesTotal },
+      'mixed',
+    );
+  }, [execData]);
+  const allocFinalNet = useMemo(() => allocVoy.reduce((s, v) => s + v.net, 0), [allocVoy]);
+  const allocPurchasesTotal = execData?.purchasesTotal ?? 0;
+
   const PRINT_CSS = `@media print {
     @page { size: A4 landscape; margin: 11mm 10mm; }
     body * { visibility: hidden !important; }
@@ -574,6 +614,48 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
                 <div className="bg-gray-50 rounded-lg p-3"><p className="text-gray-500 text-xs">إجمالي التحصيل (P)</p><p className="text-lg font-bold text-gray-800">{fmt(data.P)}</p></div>
               </div>
             </div>
+
+            {allocVoy.length > 0 && (
+              <div className="bg-white rounded-xl shadow p-4 overflow-x-auto">
+                <h3 className="font-bold text-gray-700 mb-1">صافي الربح لكل رحلة بعد توزيع التكاليف</h3>
+                <p className="text-xs text-gray-400 mb-3">توزيع البنكر (حسب تموين كل رحلة) والمرتبات والمشتريات (حسب الإيراد) — مجموع الصافي = الصافي النهائي {fmt(allocFinalNet)}</p>
+                <table className="w-full text-sm whitespace-nowrap">
+                  <thead className="text-gray-500 text-xs">
+                    <tr>
+                      <th className="text-right py-1 px-2">الرحلة</th>
+                      <th className="text-right py-1 px-2">الإيراد</th>
+                      <th className="text-right py-1 px-2">صافي قبل التوزيع</th>
+                      <th className="text-right py-1 px-2">− بنكر</th>
+                      <th className="text-right py-1 px-2">− مرتبات</th>
+                      {allocPurchasesTotal > 0 && <th className="text-right py-1 px-2">− مشتريات</th>}
+                      <th className="text-right py-1 px-2">الصافي بعد التوزيع</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {allocVoy.map((v) => (
+                      <tr key={v.ref} className="border-t">
+                        <td className="py-1 px-2 font-medium">{v.ref}</td>
+                        <td className="py-1 px-2">{fmt(v.revenue)}</td>
+                        <td className="py-1 px-2 text-gray-500">{fmt(v.before)}</td>
+                        <td className="py-1 px-2 text-red-600">{fmt(v.allocBunker)}</td>
+                        <td className="py-1 px-2 text-red-600">{fmt(v.allocSalaries)}</td>
+                        {allocPurchasesTotal > 0 && <td className="py-1 px-2 text-red-600">{fmt(v.allocPurchases)}</td>}
+                        <td className={`py-1 px-2 font-bold ${v.net >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>{fmt(v.net)}</td>
+                      </tr>
+                    ))}
+                    <tr className="border-t bg-gray-50 font-bold">
+                      <td className="py-1 px-2">الإجمالي</td>
+                      <td className="py-1 px-2">{fmt(data.revenue)}</td>
+                      <td className="py-1 px-2">{fmt(allocVoy.reduce((s, v) => s + v.before, 0))}</td>
+                      <td className="py-1 px-2 text-red-700">{fmt(data.bunkerCost)}</td>
+                      <td className="py-1 px-2 text-red-700">{fmt(data.salaries)}</td>
+                      {allocPurchasesTotal > 0 && <td className="py-1 px-2 text-red-700">{fmt(allocPurchasesTotal)}</td>}
+                      <td className="py-1 px-2 text-emerald-800">{fmt(allocFinalNet)}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
 
           {/* ── print-only document (hidden while the executive report is open) ── */}
