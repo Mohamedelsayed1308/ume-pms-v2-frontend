@@ -55,6 +55,7 @@ export interface VesselConfig {
   agentImport: string; // e.g. وكيل البسّام
   linkInvoices?: boolean;  // اربط فواتير المشتريات واطرحها من صافي التشغيل
   dbVesselName?: string;   // اسم السفينة في قاعدة البيانات (لجلب فواتيرها)
+  salariesByMonth?: Record<string, number>; // مرتبات افتراضية لكل شهر ('YYYY-MM' → USD)
   col: {
     type: number; ref: number; date: number; collection: number;
     truckC: number; truck: number; vehC: number; veh: number;
@@ -90,6 +91,10 @@ export const PELAGOS: VesselConfig = {
 export const ALCUDIA: VesselConfig = {
   vessel: 'Alcudia', sheetKey: 'ALCUDIA', agentExport: 'وكيل الاتحاد', agentImport: 'وكيل البسّام',
   linkInvoices: true, dbVesselName: 'Alcudia Express',
+  salariesByMonth: {
+    '2026-01': 110871.89, '2026-02': 99685.48, '2026-03': 107177.70,
+    '2026-04': 142512.74, '2026-05': 104033.26, '2026-06': 104334.94,
+  },
   col: { type: 0, ref: 1, date: 3, collection: 4, truckC: 5, truck: 6, vehC: 7, veh: 8, passC: 9, pass: 10, houryaC: 11, discharge: 12, O: 14, P: 15, bunker: 25, balance: 35 },
   exportExp: [
     { key: 'otherExpsE', label: 'Other EXPS', col: 24 },
@@ -217,6 +222,14 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
   const setCur = (patch: Partial<{ opening: string; closing: string; salaries: string }>) =>
     setManual((m) => ({ ...m, [month]: { ...(m[month] || { opening: '', closing: '', salaries: '' }), ...patch } }));
 
+  // المرتبات الفعّالة لشهر: اليدوي إن وُجد، وإلا القيمة الافتراضية من إعدادات المركب
+  const salaryOf = (m: string) => {
+    const v = manual[m]?.salaries;
+    if (v !== undefined && v !== '') return v;
+    const def = cfg.salariesByMonth?.[m];
+    return def != null ? String(def) : '';
+  };
+
   // reset + load saved when the vessel changes
   useEffect(() => {
     setVoyages([]); setManual({}); setMonth(''); setFileName(''); setError('');
@@ -293,7 +306,7 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
     const opening = parseFloat(mm.opening) || 0;
     const closing = parseFloat(mm.closing) || 0;
     const bunkerCost = opening + supplies - closing;
-    const salariesN = parseFloat(mm.salaries) || 0;
+    const salariesN = parseFloat(salaryOf(month)) || 0;
     const net = netBalance - opening + closing - salariesN;
     return {
       E, I, revE, revI, expE, expI, supplies, opening, closing, bunkerCost, salaries: salariesN,
@@ -568,7 +581,7 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
             </div>
 
             <div className="bg-white rounded-xl shadow p-4 flex items-end justify-between flex-wrap gap-3">
-              <div><label className="block text-xs text-gray-500 mb-1">مرتبات الشهر (يدوي)</label><input value={cur.salaries} onChange={(e) => setCur({ salaries: e.target.value })} inputMode="decimal" placeholder="0" className="border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" /></div>
+              <div><label className="block text-xs text-gray-500 mb-1">مرتبات الشهر {cfg.salariesByMonth?.[month] != null && (manual[month]?.salaries === undefined || manual[month]?.salaries === '') ? '(محمّلة تلقائياً)' : '(يدوي)'}</label><input value={salaryOf(month)} onChange={(e) => setCur({ salaries: e.target.value })} inputMode="decimal" placeholder="0" className="border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" /></div>
               <div className="text-right"><p className="text-xs text-gray-500">المبلغ المطروح من الصافي</p><p className="font-bold text-red-600 text-lg">{fmt(data.salaries)}</p></div>
             </div>
 
