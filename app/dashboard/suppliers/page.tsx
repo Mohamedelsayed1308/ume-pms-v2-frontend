@@ -15,6 +15,9 @@ interface Supplier {
 
 const empty = { name: '', contact_person: '', email: '', phone: '', address: '', country: '', is_active: true };
 
+// توحيد الاسم للمقارنة: حروف/أرقام فقط (يتجاهل المسافات وعلامات الترقيم وحالة الأحرف)
+const norm = (s: string) => (s || '').toLowerCase().replace(/[^a-z0-9؀-ۿ]/g, '');
+
 export default function SuppliersPage() {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [showModal, setShowModal] = useState(false);
@@ -46,6 +49,7 @@ export default function SuppliersPage() {
 
   async function handleSave() {
     if (!form.name.trim()) { setError('اسم المورد مطلوب'); return; }
+    if (dupExact) { setError(`مورد بنفس الاسم موجود بالفعل: "${dupExact.name}"`); return; }
     setLoading(true);
     try {
       if (editing) {
@@ -55,8 +59,8 @@ export default function SuppliersPage() {
       }
       setShowModal(false);
       load();
-    } catch {
-      setError('حدث خطأ، حاول مرة أخرى');
+    } catch (err: any) {
+      setError(err?.response?.data?.message || 'حدث خطأ، حاول مرة أخرى');
     } finally {
       setLoading(false);
     }
@@ -74,6 +78,14 @@ export default function SuppliersPage() {
 
   const f = (key: keyof typeof empty) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm({ ...form, [key]: e.target.value });
+
+  // كشف التكرار أثناء الكتابة
+  const nameNorm = norm(form.name);
+  const others = suppliers.filter((s) => s.id !== editing?.id);
+  const dupExact = nameNorm.length > 0 ? others.find((s) => norm(s.name) === nameNorm) : undefined;
+  const similar = nameNorm.length >= 4 && !dupExact
+    ? others.filter((s) => { const n = norm(s.name); return n && (n.includes(nameNorm) || nameNorm.includes(n)); }).slice(0, 5)
+    : [];
 
   return (
     <div>
@@ -131,7 +143,16 @@ export default function SuppliersPage() {
               <div className="col-span-2">
                 <label className="block text-sm text-gray-600 mb-1">اسم المورد *</label>
                 <input value={form.name} onChange={f('name')}
-                  className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  className={`w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 ${dupExact ? 'border-red-400 focus:ring-red-500' : 'focus:ring-blue-500'}`} />
+                {dupExact && (
+                  <p className="text-red-600 text-xs mt-1">⚠️ هذا المورد موجود بالفعل: «{dupExact.name}» — لا يمكن التكرار</p>
+                )}
+                {!dupExact && similar.length > 0 && (
+                  <div className="text-amber-600 text-xs mt-1">
+                    <span>⚠️ في أسماء مشابهة — اتأكد إنه مش نفس المورد:</span>
+                    <ul className="list-disc pr-5 mt-0.5">{similar.map((s) => <li key={s.id}>{s.name}</li>)}</ul>
+                  </div>
+                )}
               </div>
               <div>
                 <label className="block text-sm text-gray-600 mb-1">المسؤول</label>
@@ -165,7 +186,7 @@ export default function SuppliersPage() {
             </div>
             {error && <p className="text-red-500 text-sm mt-2">{error}</p>}
             <div className="flex gap-2 mt-4">
-              <button onClick={handleSave} disabled={loading}
+              <button onClick={handleSave} disabled={loading || !!dupExact}
                 className="flex-1 bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50">
                 {loading ? 'جاري الحفظ...' : 'حفظ'}
               </button>
