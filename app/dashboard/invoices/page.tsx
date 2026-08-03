@@ -407,7 +407,7 @@ function InvoicesContent() {
         supplier_id: supplierId || prev.supplier_id,
         vessel_id: autoVesselId || prev.vessel_id,
         po_id: poId || prev.po_id,
-        line_items: autoMulti ? mappedLines : prev.line_items,
+        line_items: autoMulti ? mappedLines : [],
       }));
     } catch (err: any) {
       const msg = err?.response?.data?.message || err?.message || 'unknown error';
@@ -460,15 +460,20 @@ function InvoicesContent() {
     }
   }
 
-  // مطابقة اسم سطر مستخرَج ببند موجود (أطول اسم بند يظهر داخل اسم السطر)
+  // مطابقة اسم سطر مستخرَج ببند موجود — تطابق كلمات كاملة متتالية (أطول اسم بند)
+  const wordsOf = (s: string) => (s || '').toLowerCase().split(/[^a-z0-9؀-ۿ]+/).filter(Boolean);
   const matchItem = (lineName: string) => {
-    const ln = normName(lineName);
-    if (!ln) return '';
+    const lw = wordsOf(lineName);
+    if (!lw.length) return '';
     let best = '', bestLen = 0;
     for (const it of items) {
       if (it.is_active === false) continue;
-      const inm = normName(it.name);
-      if (inm.length >= 3 && ln.includes(inm) && inm.length > bestLen) { best = it.id; bestLen = inm.length; }
+      const iw = wordsOf(it.name);
+      if (!iw.length) continue;
+      let found = false;
+      for (let i = 0; i + iw.length <= lw.length; i++) { if (iw.every((w, j) => lw[i + j] === w)) { found = true; break; } }
+      const len = iw.join('').length;
+      if (found && len > bestLen) { best = it.id; bestLen = len; }
     }
     return best;
   };
