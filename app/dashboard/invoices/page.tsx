@@ -28,7 +28,7 @@ interface BulkItem {
 }
 
 // كلمات دالة على وقود بحري → اختيار Bunker تلقائياً
-const BUNKER_RX = /\b(bunker|lsmgo|mgo|ifo|hfo|lfo|vlsfo|mdo|gas\s?oil|gasoil|fuel|mobil\w*|lubricant|lube|grease|gear\s?oil|cylinder\s?oil)\b|وقود|بنكر|سولار|ديزل|زيت|شحم/i;
+const BUNKER_RX = /\b(bunker|lsmgo|mgo|ifo|hfo|lfo|vlsfo|mdo|gas\s?oil|gasoil|fuel|mobilgard|mobilgear|mobilux|mobil|lubricant|lube|grease|gear\s?oil|cylinder\s?oil)\b|وقود|بنكر|سولار|ديزل|زيت|شحم/i;
 
 interface Invoice {
   id: string;
