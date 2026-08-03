@@ -390,6 +390,12 @@ function InvoicesContent() {
         }
       }
 
+      // البنود المستخرجة → ملء محرّر البنود المتعددة تلقائياً لو اتطابق بندين أو أكثر
+      const rawLines = Array.isArray(d.line_items) ? d.line_items.filter((l: any) => l && l.name && Number(l.amount) > 0) : [];
+      const mappedLines = rawLines.map((l: any) => ({ item_id: matchItem(l.name), item_name: l.name, amount: String(l.amount) }));
+      const autoMulti = rawLines.length >= 2 && mappedLines.filter((m: any) => m.item_id).length >= 2;
+      setMultiItem(autoMulti);
+
       setForm((prev) => ({
         ...prev,
         invoice_number: d.invoice_number || prev.invoice_number,
@@ -401,6 +407,7 @@ function InvoicesContent() {
         supplier_id: supplierId || prev.supplier_id,
         vessel_id: autoVesselId || prev.vessel_id,
         po_id: poId || prev.po_id,
+        line_items: autoMulti ? mappedLines : prev.line_items,
       }));
     } catch (err: any) {
       const msg = err?.response?.data?.message || err?.message || 'unknown error';
@@ -452,6 +459,19 @@ function InvoicesContent() {
       return { id: again?.id || '', list: fresh };
     }
   }
+
+  // مطابقة اسم سطر مستخرَج ببند موجود (أطول اسم بند يظهر داخل اسم السطر)
+  const matchItem = (lineName: string) => {
+    const ln = normName(lineName);
+    if (!ln) return '';
+    let best = '', bestLen = 0;
+    for (const it of items) {
+      if (it.is_active === false) continue;
+      const inm = normName(it.name);
+      if (inm.length >= 3 && ln.includes(inm) && inm.length > bestLen) { best = it.id; bestLen = inm.length; }
+    }
+    return best;
+  };
 
   async function processBulkFile(index: number, file: File, currentSuppliers: any[]) {
     setBulkItems((prev) => prev.map((it, i) => i === index ? { ...it, status: 'extracting' } : it));
