@@ -249,7 +249,15 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
     const mr = Number(rates[pm]?.[curr]); if (mr > 0) return mr;
     return Number(rates['default']?.[curr]) || DEFAULT_RATES[curr] || 0;
   };
-  const isBunkerInv = (inv: any) => (inv.item?.name || '').toLowerCase().includes('bunker');
+  const isBunkerName = (n: string) => (n || '').toLowerCase().includes('bunker');
+  const isBunkerInv = (inv: any) => isBunkerName(inv.item?.name);
+  // الجزء الخاص بالبنكر من الفاتورة (بعملتها الأصلية): بند مفرد بنكر = الكل ؛ متعدد = مجموع أسطر البنكر
+  const bunkerPortion = (inv: any) => {
+    if (Array.isArray(inv.line_items) && inv.line_items.length) {
+      return inv.line_items.filter((l: any) => isBunkerName(l.item_name)).reduce((s: number, l: any) => s + (Number(l.amount) || 0), 0);
+    }
+    return isBunkerInv(inv) ? Number(inv.total_amount) : 0;
+  };
 
   // reset + load saved when the vessel changes
   useEffect(() => {
@@ -317,11 +325,12 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
     if (!cfg.linkInvoices || !month) return 0;
     let sum = 0;
     for (const inv of invoices) {
-      if (!isBunkerInv(inv)) continue;
       const pm = (inv.invoice_date || '').slice(0, 7);
       if (pm !== month) continue;
+      const bp = bunkerPortion(inv);
+      if (bp <= 0) continue;
       const rate = rateFor(inv.currency || 'USD', pm);
-      if (rate > 0) sum += Number(inv.total_amount) / rate;
+      if (rate > 0) sum += bp / rate;
     }
     return sum;
   }, [cfg.linkInvoices, invoices, rates, month]);
@@ -355,9 +364,11 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
     if (!cfg.linkInvoices || !month) return null;
     const items = invoices
       .map((inv) => {
-        if (isBunkerInv(inv)) return null; // البنكر يتحمّل على بند البنكر مش المشتريات
         const pm = (inv.invoice_date || '').slice(0, 7);
         if (!pm) return null;
+        // استبعاد جزء البنكر (بيتحمّل على بند البنكر) — الباقي مشتريات
+        const purchAmount = Number(inv.total_amount) - bunkerPortion(inv);
+        if (purchAmount <= 0.005) return null; // فاتورة بنكر بالكامل
         const nMonths = inv.depreciation_months && inv.depreciation_months > 1 ? inv.depreciation_months : 1;
         const diff = monthDiff(pm, month);
         if (diff < 0 || diff >= nMonths) return null; // خارج فترة الإهلاك للشهر المختار
@@ -367,13 +378,14 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
         const rate = monthRate > 0 ? monthRate : defRate;
         const usedDefault = !(monthRate > 0) && rate > 0; // اتحسبت بسعر افتراضي
         const missing = !(rate > 0);
-        const usdTotal = missing ? 0 : Number(inv.total_amount) / rate;
+        const usdTotal = missing ? 0 : purchAmount / rate;
         const installment = usdTotal / nMonths;
-        const lines = Array.isArray(inv.line_items) && inv.line_items.length ? inv.line_items : null;
+        const allLines = Array.isArray(inv.line_items) && inv.line_items.length ? inv.line_items.filter((l: any) => !isBunkerName(l.item_name)) : null;
+        const lines = allLines && allLines.length ? allLines : null;
         return {
           id: inv.id, number: inv.invoice_number, supplier: inv.supplier?.name || '—',
           item: lines ? 'متعدد البنود' : (inv.item?.name || 'بدون بند'), lines, date: (inv.invoice_date || '').slice(0, 10),
-          amount: Number(inv.total_amount), currency: curr, nMonths, purchaseMonth: pm,
+          amount: purchAmount, currency: curr, nMonths, purchaseMonth: pm,
           rate, missing, usedDefault, usdTotal, installment, seq: diff + 1,
         };
       })
