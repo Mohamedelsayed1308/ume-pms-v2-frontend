@@ -369,9 +369,10 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
         const missing = !(rate > 0);
         const usdTotal = missing ? 0 : Number(inv.total_amount) / rate;
         const installment = usdTotal / nMonths;
+        const lines = Array.isArray(inv.line_items) && inv.line_items.length ? inv.line_items : null;
         return {
           id: inv.id, number: inv.invoice_number, supplier: inv.supplier?.name || '—',
-          item: inv.item?.name || 'بدون بند', date: (inv.invoice_date || '').slice(0, 10),
+          item: lines ? 'متعدد البنود' : (inv.item?.name || 'بدون بند'), lines, date: (inv.invoice_date || '').slice(0, 10),
           amount: Number(inv.total_amount), currency: curr, nMonths, purchaseMonth: pm,
           rate, missing, usedDefault, usdTotal, installment, seq: diff + 1,
         };
@@ -380,9 +381,16 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
     const total = items.reduce((s, i) => s + i.installment, 0);
     const missingList = items.filter((i) => i.missing);
     const defaultList = items.filter((i) => i.usedDefault);
-    // تجميع المشتريات حسب البند (لتقارير التكاليف)
+    // تجميع المشتريات حسب البند (لتقارير التكاليف) — الفاتورة متعددة البنود تتوزّع على بنودها
     const byItemMap: Record<string, number> = {};
-    for (const i of items) byItemMap[i.item] = (byItemMap[i.item] || 0) + i.installment;
+    for (const i of items) {
+      if (i.lines) {
+        const totLn = i.lines.reduce((s: number, l: any) => s + (Number(l.amount) || 0), 0) || 1;
+        for (const l of i.lines) byItemMap[l.item_name || 'بدون بند'] = (byItemMap[l.item_name || 'بدون بند'] || 0) + i.installment * ((Number(l.amount) || 0) / totLn);
+      } else {
+        byItemMap[i.item] = (byItemMap[i.item] || 0) + i.installment;
+      }
+    }
     const byItem = Object.entries(byItemMap).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
     return { items, total, missingList, defaultList, byItem };
   }, [cfg.linkInvoices, invoices, rates, month]);

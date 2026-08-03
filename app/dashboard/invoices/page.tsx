@@ -46,6 +46,7 @@ interface Invoice {
   description: string;
   depreciation_months?: number | null;
   item?: { id: string; name: string } | null;
+  line_items?: { item_id: string; item_name: string; amount: number }[] | null;
   created_by_name: string;
   created_at?: string;
   supplier: { id: string; name: string };
@@ -53,12 +54,14 @@ interface Invoice {
   purchase_order: { id: string; po_number: string };
 }
 
+type Line = { item_id: string; item_name: string; amount: string };
 const empty = {
   invoice_number: '', supplier_id: '', vessel_id: '', po_id: '',
   type: 'preliminary', currency: 'USD', total_amount: '',
   invoice_date: '', due_date: '', description: '', notes: '',
   approval_status: '', approval_status_date: '', comment: '',
   charge_type: '', depreciation_months: '', item_id: '',
+  line_items: [] as Line[],
 };
 
 const approvalLabel: Record<string, string> = {
@@ -97,6 +100,7 @@ function InvoicesContent() {
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<Invoice | null>(null);
   const [form, setForm] = useState(empty);
+  const [multiItem, setMultiItem] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
@@ -160,6 +164,7 @@ function InvoicesContent() {
   function openAdd() {
     setEditing(null);
     setForm(empty);
+    setMultiItem(false);
     setError('');
     setPoManualMode(false);
     setPoManualNumber('');
@@ -186,7 +191,9 @@ function InvoicesContent() {
       charge_type: inv.depreciation_months && inv.depreciation_months > 1 ? 'depreciate' : 'month',
       depreciation_months: inv.depreciation_months && inv.depreciation_months > 1 ? String(inv.depreciation_months) : '',
       item_id: inv.item?.id || '',
+      line_items: (inv.line_items || []).map((l) => ({ item_id: l.item_id, item_name: l.item_name, amount: String(l.amount) })),
     });
+    setMultiItem((inv.line_items?.length || 0) > 0);
     setError('');
     setShowModal(true);
   }
@@ -199,6 +206,12 @@ function InvoicesContent() {
     if (form.charge_type === 'depreciate') {
       const m = parseInt(form.depreciation_months);
       if (!m || m < 2) { setError('أدخل عدد شهور الإهلاك (شهرين أو أكثر)'); return; }
+    }
+    if (multiItem) {
+      if (!form.line_items.length) { setError('أضف بند واحد على الأقل'); return; }
+      if (form.line_items.some((l) => !l.item_id || !(parseFloat(l.amount) > 0))) { setError('كل بند لازم يكون له تصنيف ومبلغ أكبر من صفر'); return; }
+      const sum = form.line_items.reduce((s, l) => s + (parseFloat(l.amount) || 0), 0);
+      if (Math.abs(sum - parseFloat(form.total_amount)) > 0.01) { setError(`مجموع البنود (${sum.toLocaleString()}) لازم يساوي إجمالي الفاتورة (${Number(form.total_amount).toLocaleString()})`); return; }
     }
     setLoading(true);
     try {
@@ -223,7 +236,7 @@ function InvoicesContent() {
         setPoManualNumber('');
       }
 
-      const { charge_type, ...rest } = form;
+      const { charge_type, line_items, ...rest } = form;
       const data = {
         ...rest,
         total_amount: parseFloat(form.total_amount),
@@ -232,7 +245,8 @@ function InvoicesContent() {
         invoice_date: form.invoice_date || null,
         due_date: form.due_date || null,
         depreciation_months: charge_type === 'depreciate' ? parseInt(form.depreciation_months) : null,
-        item_id: form.item_id || null,
+        item_id: multiItem ? null : (form.item_id || null),
+        line_items: multiItem ? form.line_items.map((l) => ({ item_id: l.item_id, item_name: items.find((it) => it.id === l.item_id)?.name || l.item_name || '', amount: parseFloat(l.amount) })) : null,
       };
       if (editing) {
         await api.put(`/api/invoices/${editing.id}`, data);
@@ -562,7 +576,7 @@ function InvoicesContent() {
     invoice_number: (i) => (i.invoice_number || '').toLowerCase(),
     supplier: (i) => (i.supplier?.name || '').toLowerCase(),
     vessel: (i) => (i.vessel?.name || '').toLowerCase(),
-    item: (i) => (i.item?.name || '').toLowerCase(),
+    item: (i) => (i.line_items?.length ? 'متعدد' : (i.item?.name || '')).toLowerCase(),
     type: (i) => i.type || '',
     total_amount: (i) => +i.total_amount || 0,
     paid_amount: (i) => +i.paid_amount || 0,
@@ -654,7 +668,7 @@ function InvoicesContent() {
                   <td className="px-4 py-3 font-mono font-medium text-blue-700">{inv.invoice_number}</td>
                   <td className="px-4 py-3">{inv.supplier?.name || '—'}</td>
                   <td className="px-4 py-3">{inv.vessel?.name || '—'}</td>
-                  <td className="px-4 py-3">{inv.item?.name || '—'}</td>
+                  <td className="px-4 py-3">{inv.line_items?.length ? <span title={inv.line_items.map((l) => l.item_name).join('، ')} className="text-indigo-600">متعدد ({inv.line_items.length})</span> : (inv.item?.name || '—')}</td>
                   <td className="px-4 py-3">
                     <span className={`px-2 py-1 rounded-full text-xs ${inv.type === 'final' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'}`}>
                       {typeLabel[inv.type]}
@@ -820,13 +834,46 @@ function InvoicesContent() {
                   {vessels.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
                 </select>
               </div>
-              <div>
-                <label className="block text-sm text-gray-600 mb-1">البند</label>
-                <select value={form.item_id} onChange={(e) => setForm({ ...form, item_id: e.target.value })}
-                  className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                  <option value="">— اختر البند —</option>
-                  {items.filter((it) => it.is_active !== false || it.id === form.item_id).map((it) => <option key={it.id} value={it.id}>{it.name}{it.is_active === false ? ' (موقوف)' : ''}</option>)}
-                </select>
+              <div className="col-span-2">
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-sm text-gray-600">البند</label>
+                  <label className="flex items-center gap-2 text-xs text-gray-500 cursor-pointer">
+                    <input type="checkbox" checked={multiItem} onChange={(e) => setMultiItem(e.target.checked)} /> بنود متعددة
+                  </label>
+                </div>
+                {!multiItem ? (
+                  <select value={form.item_id} onChange={(e) => setForm({ ...form, item_id: e.target.value })}
+                    className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="">— اختر البند —</option>
+                    {items.filter((it) => it.is_active !== false || it.id === form.item_id).map((it) => <option key={it.id} value={it.id}>{it.name}{it.is_active === false ? ' (موقوف)' : ''}</option>)}
+                  </select>
+                ) : (
+                  <div className="border rounded-lg p-3 bg-gray-50 space-y-2">
+                    {form.line_items.map((l, idx) => (
+                      <div key={idx} className="flex items-center gap-2">
+                        <select value={l.item_id} onChange={(e) => setForm({ ...form, line_items: form.line_items.map((x, i) => i === idx ? { ...x, item_id: e.target.value } : x) })}
+                          className="flex-1 border rounded-lg px-2 py-1.5 text-sm">
+                          <option value="">— البند —</option>
+                          {items.filter((it) => it.is_active !== false).map((it) => <option key={it.id} value={it.id}>{it.name}</option>)}
+                        </select>
+                        <input inputMode="decimal" placeholder="المبلغ" value={l.amount}
+                          onChange={(e) => setForm({ ...form, line_items: form.line_items.map((x, i) => i === idx ? { ...x, amount: e.target.value } : x) })}
+                          className="w-32 border rounded-lg px-2 py-1.5 text-sm" />
+                        <button type="button" onClick={() => setForm({ ...form, line_items: form.line_items.filter((_, i) => i !== idx) })} className="text-red-400 hover:text-red-600 px-1">✕</button>
+                      </div>
+                    ))}
+                    <div className="flex items-center justify-between">
+                      <button type="button" onClick={() => setForm({ ...form, line_items: [...form.line_items, { item_id: '', item_name: '', amount: '' }] })}
+                        className="text-blue-600 text-xs hover:underline">➕ إضافة بند</button>
+                      {(() => {
+                        const sum = form.line_items.reduce((s, l) => s + (parseFloat(l.amount) || 0), 0);
+                        const tot = parseFloat(form.total_amount) || 0;
+                        const ok = tot > 0 && Math.abs(sum - tot) < 0.01;
+                        return <span className={`text-xs ${ok ? 'text-emerald-600' : 'text-red-500'}`}>مجموع البنود: {sum.toLocaleString()} / {tot.toLocaleString()} {ok ? '✓' : ''}</span>;
+                      })()}
+                    </div>
+                  </div>
+                )}
               </div>
               <div className="col-span-2">
                 <div className="flex items-center justify-between mb-1">
