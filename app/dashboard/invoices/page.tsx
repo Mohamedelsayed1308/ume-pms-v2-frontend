@@ -342,17 +342,7 @@ function InvoicesContent() {
 
       let supplierId = '';
       if (d.supplier_name) {
-        const existing = suppliers.find((s) =>
-          s.name.toLowerCase().trim() === d.supplier_name.toLowerCase().trim()
-        );
-        if (existing) {
-          supplierId = existing.id;
-        } else {
-          const newSup = await api.post('/api/suppliers', { name: d.supplier_name });
-          supplierId = newSup.data.id;
-          const supRes = await api.get('/api/suppliers');
-          setSuppliers(supRes.data);
-        }
+        supplierId = (await resolveSupplier(d.supplier_name, suppliers)).id;
       }
 
       const vesselId = matchVessel(d.vessel_name || '');
@@ -442,6 +432,27 @@ function InvoicesContent() {
     return partial?.id || '';
   };
 
+  // توحيد اسم المورد للمطابقة (نفس منطق الباك-إند)
+  const normName = (s: string) => (s || '').toLowerCase().replace(/[^a-z0-9؀-ۿ]/g, '');
+  // إيجاد المورد بالتطبيع أو إنشاؤه — لو موجود بالفعل (تكرار) نعيد الجلب ونطابق بدل ما نفشل
+  async function resolveSupplier(name: string, list: any[]): Promise<{ id: string; list: any[] }> {
+    const n = normName(name);
+    if (!n) return { id: '', list };
+    const found = list.find((s) => normName(s.name) === n);
+    if (found) return { id: found.id, list };
+    try {
+      const newSup = await api.post('/api/suppliers', { name: name.trim() });
+      const fresh = (await api.get('/api/suppliers')).data;
+      setSuppliers(fresh);
+      return { id: newSup.data.id, list: fresh };
+    } catch {
+      const fresh = (await api.get('/api/suppliers')).data;
+      setSuppliers(fresh);
+      const again = fresh.find((s: any) => normName(s.name) === n);
+      return { id: again?.id || '', list: fresh };
+    }
+  }
+
   async function processBulkFile(index: number, file: File, currentSuppliers: any[]) {
     setBulkItems((prev) => prev.map((it, i) => i === index ? { ...it, status: 'extracting' } : it));
     try {
@@ -453,20 +464,11 @@ function InvoicesContent() {
       const d = res.data;
 
       let supplierId = '';
-      let supplierName = d.supplier_name || '';
+      const supplierName = d.supplier_name || '';
       if (supplierName) {
-        const existing = currentSuppliers.find(
-          (s) => s.name.toLowerCase().trim() === supplierName.toLowerCase().trim()
-        );
-        if (existing) {
-          supplierId = existing.id;
-        } else {
-          const newSup = await api.post('/api/suppliers', { name: supplierName });
-          supplierId = newSup.data.id;
-          const supRes = await api.get('/api/suppliers');
-          setSuppliers(supRes.data);
-          currentSuppliers = supRes.data;
-        }
+        const r = await resolveSupplier(supplierName, currentSuppliers);
+        supplierId = r.id;
+        currentSuppliers = r.list;
       }
 
       const vesselId = matchVessel(d.vessel_name || '');
