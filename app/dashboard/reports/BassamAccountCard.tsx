@@ -9,12 +9,39 @@ const fmt = (n: number) => Number(n || 0).toLocaleString('en-US', { maximumFract
 interface Transfer { month: string; date: string; amount: string; note: string }
 interface Account { opening0: string; add: Record<string, string>; transfers: Transfer[] }
 
+const MONTHS_EN: Record<string, string> = { jan: '01', feb: '02', mar: '03', apr: '04', may: '05', jun: '06', jul: '07', aug: '08', sep: '09', oct: '10', nov: '11', dec: '12' };
+// تحليل تحويلات ملصوقة من إكسيل (كل سطر: تاريخ + مبلغ + بيان)
+function parsePastedTransfers(text: string): Transfer[] {
+  const out: Transfer[] = [];
+  for (const raw of (text || '').split(/\r?\n/)) {
+    const line = raw.replace(/\t/g, ' ').trim();
+    if (!line) continue;
+    const dm = line.match(/(\d{1,2})[-/ ]([A-Za-z]{3,}|\d{1,2})[-/ ](\d{2,4})/);
+    let month = '', date = '';
+    if (dm) {
+      const d = dm[1].padStart(2, '0');
+      let mo = /^\d+$/.test(dm[2]) ? dm[2].padStart(2, '0') : (MONTHS_EN[dm[2].slice(0, 3).toLowerCase()] || '');
+      let y = dm[3]; if (y.length === 2) y = '20' + y;
+      if (mo) { month = `${y}-${mo}`; date = `${y}-${mo}-${d}`; }
+    }
+    const nums = (line.match(/\d[\d,]*(?:\.\d+)?/g) || []).map((s) => parseFloat(s.replace(/,/g, ''))).filter((n) => !isNaN(n) && n > 0);
+    const big = nums.filter((n) => n >= 1000);
+    const amount = (big.length ? Math.max(...big) : (nums.length ? Math.max(...nums) : 0));
+    const noteM = line.match(/[؀-ۿ][؀-ۿ\s()\-.،0-9A-Za-z]*/);
+    const note = noteM ? noteM[0].trim() : '';
+    if (amount > 0) out.push({ month, date, amount: String(amount), note });
+  }
+  return out;
+}
+
 export default function BassamAccountCard() {
   const [liqByMonth, setLiqByMonth] = useState<Record<string, number>>({});
   const [acc, setAcc] = useState<Account>({ opening0: '', add: {}, transfers: [] });
   const [saving, setSaving] = useState(false);
   const [savedMsg, setSavedMsg] = useState('');
   const [loaded, setLoaded] = useState(false);
+  const [pasteText, setPasteText] = useState('');
+  const [showPaste, setShowPaste] = useState(false);
 
   useEffect(() => {
     // سيولة البسّام لكل شهر من بيانات الكوديا المحفوظة (مجموع عمود O لكل شهر)
@@ -57,6 +84,12 @@ export default function BassamAccountCard() {
   const addTransfer = () => setAcc((a) => ({ ...a, transfers: [...a.transfers, { month: months[months.length - 1] || '', date: '', amount: '', note: '' }] }));
   const setTransfer = (idx: number, patch: Partial<Transfer>) => setAcc((a) => ({ ...a, transfers: a.transfers.map((t, i) => i === idx ? { ...t, ...patch } : t) }));
   const removeTransfer = (idx: number) => setAcc((a) => ({ ...a, transfers: a.transfers.filter((_, i) => i !== idx) }));
+  function importPasted() {
+    const parsed = parsePastedTransfers(pasteText);
+    if (!parsed.length) { alert('لم يتم العثور على تحويلات — تأكد إن كل سطر فيه تاريخ ومبلغ.'); return; }
+    setAcc((a) => ({ ...a, transfers: [...a.transfers, ...parsed] }));
+    setPasteText(''); setShowPaste(false);
+  }
 
   async function save() {
     setSaving(true); setSavedMsg('');
@@ -129,8 +162,23 @@ export default function BassamAccountCard() {
       <div className="bg-white rounded-xl shadow p-4">
         <div className="flex items-center justify-between mb-3">
           <h3 className="font-bold text-gray-700">💸 التحويلات المستلمة من البسّام <span className="text-xs text-gray-400 font-normal">(الإجمالي: {fmt(totalTransfers)})</span></h3>
-          <button onClick={addTransfer} disabled={!months.length} className="bg-emerald-600 text-white text-sm px-4 py-1.5 rounded-lg hover:bg-emerald-700 disabled:opacity-50">➕ إضافة تحويل</button>
+          <div className="flex gap-2">
+            <button onClick={() => setShowPaste((v) => !v)} className="text-sm px-4 py-1.5 rounded-lg border hover:bg-gray-50">📋 لصق تحويلات</button>
+            <button onClick={addTransfer} className="bg-emerald-600 text-white text-sm px-4 py-1.5 rounded-lg hover:bg-emerald-700">➕ إضافة تحويل</button>
+          </div>
         </div>
+        {showPaste && (
+          <div className="mb-3 border rounded-lg p-3 bg-gray-50">
+            <p className="text-xs text-gray-500 mb-2">الصق الجدول من الإكسيل (كل سطر فيه التاريخ والمبلغ والبيان) — النظام هيقرأ التاريخ والمبلغ والشهر تلقائياً:</p>
+            <textarea value={pasteText} onChange={(e) => setPasteText(e.target.value)} rows={6}
+              placeholder={'13-Jan-26\t20\tدفعة من حساب العبارة (ISBA)\t\t1,000,000.00'}
+              className="w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500" dir="ltr" />
+            <div className="flex gap-2 mt-2">
+              <button onClick={importPasted} className="bg-blue-600 text-white text-sm px-4 py-1.5 rounded-lg hover:bg-blue-700">تحليل وإضافة</button>
+              <button onClick={() => { setShowPaste(false); setPasteText(''); }} className="text-sm px-4 py-1.5 rounded-lg border hover:bg-gray-100">إلغاء</button>
+            </div>
+          </div>
+        )}
         {orphanTransfers > 0 && <p className="text-xs text-red-500 mb-2">⚠️ في تحويلات من غير شهر محدّد ({fmt(orphanTransfers)}) — اتخصمت من الرصيد، بس حدّد شهرها عشان تظهر في الكشف الشهري صح.</p>}
         {acc.transfers.length === 0 ? (
           <p className="text-gray-400 text-sm">لا توجد تحويلات — اضغط «إضافة تحويل».</p>
