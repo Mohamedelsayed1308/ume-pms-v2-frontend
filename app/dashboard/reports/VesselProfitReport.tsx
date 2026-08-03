@@ -90,7 +90,7 @@ export const PELAGOS: VesselConfig = {
 };
 
 export const ALCUDIA: VesselConfig = {
-  vessel: 'Alcudia', sheetKey: 'ALCUDIA', agentExport: 'وكيل الاتحاد', agentImport: 'وكيل البسّام',
+  vessel: 'Alcudia', sheetKey: 'ALCUDIA', agentExport: 'وكيل بدوي', agentImport: 'وكيل البسّام',
   linkInvoices: true, dbVesselName: 'Alcudia Express',
   salariesByMonth: {
     '2026-01': 110871.89, '2026-02': 99685.48, '2026-03': 107177.70,
