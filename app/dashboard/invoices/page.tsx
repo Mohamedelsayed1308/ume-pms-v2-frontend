@@ -22,9 +22,13 @@ interface BulkItem {
     vessel_id: string; total_amount: string; currency: string;
     invoice_date: string; due_date: string; description: string;
     type: string; approval_status: string;
+    item_id: string; charge_type: string; depreciation_months: string;
   };
   error: string;
 }
+
+// كلمات دالة على وقود بحري → اختيار Bunker تلقائياً
+const BUNKER_RX = /\b(bunker|lsmgo|mgo|ifo|hfo|lfo|vlsfo|mdo|gas\s?oil|gasoil|fuel)\b|وقود|بنكر|سولار|ديزل/i;
 
 interface Invoice {
   id: string;
@@ -413,7 +417,12 @@ function InvoicesContent() {
     vessel_id: '', total_amount: '', currency: 'USD',
     invoice_date: '', due_date: '', description: '',
     type: 'preliminary', approval_status: '',
+    item_id: '', charge_type: 'month', depreciation_months: '',
   });
+
+  // البند الذي اسمه Bunker (لاكتشاف الوقود تلقائياً)
+  const bunkerItemId = () => items.find((it) => (it.name || '').toLowerCase().includes('bunker'))?.id || '';
+  const detectItem = (desc: string) => (desc && BUNKER_RX.test(desc) ? bunkerItemId() : '');
 
   async function processBulkFile(index: number, file: File, currentSuppliers: any[]) {
     setBulkItems((prev) => prev.map((it, i) => i === index ? { ...it, status: 'extracting' } : it));
@@ -466,6 +475,9 @@ function InvoicesContent() {
             description: d.description || '',
             type: 'preliminary',
             approval_status: '',
+            item_id: detectItem(d.description || ''),
+            charge_type: 'month',
+            depreciation_months: '',
           },
         } : it
       ));
@@ -496,13 +508,16 @@ function InvoicesContent() {
       if (item.status !== 'ready') continue;
       setBulkItems((prev) => prev.map((it, idx) => idx === i ? { ...it, status: 'saving' } : it));
       try {
+        const { charge_type, depreciation_months, item_id, ...restData } = item.data;
         const payload = {
-          ...item.data,
+          ...restData,
           total_amount: parseFloat(item.data.total_amount) || 0,
           vessel_id: item.data.vessel_id || null,
           po_id: null,
           invoice_date: item.data.invoice_date || null,
           due_date: item.data.due_date || null,
+          item_id: item_id || null,
+          depreciation_months: charge_type === 'depreciate' ? parseInt(depreciation_months) : null,
         };
         const res = await api.post('/api/invoices', payload);
         const newInvoiceId = res.data.id;
@@ -1105,6 +1120,55 @@ function InvoicesContent() {
                                 <option value="final">نهائية</option>
                               </select>
                             </div>
+                            <div>
+                              <label className="text-xs text-gray-500">البند</label>
+                              <select value={item.data.item_id}
+                                onChange={(e) => setBulkItems((prev) => prev.map((it, idx) =>
+                                  idx === i ? { ...it, data: { ...it.data, item_id: e.target.value } } : it
+                                ))}
+                                className="w-full border rounded px-2 py-1 text-xs mt-0.5 focus:outline-none focus:ring-1 focus:ring-blue-400">
+                                <option value="">— اختر البند —</option>
+                                {items.filter((it) => it.is_active !== false || it.id === item.data.item_id).map((it) => <option key={it.id} value={it.id}>{it.name}</option>)}
+                              </select>
+                            </div>
+                            <div>
+                              <label className="text-xs text-gray-500">حالة الموافقة</label>
+                              <select value={item.data.approval_status}
+                                onChange={(e) => setBulkItems((prev) => prev.map((it, idx) =>
+                                  idx === i ? { ...it, data: { ...it.data, approval_status: e.target.value } } : it
+                                ))}
+                                className="w-full border rounded px-2 py-1 text-xs mt-0.5 focus:outline-none focus:ring-1 focus:ring-blue-400">
+                                <option value="">— بدون —</option>
+                                <option value="booking_waiting_payment">Booking - Waiting Payment</option>
+                                <option value="waiting_approval">Waiting Approval</option>
+                                <option value="waiting_po">Waiting PO</option>
+                                <option value="send_to_pay">Send to Pay</option>
+                                <option value="hold">Hold</option>
+                                <option value="delivery_missing">Delivery Missing</option>
+                                <option value="paid">Paid (مدفوعة)</option>
+                              </select>
+                            </div>
+                            <div>
+                              <label className="text-xs text-gray-500">نوع التحميل</label>
+                              <select value={item.data.charge_type}
+                                onChange={(e) => setBulkItems((prev) => prev.map((it, idx) =>
+                                  idx === i ? { ...it, data: { ...it.data, charge_type: e.target.value, depreciation_months: e.target.value === 'depreciate' ? it.data.depreciation_months : '' } } : it
+                                ))}
+                                className="w-full border rounded px-2 py-1 text-xs mt-0.5 focus:outline-none focus:ring-1 focus:ring-blue-400">
+                                <option value="month">تخص شهرها</option>
+                                <option value="depreciate">تُهلك على شهور</option>
+                              </select>
+                            </div>
+                            {item.data.charge_type === 'depreciate' && (
+                              <div>
+                                <label className="text-xs text-gray-500">شهور الإهلاك</label>
+                                <input type="number" min="2" step="1" value={item.data.depreciation_months}
+                                  onChange={(e) => setBulkItems((prev) => prev.map((it, idx) =>
+                                    idx === i ? { ...it, data: { ...it.data, depreciation_months: e.target.value } } : it
+                                  ))}
+                                  className="w-full border rounded px-2 py-1 text-xs mt-0.5 focus:outline-none focus:ring-1 focus:ring-blue-400" />
+                              </div>
+                            )}
                             <div className="col-span-3">
                               <label className="text-xs text-gray-500">الوصف</label>
                               <input value={item.data.description}
