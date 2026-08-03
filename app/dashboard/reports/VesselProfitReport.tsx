@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import * as XLSX from 'xlsx';
 import api from '@/lib/api';
 import VesselExecReport, { ExecData } from './VesselExecReport';
+import BassamAccountCard from './BassamAccountCard';
 import { DEFAULT_RATES } from './ExchangeRatesCard';
 
 // التوزيع الافتراضي لبنود المصروفات على مجموعات هيكل التكاليف (مفتاح البند → المجموعة)
@@ -57,6 +58,7 @@ export interface VesselConfig {
   linkInvoices?: boolean;  // اربط فواتير المشتريات واطرحها من صافي التشغيل
   dbVesselName?: string;   // اسم السفينة في قاعدة البيانات (لجلب فواتيرها)
   salariesByMonth?: Record<string, number>; // مرتبات افتراضية لكل شهر ('YYYY-MM' → USD)
+  bassamAccount?: boolean; // زر حساب وكيل البسّام داخل الكارت
   col: {
     type: number; ref: number; date: number; collection: number;
     truckC: number; truck: number; vehC: number; veh: number;
@@ -91,7 +93,7 @@ export const PELAGOS: VesselConfig = {
 
 export const ALCUDIA: VesselConfig = {
   vessel: 'Alcudia', sheetKey: 'ALCUDIA', agentExport: 'وكيل بدوي', agentImport: 'وكيل البسّام',
-  linkInvoices: true, dbVesselName: 'Alcudia Express',
+  linkInvoices: true, dbVesselName: 'Alcudia Express', bassamAccount: true,
   salariesByMonth: {
     '2026-01': 110871.89, '2026-02': 99685.48, '2026-03': 107177.70,
     '2026-04': 142512.74, '2026-05': 104033.26, '2026-06': 104334.94,
@@ -214,6 +216,7 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
   const [saving, setSaving] = useState(false);
   const [savedMsg, setSavedMsg] = useState('');
   const [showExec, setShowExec] = useState(false);
+  const [showBassam, setShowBassam] = useState(false);
 
   // فواتير المشتريات + أسعار الصرف (لو المركب مربوط بالفواتير)
   const [invoices, setInvoices] = useState<any[]>([]);
@@ -528,6 +531,9 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
             className="text-sm file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-blue-600 file:text-white file:cursor-pointer hover:file:bg-blue-700" />
           {fileName && <p className="text-xs text-gray-400 mt-1">📄 {fileName} — {voyages.length} رحلة</p>}
         </div>
+        {cfg.bassamAccount && (
+          <button onClick={() => setShowBassam(true)} className="bg-purple-100 text-purple-800 border border-purple-300 text-sm px-3 py-2 rounded-lg hover:bg-purple-200">📒 حساب البسّام</button>
+        )}
         {months.length > 0 && (
           <div>
             <label className="block text-sm text-gray-600 mb-1">الشهر</label>
@@ -890,6 +896,18 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
 
       {showExec && execData && (
         <VesselExecReport cfg={cfg} month={month} monthLabel={monthLabel(month)} exec={execData} onClose={() => setShowExec(false)} />
+      )}
+
+      {showBassam && (
+        <div className="fixed inset-0 z-50 bg-black/40 overflow-auto">
+          <div className="max-w-6xl mx-auto my-6 bg-gray-50 rounded-xl shadow-xl">
+            <div className="flex items-center justify-between bg-white rounded-t-xl border-b px-4 py-3 sticky top-0 z-10">
+              <h3 className="font-bold text-gray-800">📒 حساب وكيل البسّام — {cfg.vessel}</h3>
+              <button onClick={() => setShowBassam(false)} className="text-gray-400 hover:text-gray-700 text-xl">✕</button>
+            </div>
+            <div className="p-4"><BassamAccountCard /></div>
+          </div>
+        </div>
       )}
     </div>
   );
