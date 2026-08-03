@@ -45,6 +45,8 @@ export default function BassamAccountCard() {
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [showTransfers, setShowTransfers] = useState(true);
+  const [pasteAddText, setPasteAddText] = useState('');
+  const [showPasteAdd, setShowPasteAdd] = useState(false);
 
   useEffect(() => {
     // سيولة البسّام لكل شهر من بيانات الكوديا المحفوظة (مجموع عمود O لكل شهر)
@@ -104,6 +106,21 @@ export default function BassamAccountCard() {
     setAcc((a) => ({ ...a, transfers: [...a.transfers, ...parsed] }));
     setPasteText(''); setShowPaste(false);
   }
+  // لصق إضافات يدوية — تجميع حسب الشهر وإضافتها للقيمة الحالية
+  function importPastedAdditions() {
+    const parsed = parsePastedTransfers(pasteAddText);
+    if (!parsed.length) { alert('لم يتم العثور على إضافات — تأكد إن كل سطر فيه تاريخ ومبلغ.'); return; }
+    const byMonth: Record<string, number> = {};
+    for (const p of parsed) { if (p.month) byMonth[p.month] = (byMonth[p.month] || 0) + (parseFloat(p.amount) || 0); }
+    const skipped = parsed.filter((p) => !p.month).length;
+    setAcc((a) => {
+      const add = { ...a.add };
+      for (const [m, v] of Object.entries(byMonth)) add[m] = String((parseFloat(add[m] || '') || 0) + v);
+      return { ...a, add };
+    });
+    setPasteAddText(''); setShowPasteAdd(false);
+    if (skipped) alert(`تم التجاهل: ${skipped} سطر بدون تاريخ صالح.`);
+  }
 
   async function save() {
     setSaving(true); setSavedMsg('');
@@ -142,7 +159,10 @@ export default function BassamAccountCard() {
       {/* الكشف الشهري */}
       <div className="bg-white rounded-xl shadow p-4 overflow-x-auto">
         <div className="flex items-center justify-between flex-wrap gap-3 mb-3">
-          <h3 className="font-bold text-gray-700">📒 كشف حساب وكيل البسّام (شهري)</h3>
+          <div className="flex items-center gap-3">
+            <h3 className="font-bold text-gray-700">📒 كشف حساب وكيل البسّام (شهري)</h3>
+            <button onClick={() => setShowPasteAdd((v) => !v)} className="text-xs px-3 py-1.5 rounded-lg border hover:bg-gray-50">📋 لصق إضافات</button>
+          </div>
           {months.length > 0 && (
             <div className="flex items-end gap-2 text-sm">
               <div>
@@ -160,6 +180,18 @@ export default function BassamAccountCard() {
             </div>
           )}
         </div>
+        {showPasteAdd && (
+          <div className="mb-3 border rounded-lg p-3 bg-gray-50">
+            <p className="text-xs text-gray-500 mb-2">الصق الإضافات من الإكسيل (كل سطر فيه تاريخ ومبلغ) — هتتجمّع على الشهر المناسب وتنضاف لقيمته الحالية:</p>
+            <textarea value={pasteAddText} onChange={(e) => setPasteAddText(e.target.value)} rows={5}
+              placeholder={'13-Jan-26\tبيان\t\t50,000.00'}
+              className="w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500" dir="ltr" />
+            <div className="flex gap-2 mt-2">
+              <button onClick={importPastedAdditions} className="bg-blue-600 text-white text-sm px-4 py-1.5 rounded-lg hover:bg-blue-700">تحليل وإضافة</button>
+              <button onClick={() => { setShowPasteAdd(false); setPasteAddText(''); }} className="text-sm px-4 py-1.5 rounded-lg border hover:bg-gray-100">إلغاء</button>
+            </div>
+          </div>
+        )}
         <table className="w-full text-sm whitespace-nowrap">
           <thead className="text-gray-500 text-xs">
             <tr>
