@@ -332,6 +332,7 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
         const installment = usdTotal / nMonths;
         return {
           id: inv.id, number: inv.invoice_number, supplier: inv.supplier?.name || '—',
+          item: inv.item?.name || 'بدون بند',
           amount: Number(inv.total_amount), currency: curr, nMonths, purchaseMonth: pm,
           rate, missing, usdTotal, installment, seq: diff + 1,
         };
@@ -339,7 +340,11 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
       .filter(Boolean) as any[];
     const total = items.reduce((s, i) => s + i.installment, 0);
     const missingList = items.filter((i) => i.missing);
-    return { items, total, missingList };
+    // تجميع المشتريات حسب البند (لتقارير التكاليف)
+    const byItemMap: Record<string, number> = {};
+    for (const i of items) byItemMap[i.item] = (byItemMap[i.item] || 0) + i.installment;
+    const byItem = Object.entries(byItemMap).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
+    return { items, total, missingList, byItem };
   }, [cfg.linkInvoices, invoices, rates, month]);
 
   // بيانات التقرير الإداري (شرائح العرض)
@@ -599,20 +604,31 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
                   <div className="bg-red-50 rounded-lg p-3"><p className="text-red-600 text-xs">إجمالي المشتريات (قسط الشهر)</p><p className="text-lg font-bold text-red-700">{fmt(purchases.total)}</p></div>
                   <div className="bg-blue-600 text-white rounded-lg p-3"><p className="text-xs opacity-80">صافي نهائي بعد المشتريات</p><p className="text-lg font-bold">{fmt(data.net - purchases.total)}</p></div>
                 </div>
+                {purchases.byItem.length > 0 && (
+                  <div className="mb-3">
+                    <p className="text-xs text-gray-500 mb-1">المشتريات حسب البند:</p>
+                    <div className="flex flex-wrap gap-2">
+                      {purchases.byItem.map((b) => (
+                        <span key={b.name} className="bg-indigo-50 text-indigo-800 text-xs rounded-lg px-3 py-1.5">{b.name}: <strong>{fmt(b.value)}</strong></span>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 {purchases.items.length ? (
                   <table className="w-full text-sm">
-                    <thead className="text-gray-500 text-xs"><tr><th className="text-right py-1">رقم الفاتورة</th><th className="text-right py-1">المورد</th><th className="text-right py-1">المبلغ الأصلي</th><th className="text-right py-1">شهور الإهلاك</th><th className="text-right py-1">القسط الشهري (USD)</th></tr></thead>
+                    <thead className="text-gray-500 text-xs"><tr><th className="text-right py-1">رقم الفاتورة</th><th className="text-right py-1">المورد</th><th className="text-right py-1">البند</th><th className="text-right py-1">المبلغ الأصلي</th><th className="text-right py-1">شهور الإهلاك</th><th className="text-right py-1">القسط الشهري (USD)</th></tr></thead>
                     <tbody>
                       {purchases.items.map((i) => (
                         <tr key={i.id} className="border-t">
                           <td className="py-1">{i.number}</td>
                           <td className="py-1">{i.supplier}</td>
+                          <td className="py-1">{i.item}</td>
                           <td className="py-1">{fmt(i.amount)} {i.currency}</td>
                           <td className="py-1 text-gray-500">{i.nMonths > 1 ? `${i.seq}/${i.nMonths}` : 'كامل'}</td>
                           <td className="py-1 font-medium text-red-600">{i.missing ? '⚠️ سعر ناقص' : fmt(i.installment)}</td>
                         </tr>
                       ))}
-                      <tr className="border-t bg-gray-50 font-bold"><td className="py-1" colSpan={4}>إجمالي المشتريات</td><td className="py-1 text-red-700">{fmt(purchases.total)}</td></tr>
+                      <tr className="border-t bg-gray-50 font-bold"><td className="py-1" colSpan={5}>إجمالي المشتريات</td><td className="py-1 text-red-700">{fmt(purchases.total)}</td></tr>
                     </tbody>
                   </table>
                 ) : <p className="text-gray-400 text-sm">لا توجد فواتير على المركب في {monthLabel(month)}.</p>}
@@ -762,13 +778,22 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
             {purchases && (
               <>
                 <h3>المشتريات (فواتير المركب) — بالدولار</h3>
+                {purchases.byItem.length > 0 && (
+                  <table>
+                    <thead><tr><th>البند</th><th>إجمالي القسط (USD)</th></tr></thead>
+                    <tbody>
+                      {purchases.byItem.map((b) => (<tr key={b.name}><td>{b.name}</td><td>{fmt(b.value)}</td></tr>))}
+                      <tr className="tot"><td>الإجمالي</td><td>{fmt(purchases.total)}</td></tr>
+                    </tbody>
+                  </table>
+                )}
                 <table>
-                  <thead><tr><th>رقم الفاتورة</th><th>المورد</th><th>المبلغ الأصلي</th><th>شهور الإهلاك</th><th>القسط الشهري (USD)</th></tr></thead>
+                  <thead><tr><th>رقم الفاتورة</th><th>المورد</th><th>البند</th><th>المبلغ الأصلي</th><th>شهور الإهلاك</th><th>القسط الشهري (USD)</th></tr></thead>
                   <tbody>
                     {purchases.items.length ? purchases.items.map((i) => (
-                      <tr key={i.id}><td>{i.number}</td><td>{i.supplier}</td><td>{fmt(i.amount)} {i.currency}</td><td>{i.nMonths > 1 ? `${i.seq}/${i.nMonths}` : 'كامل'}</td><td>{i.missing ? 'سعر ناقص' : fmt(i.installment)}</td></tr>
-                    )) : (<tr><td colSpan={5}>لا توجد فواتير على المركب في هذا الشهر</td></tr>)}
-                    <tr className="tot"><td colSpan={4}>إجمالي المشتريات</td><td>{fmt(purchases.total)}</td></tr>
+                      <tr key={i.id}><td>{i.number}</td><td>{i.supplier}</td><td>{i.item}</td><td>{fmt(i.amount)} {i.currency}</td><td>{i.nMonths > 1 ? `${i.seq}/${i.nMonths}` : 'كامل'}</td><td>{i.missing ? 'سعر ناقص' : fmt(i.installment)}</td></tr>
+                    )) : (<tr><td colSpan={6}>لا توجد فواتير على المركب في هذا الشهر</td></tr>)}
+                    <tr className="tot"><td colSpan={5}>إجمالي المشتريات</td><td>{fmt(purchases.total)}</td></tr>
                   </tbody>
                 </table>
                 <table>
