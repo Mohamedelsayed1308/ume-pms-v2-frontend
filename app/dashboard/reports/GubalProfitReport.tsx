@@ -75,7 +75,16 @@ function parseWorkbook(wb: XLSX.WorkBook): GubalMonth[] {
     if (incomeTotal === 0 && costTotal === 0) continue; // skip empty months
     out.push({ key, label: lbl.replace(/\s+/g, ' '), incomeLines, incomeTotal, groups, costTotal, net });
   }
-  return out.sort((a, b) => a.key.localeCompare(b.key));
+  // دمج أي صفوف بنفس الشهر (منعاً للتكرار المضاعف)
+  const byKey = new Map<string, GubalMonth[]>();
+  for (const mth of out) { const a = byKey.get(mth.key) || []; a.push(mth); byKey.set(mth.key, a); }
+  const deduped: GubalMonth[] = [];
+  for (const [key, arr] of byKey) {
+    if (arr.length === 1) { deduped.push(arr[0]); continue; }
+    const merged = aggregate(arr)!;
+    deduped.push({ ...merged, key, label: arr[0].label });
+  }
+  return deduped.sort((a, b) => a.key.localeCompare(b.key));
 }
 
 // aggregate a set of months into one combined period
@@ -142,7 +151,7 @@ export default function GubalProfitReport() {
     if (!months.length) return;
     setSaving(true); setSavedMsg('');
     try {
-      await api.put('/api/vessel-profit/Gubal', { voyages: months, manual: {} });
+      await api.put('/api/vessel-profit/Gubal', { voyages: months });
       setSavedMsg('تم الحفظ ✅'); setTimeout(() => setSavedMsg(''), 2500);
     } catch { setSavedMsg('فشل الحفظ'); } finally { setSaving(false); }
   }
@@ -341,18 +350,24 @@ function Donut({ segs, total }: { segs: { value: number; color: string }[]; tota
 }
 
 function TrendBars({ data }: { data: { label: string; value: number }[] }) {
-  const W = 900, H = 260, m = { l: 55, r: 10, t: 20, b: 28 };
+  const W = 900, H = 280, m = { l: 55, r: 10, t: 26, b: 30 };
   const pw = W - m.l - m.r, ph = H - m.t - m.b;
-  const max = Math.max(1, ...data.map((d) => d.value));
+  const maxV = Math.max(0, ...data.map((d) => d.value));
+  const minV = Math.min(0, ...data.map((d) => d.value));
+  const range = (maxV - minV) || 1;
+  const zeroY = m.t + (maxV / range) * ph; // موضع خط الصفر
   const gap = pw / data.length, bw = gap * 0.55;
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="w-full">
-      <line x1={m.l} y1={m.t + ph} x2={W - m.r} y2={m.t + ph} stroke="#e5e9f0" />
+      <line x1={m.l} y1={zeroY} x2={W - m.r} y2={zeroY} stroke="#cbd5e1" />
       {data.map((d, i) => {
-        const h = (d.value / max) * ph, x = m.l + gap * i + (gap - bw) / 2, y = m.t + ph - h;
+        const valY = m.t + ((maxV - d.value) / range) * ph;
+        const x = m.l + gap * i + (gap - bw) / 2;
+        const top = Math.min(zeroY, valY), h = Math.abs(zeroY - valY);
+        const pos = d.value >= 0;
         return (<g key={i}>
-          <rect x={x} y={y} width={bw} height={h} fill="#5b9e77" rx="2" />
-          <text x={x + bw / 2} y={y - 5} textAnchor="middle" fontSize="12" fill="#435061" fontWeight="600">{fmtAbbr(d.value)}</text>
+          <rect x={x} y={top} width={bw} height={h} fill={pos ? '#5b9e77' : '#e2564a'} rx="2" />
+          <text x={x + bw / 2} y={pos ? valY - 5 : valY + 14} textAnchor="middle" fontSize="12" fill="#435061" fontWeight="600">{fmtAbbr(d.value)}</text>
           <text x={x + bw / 2} y={H - 10} textAnchor="middle" fontSize="12" fill="#6b7480">{d.label}</text>
         </g>);
       })}
