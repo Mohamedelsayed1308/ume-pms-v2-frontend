@@ -41,6 +41,7 @@ interface Invoice {
   due_date: string;
   description: string;
   depreciation_months?: number | null;
+  item?: { id: string; name: string } | null;
   created_by_name: string;
   created_at?: string;
   supplier: { id: string; name: string };
@@ -53,7 +54,7 @@ const empty = {
   type: 'preliminary', currency: 'USD', total_amount: '',
   invoice_date: '', due_date: '', description: '', notes: '',
   approval_status: '', approval_status_date: '', comment: '',
-  charge_type: '', depreciation_months: '',
+  charge_type: '', depreciation_months: '', item_id: '',
 };
 
 const approvalLabel: Record<string, string> = {
@@ -86,6 +87,7 @@ function InvoicesContent() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [vessels, setVessels] = useState<any[]>([]);
+  const [items, setItems] = useState<any[]>([]);
   const [pos, setPos] = useState<any[]>([]);
   const [filteredPos, setFilteredPos] = useState<any[]>([]);
   const [showModal, setShowModal] = useState(false);
@@ -116,16 +118,18 @@ function InvoicesContent() {
   const supplierDropRef = useRef<HTMLDivElement>(null);
 
   async function load() {
-    const [invRes, supRes, vesRes, poRes] = await Promise.all([
+    const [invRes, supRes, vesRes, poRes, itemRes] = await Promise.all([
       api.get('/api/invoices'),
       api.get('/api/suppliers'),
       api.get('/api/vessels'),
       api.get('/api/purchase-orders'),
+      api.get('/api/items'),
     ]);
     setInvoices(invRes.data);
     setSuppliers(supRes.data);
     setVessels(vesRes.data);
     setPos(poRes.data);
+    setItems(itemRes.data);
   }
 
   useEffect(() => { load(); }, []);
@@ -177,6 +181,7 @@ function InvoicesContent() {
       comment: inv.comment || '',
       charge_type: inv.depreciation_months && inv.depreciation_months > 1 ? 'depreciate' : 'month',
       depreciation_months: inv.depreciation_months && inv.depreciation_months > 1 ? String(inv.depreciation_months) : '',
+      item_id: inv.item?.id || '',
     });
     setError('');
     setShowModal(true);
@@ -223,6 +228,7 @@ function InvoicesContent() {
         invoice_date: form.invoice_date || null,
         due_date: form.due_date || null,
         depreciation_months: charge_type === 'depreciate' ? parseInt(form.depreciation_months) : null,
+        item_id: form.item_id || null,
       };
       if (editing) {
         await api.put(`/api/invoices/${editing.id}`, data);
@@ -535,6 +541,7 @@ function InvoicesContent() {
     invoice_number: (i) => (i.invoice_number || '').toLowerCase(),
     supplier: (i) => (i.supplier?.name || '').toLowerCase(),
     vessel: (i) => (i.vessel?.name || '').toLowerCase(),
+    item: (i) => (i.item?.name || '').toLowerCase(),
     type: (i) => i.type || '',
     total_amount: (i) => +i.total_amount || 0,
     paid_amount: (i) => +i.paid_amount || 0,
@@ -605,6 +612,7 @@ function InvoicesContent() {
               <SortTh k="invoice_number" label="رقم الفاتورة" />
               <SortTh k="supplier" label="المورد" />
               <SortTh k="vessel" label="السفينة" />
+              <SortTh k="item" label="البند" />
               <SortTh k="type" label="النوع" />
               <SortTh k="total_amount" label="المبلغ" />
               <SortTh k="paid_amount" label="المدفوع" />
@@ -625,6 +633,7 @@ function InvoicesContent() {
                   <td className="px-4 py-3 font-mono font-medium text-blue-700">{inv.invoice_number}</td>
                   <td className="px-4 py-3">{inv.supplier?.name || '—'}</td>
                   <td className="px-4 py-3">{inv.vessel?.name || '—'}</td>
+                  <td className="px-4 py-3">{inv.item?.name || '—'}</td>
                   <td className="px-4 py-3">
                     <span className={`px-2 py-1 rounded-full text-xs ${inv.type === 'final' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'}`}>
                       {typeLabel[inv.type]}
@@ -788,6 +797,14 @@ function InvoicesContent() {
                   className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
                   <option value="">— اختر السفينة —</option>
                   {vessels.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">البند</label>
+                <select value={form.item_id} onChange={(e) => setForm({ ...form, item_id: e.target.value })}
+                  className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  <option value="">— اختر البند —</option>
+                  {items.filter((it) => it.is_active !== false).map((it) => <option key={it.id} value={it.id}>{it.name}</option>)}
                 </select>
               </div>
               <div className="col-span-2">

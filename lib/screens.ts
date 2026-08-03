@@ -13,6 +13,7 @@ export const SCREENS: Screen[] = [
   { href: '/dashboard/suppliers', label: 'الموردين', icon: '🏭' },
   { href: '/dashboard/purchase-orders', label: 'أوامر الشراء', icon: '📋' },
   { href: '/dashboard/invoices', label: 'الفواتير', icon: '🧾' },
+  { href: '/dashboard/items', label: 'بنود الفواتير', icon: '🏷️' },
   { href: '/dashboard/payments', label: 'المدفوعات', icon: '💳' },
   { href: '/dashboard/reports', label: 'التقارير', icon: '📊' },
   { href: '/dashboard/customers', label: 'العملاء', icon: '🤝' },
