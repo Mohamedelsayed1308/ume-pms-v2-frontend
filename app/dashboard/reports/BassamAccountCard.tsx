@@ -48,7 +48,9 @@ export default function BassamAccountCard() {
     });
   }, [months, liqByMonth, acc]);
 
-  const currentBalance = rows.length ? rows[rows.length - 1].closing : (parseFloat(acc.opening0) || 0);
+  // تحويلات من غير شهر محدّد (أو شهر غير موجود) — تُخصم من الرصيد كي يبقى متسقاً
+  const orphanTransfers = useMemo(() => acc.transfers.filter((t) => !months.includes(t.month)).reduce((s, t) => s + (parseFloat(t.amount) || 0), 0), [acc.transfers, months]);
+  const currentBalance = (rows.length ? rows[rows.length - 1].closing : (parseFloat(acc.opening0) || 0)) - orphanTransfers;
   const totalTransfers = acc.transfers.reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
 
   const setAdd = (m: string, v: string) => setAcc((a) => ({ ...a, add: { ...a.add, [m]: v } }));
@@ -129,6 +131,7 @@ export default function BassamAccountCard() {
           <h3 className="font-bold text-gray-700">💸 التحويلات المستلمة من البسّام <span className="text-xs text-gray-400 font-normal">(الإجمالي: {fmt(totalTransfers)})</span></h3>
           <button onClick={addTransfer} disabled={!months.length} className="bg-emerald-600 text-white text-sm px-4 py-1.5 rounded-lg hover:bg-emerald-700 disabled:opacity-50">➕ إضافة تحويل</button>
         </div>
+        {orphanTransfers > 0 && <p className="text-xs text-red-500 mb-2">⚠️ في تحويلات من غير شهر محدّد ({fmt(orphanTransfers)}) — اتخصمت من الرصيد، بس حدّد شهرها عشان تظهر في الكشف الشهري صح.</p>}
         {acc.transfers.length === 0 ? (
           <p className="text-gray-400 text-sm">لا توجد تحويلات — اضغط «إضافة تحويل».</p>
         ) : (
