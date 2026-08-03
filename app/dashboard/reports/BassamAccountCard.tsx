@@ -42,6 +42,9 @@ export default function BassamAccountCard() {
   const [loaded, setLoaded] = useState(false);
   const [pasteText, setPasteText] = useState('');
   const [showPaste, setShowPaste] = useState(false);
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+  const [showTransfers, setShowTransfers] = useState(true);
 
   useEffect(() => {
     // سيولة البسّام لكل شهر من بيانات الكوديا المحفوظة (مجموع عمود O لكل شهر)
@@ -62,6 +65,10 @@ export default function BassamAccountCard() {
 
   const months = useMemo(() => [...new Set(Object.keys(liqByMonth))].sort(), [liqByMonth]);
 
+  useEffect(() => {
+    if (months.length) { setFrom((f) => f || months[0]); setTo((t) => t || months[months.length - 1]); }
+  }, [months]);
+
   const rows = useMemo(() => {
     let prevClosing = 0;
     return months.map((m, i) => {
@@ -77,6 +84,13 @@ export default function BassamAccountCard() {
 
   // تحويلات من غير شهر محدّد (أو شهر غير موجود) — تُخصم من الرصيد كي يبقى متسقاً
   const orphanTransfers = useMemo(() => acc.transfers.filter((t) => !months.includes(t.month)).reduce((s, t) => s + (parseFloat(t.amount) || 0), 0), [acc.transfers, months]);
+  // الكشف المعروض حسب الفترة المختارة (الحساب الكامل بيتعمل لكل الشهور عشان الترحيل يفضل صح)
+  const displayedRows = useMemo(() => {
+    if (!from || !to) return rows;
+    const lo = from <= to ? from : to, hi = from <= to ? to : from;
+    return rows.filter((r) => r.m >= lo && r.m <= hi);
+  }, [rows, from, to]);
+
   const currentBalance = (rows.length ? rows[rows.length - 1].closing : (parseFloat(acc.opening0) || 0)) - orphanTransfers;
   const totalTransfers = acc.transfers.reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
 
@@ -127,7 +141,25 @@ export default function BassamAccountCard() {
 
       {/* الكشف الشهري */}
       <div className="bg-white rounded-xl shadow p-4 overflow-x-auto">
-        <h3 className="font-bold text-gray-700 mb-3">📒 كشف حساب وكيل البسّام (شهري)</h3>
+        <div className="flex items-center justify-between flex-wrap gap-3 mb-3">
+          <h3 className="font-bold text-gray-700">📒 كشف حساب وكيل البسّام (شهري)</h3>
+          {months.length > 0 && (
+            <div className="flex items-end gap-2 text-sm">
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">من</label>
+                <select value={from} onChange={(e) => setFrom(e.target.value)} className="border rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  {months.map((m) => <option key={m} value={m}>{monthLabel(m)}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">إلى</label>
+                <select value={to} onChange={(e) => setTo(e.target.value)} className="border rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  {months.map((m) => <option key={m} value={m}>{monthLabel(m)}</option>)}
+                </select>
+              </div>
+            </div>
+          )}
+        </div>
         <table className="w-full text-sm whitespace-nowrap">
           <thead className="text-gray-500 text-xs">
             <tr>
@@ -140,7 +172,7 @@ export default function BassamAccountCard() {
             </tr>
           </thead>
           <tbody>
-            {rows.map((r) => (
+            {displayedRows.map((r) => (
               <tr key={r.m} className="border-t">
                 <td className="py-1.5 px-2 font-medium">{monthLabel(r.m)}</td>
                 <td className="py-1.5 px-2 text-gray-500">{fmt(r.opening)}</td>
@@ -153,7 +185,7 @@ export default function BassamAccountCard() {
                 <td className="py-1.5 px-2 font-bold text-indigo-800">{fmt(r.closing)}</td>
               </tr>
             ))}
-            {rows.length === 0 && <tr><td colSpan={6} className="text-center py-6 text-gray-400">لا توجد شهور</td></tr>}
+            {displayedRows.length === 0 && <tr><td colSpan={6} className="text-center py-6 text-gray-400">لا توجد شهور في الفترة</td></tr>}
           </tbody>
         </table>
       </div>
@@ -161,13 +193,18 @@ export default function BassamAccountCard() {
       {/* التحويلات */}
       <div className="bg-white rounded-xl shadow p-4">
         <div className="flex items-center justify-between mb-3">
-          <h3 className="font-bold text-gray-700">💸 التحويلات المستلمة من البسّام <span className="text-xs text-gray-400 font-normal">(الإجمالي: {fmt(totalTransfers)})</span></h3>
-          <div className="flex gap-2">
-            <button onClick={() => setShowPaste((v) => !v)} className="text-sm px-4 py-1.5 rounded-lg border hover:bg-gray-50">📋 لصق تحويلات</button>
-            <button onClick={addTransfer} className="bg-emerald-600 text-white text-sm px-4 py-1.5 rounded-lg hover:bg-emerald-700">➕ إضافة تحويل</button>
-          </div>
+          <button onClick={() => setShowTransfers((v) => !v)} className="font-bold text-gray-700 flex items-center gap-2 hover:text-blue-700">
+            <span className="text-gray-400">{showTransfers ? '▾' : '▸'}</span>
+            💸 التحويلات المستلمة من البسّام <span className="text-xs text-gray-400 font-normal">(الإجمالي: {fmt(totalTransfers)})</span>
+          </button>
+          {showTransfers && (
+            <div className="flex gap-2">
+              <button onClick={() => setShowPaste((v) => !v)} className="text-sm px-4 py-1.5 rounded-lg border hover:bg-gray-50">📋 لصق تحويلات</button>
+              <button onClick={addTransfer} className="bg-emerald-600 text-white text-sm px-4 py-1.5 rounded-lg hover:bg-emerald-700">➕ إضافة تحويل</button>
+            </div>
+          )}
         </div>
-        {showPaste && (
+        {showTransfers && <>{showPaste && (
           <div className="mb-3 border rounded-lg p-3 bg-gray-50">
             <p className="text-xs text-gray-500 mb-2">الصق الجدول من الإكسيل (كل سطر فيه التاريخ والمبلغ والبيان) — النظام هيقرأ التاريخ والمبلغ والشهر تلقائياً:</p>
             <textarea value={pasteText} onChange={(e) => setPasteText(e.target.value)} rows={6}
@@ -200,6 +237,7 @@ export default function BassamAccountCard() {
             ))}
           </div>
         )}
+        </>}
       </div>
     </div>
   );
