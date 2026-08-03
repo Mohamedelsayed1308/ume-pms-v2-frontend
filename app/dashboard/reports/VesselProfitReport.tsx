@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import * as XLSX from 'xlsx';
 import api from '@/lib/api';
 import VesselExecReport, { ExecData } from './VesselExecReport';
+import { DEFAULT_RATES } from './ExchangeRatesCard';
 
 // التوزيع الافتراضي لبنود المصروفات على مجموعات هيكل التكاليف (مفتاح البند → المجموعة)
 const COST_BUCKET_DEFAULTS: Record<string, string> = {
@@ -326,7 +327,10 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
         const diff = monthDiff(pm, month);
         if (diff < 0 || diff >= nMonths) return null; // خارج فترة الإهلاك للشهر المختار
         const curr = inv.currency || 'USD';
-        const rate = curr === 'USD' ? 1 : Number(rates[pm]?.[curr]);
+        const monthRate = curr === 'USD' ? 1 : Number(rates[pm]?.[curr]);
+        const defRate = curr === 'USD' ? 1 : (Number(rates['default']?.[curr]) || DEFAULT_RATES[curr] || 0);
+        const rate = monthRate > 0 ? monthRate : defRate;
+        const usedDefault = !(monthRate > 0) && rate > 0; // اتحسبت بسعر افتراضي
         const missing = !(rate > 0);
         const usdTotal = missing ? 0 : Number(inv.total_amount) / rate;
         const installment = usdTotal / nMonths;
@@ -334,17 +338,18 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
           id: inv.id, number: inv.invoice_number, supplier: inv.supplier?.name || '—',
           item: inv.item?.name || 'بدون بند',
           amount: Number(inv.total_amount), currency: curr, nMonths, purchaseMonth: pm,
-          rate, missing, usdTotal, installment, seq: diff + 1,
+          rate, missing, usedDefault, usdTotal, installment, seq: diff + 1,
         };
       })
       .filter(Boolean) as any[];
     const total = items.reduce((s, i) => s + i.installment, 0);
     const missingList = items.filter((i) => i.missing);
+    const defaultList = items.filter((i) => i.usedDefault);
     // تجميع المشتريات حسب البند (لتقارير التكاليف)
     const byItemMap: Record<string, number> = {};
     for (const i of items) byItemMap[i.item] = (byItemMap[i.item] || 0) + i.installment;
     const byItem = Object.entries(byItemMap).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
-    return { items, total, missingList, byItem };
+    return { items, total, missingList, defaultList, byItem };
   }, [cfg.linkInvoices, invoices, rates, month]);
 
   // بيانات التقرير الإداري (شرائح العرض)
@@ -594,9 +599,15 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
               <div className="bg-white rounded-xl shadow p-4">
                 <h3 className="font-bold text-gray-700 mb-3">🧾 المشتريات (فواتير المركب) — بالدولار</h3>
                 {purchases.missingList.length > 0 && (
-                  <div className="bg-amber-50 border border-amber-200 text-amber-800 text-sm rounded-lg px-3 py-2 mb-3">
-                    ⚠️ فواتير سعر صرفها ناقص لشهر الشراء — مش محتسبة لحد ما تدخل السعر في كارت أسعار الصرف:
+                  <div className="bg-red-50 border border-red-200 text-red-800 text-sm rounded-lg px-3 py-2 mb-3">
+                    ⚠️ فواتير مفيش لها سعر صرف (ولا افتراضي) — مش محتسبة:
                     {purchases.missingList.map((i) => ` ${i.number} (${i.currency} — ${monthLabel(i.purchaseMonth)})`).join('،')}
+                  </div>
+                )}
+                {purchases.defaultList.length > 0 && (
+                  <div className="bg-amber-50 border border-amber-200 text-amber-800 text-xs rounded-lg px-3 py-2 mb-3">
+                    ⭐ فواتير اتحسبت بـ<strong> سعر الصرف الافتراضي</strong> (شهرها مش متسجّل) — أدخل سعر الشهر في كارت أسعار الصرف للدقة:
+                    {purchases.defaultList.map((i) => ` ${i.number} (${i.currency} — ${monthLabel(i.purchaseMonth)})`).join('،')}
                   </div>
                 )}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3 text-sm">
@@ -625,7 +636,7 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
                           <td className="py-1">{i.item}</td>
                           <td className="py-1">{fmt(i.amount)} {i.currency}</td>
                           <td className="py-1 text-gray-500">{i.nMonths > 1 ? `${i.seq}/${i.nMonths}` : 'كامل'}</td>
-                          <td className="py-1 font-medium text-red-600">{i.missing ? '⚠️ سعر ناقص' : fmt(i.installment)}</td>
+                          <td className="py-1 font-medium text-red-600">{i.missing ? '⚠️ سعر ناقص' : <>{fmt(i.installment)}{i.usedDefault && <span title="بسعر صرف افتراضي" className="text-amber-600"> ⭐</span>}</>}</td>
                         </tr>
                       ))}
                       <tr className="border-t bg-gray-50 font-bold"><td className="py-1" colSpan={5}>إجمالي المشتريات</td><td className="py-1 text-red-700">{fmt(purchases.total)}</td></tr>
@@ -791,7 +802,7 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
                   <thead><tr><th>رقم الفاتورة</th><th>المورد</th><th>البند</th><th>المبلغ الأصلي</th><th>شهور الإهلاك</th><th>القسط الشهري (USD)</th></tr></thead>
                   <tbody>
                     {purchases.items.length ? purchases.items.map((i) => (
-                      <tr key={i.id}><td>{i.number}</td><td>{i.supplier}</td><td>{i.item}</td><td>{fmt(i.amount)} {i.currency}</td><td>{i.nMonths > 1 ? `${i.seq}/${i.nMonths}` : 'كامل'}</td><td>{i.missing ? 'سعر ناقص' : fmt(i.installment)}</td></tr>
+                      <tr key={i.id}><td>{i.number}</td><td>{i.supplier}</td><td>{i.item}</td><td>{fmt(i.amount)} {i.currency}</td><td>{i.nMonths > 1 ? `${i.seq}/${i.nMonths}` : 'كامل'}</td><td>{i.missing ? 'سعر ناقص' : `${fmt(i.installment)}${i.usedDefault ? ' *' : ''}`}</td></tr>
                     )) : (<tr><td colSpan={6}>لا توجد فواتير على المركب في هذا الشهر</td></tr>)}
                     <tr className="tot"><td colSpan={5}>إجمالي المشتريات</td><td>{fmt(purchases.total)}</td></tr>
                   </tbody>

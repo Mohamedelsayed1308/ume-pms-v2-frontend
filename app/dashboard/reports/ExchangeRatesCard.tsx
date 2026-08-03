@@ -12,6 +12,9 @@ const CURRENCIES = [
   { code: 'AED', label: 'درهم إماراتي' },
 ];
 
+// أسعار افتراضية تُستخدم لو شهر الفاتورة مش متسجّل (قابلة للتعديل عبر شهر 'default')
+export const DEFAULT_RATES: Record<string, number> = { EGP: 50, EUR: 0.92, SAR: 3.75, GBP: 0.79, CHF: 0.88, AED: 3.675 };
+
 const MONTH_AR = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
 const monthLabel = (m: string) => { const [y, mm] = m.split('-'); return `${MONTH_AR[+mm - 1]} ${y}`; };
 const nowMonth = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; };
@@ -22,6 +25,9 @@ export default function ExchangeRatesCard() {
   const [rates, setRates] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState('');
+  const [defRates, setDefRates] = useState<Record<string, string>>({});
+  const [savingDef, setSavingDef] = useState(false);
+  const [defMsg, setDefMsg] = useState('');
 
   useEffect(() => { api.get('/api/exchange-rates').then((r) => setAll(r.data || {})).catch(() => {}); }, []);
 
@@ -32,7 +38,27 @@ export default function ExchangeRatesCard() {
     setRates(obj);
   }, [month, all]);
 
-  const savedMonths = useMemo(() => Object.keys(all).sort().reverse(), [all]);
+  // الأسعار الافتراضية: من المحفوظ ('default') أو القيم المدمجة
+  useEffect(() => {
+    const d = all['default'] || {};
+    const obj: Record<string, string> = {};
+    CURRENCIES.forEach((c) => { obj[c.code] = d[c.code] != null ? String(d[c.code]) : String(DEFAULT_RATES[c.code] ?? ''); });
+    setDefRates(obj);
+  }, [all]);
+
+  const savedMonths = useMemo(() => Object.keys(all).filter((k) => k !== 'default').sort().reverse(), [all]);
+
+  async function saveDefaults() {
+    setSavingDef(true); setDefMsg('');
+    const payload: Record<string, number> = {};
+    for (const c of CURRENCIES) { const v = parseFloat(defRates[c.code]); if (v > 0) payload[c.code] = v; }
+    try {
+      await api.put('/api/exchange-rates/default', { rates: payload });
+      setAll((prev) => ({ ...prev, default: payload }));
+      setDefMsg('تم الحفظ ✅'); setTimeout(() => setDefMsg(''), 2500);
+    } catch { setDefMsg('فشل الحفظ'); }
+    finally { setSavingDef(false); }
+  }
 
   async function save() {
     setSaving(true); setMsg('');
@@ -48,6 +74,35 @@ export default function ExchangeRatesCard() {
 
   return (
     <div className="space-y-4">
+      {/* الأسعار الافتراضية */}
+      <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+        <div className="flex items-center justify-between flex-wrap gap-2 mb-1">
+          <h3 className="font-bold text-amber-800">⭐ الأسعار الافتراضية</h3>
+          <div className="flex items-center gap-3">
+            {defMsg && <span className="text-sm text-emerald-600 font-medium">{defMsg}</span>}
+            <button onClick={saveDefaults} disabled={savingDef}
+              className="bg-amber-600 text-white text-sm px-4 py-1.5 rounded-lg hover:bg-amber-700 disabled:opacity-50">
+              {savingDef ? '...' : '💾 حفظ الافتراضي'}
+            </button>
+          </div>
+        </div>
+        <p className="text-xs text-amber-700 mb-3">تُستخدم تلقائياً لأي فاتورة شهرها مش متسجّل — تقدر تعدّلها. (سعر الشهر المحدد بيغلب الافتراضي.)</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+          {CURRENCIES.map((c) => (
+            <div key={c.code} className="border border-amber-200 bg-white rounded-lg p-3">
+              <label className="block text-xs text-gray-500 mb-1">{c.label} ({c.code})</label>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-500 whitespace-nowrap">1 USD =</span>
+                <input inputMode="decimal" value={defRates[c.code] || ''} placeholder="0"
+                  onChange={(e) => setDefRates((r) => ({ ...r, [c.code]: e.target.value }))}
+                  className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-500" />
+                <span className="text-sm text-gray-500">{c.code}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
       <div className="bg-white rounded-xl shadow p-4">
         <div className="flex items-end gap-4 flex-wrap mb-4">
           <div>
