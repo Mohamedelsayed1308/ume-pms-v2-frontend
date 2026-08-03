@@ -371,7 +371,7 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
         const installment = usdTotal / nMonths;
         return {
           id: inv.id, number: inv.invoice_number, supplier: inv.supplier?.name || '—',
-          item: inv.item?.name || 'بدون بند',
+          item: inv.item?.name || 'بدون بند', date: (inv.invoice_date || '').slice(0, 10),
           amount: Number(inv.total_amount), currency: curr, nMonths, purchaseMonth: pm,
           rate, missing, usedDefault, usdTotal, installment, seq: diff + 1,
         };
@@ -620,7 +620,13 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
               <div className="grid grid-cols-2 md:grid-cols-5 gap-3 items-end text-sm">
                 <div>
                   <label className="block text-xs text-gray-500 mb-1">رصيد أول المدة {manual[month]?.opening === undefined || manual[month]?.opening === '' ? (openingOf(month) ? '(مُرحّل)' : '(يدوي)') : '(يدوي)'}</label>
-                  <input value={openingOf(month)} onChange={(e) => setCur({ opening: e.target.value })} inputMode="decimal" placeholder="0" className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  <div className="flex gap-1">
+                    <input value={openingOf(month)} onChange={(e) => setCur({ opening: e.target.value })} inputMode="decimal" placeholder="0" className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    {(() => { const pc = manual[prevMonthOf(month)]?.closing; return pc !== undefined && pc !== '' ? (
+                      <button type="button" title="ترحيل مخزون آخر الشهر السابق" onClick={() => setCur({ opening: pc })}
+                        className="px-2 rounded-lg border text-gray-500 hover:bg-gray-100 shrink-0">↩</button>
+                    ) : null; })()}
+                  </div>
                 </div>
                 <div><p className="text-xs text-gray-500 mb-1">+ تموينات (إكسيل)</p><p className="border rounded-lg px-3 py-2 bg-gray-50 font-medium">{fmt(data.suppliesExcel)}</p></div>
                 <div><p className="text-xs text-gray-500 mb-1">+ فواتير البنكر</p><p className="border rounded-lg px-3 py-2 bg-amber-50 font-medium text-amber-700">{fmt(data.bunkerInvoiceUSD)}</p></div>
@@ -667,11 +673,12 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
                 )}
                 {purchases.items.length ? (
                   <table className="w-full text-sm">
-                    <thead className="text-gray-500 text-xs"><tr><th className="text-right py-1">رقم الفاتورة</th><th className="text-right py-1">المورد</th><th className="text-right py-1">البند</th><th className="text-right py-1">المبلغ الأصلي</th><th className="text-right py-1">شهور الإهلاك</th><th className="text-right py-1">القسط الشهري (USD)</th></tr></thead>
+                    <thead className="text-gray-500 text-xs"><tr><th className="text-right py-1">رقم الفاتورة</th><th className="text-right py-1">التاريخ</th><th className="text-right py-1">المورد</th><th className="text-right py-1">البند</th><th className="text-right py-1">المبلغ الأصلي</th><th className="text-right py-1">شهور الإهلاك</th><th className="text-right py-1">القسط الشهري (USD)</th></tr></thead>
                     <tbody>
                       {purchases.items.map((i) => (
                         <tr key={i.id} className="border-t">
                           <td className="py-1">{i.number}</td>
+                          <td className="py-1 text-gray-500">{i.date || '—'}</td>
                           <td className="py-1">{i.supplier}</td>
                           <td className="py-1">{i.item}</td>
                           <td className="py-1">{fmt(i.amount)} {i.currency}</td>
@@ -679,7 +686,7 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
                           <td className="py-1 font-medium text-red-600">{i.missing ? '⚠️ سعر ناقص' : <>{fmt(i.installment)}{i.usedDefault && <span title="بسعر صرف افتراضي" className="text-amber-600"> ⭐</span>}</>}</td>
                         </tr>
                       ))}
-                      <tr className="border-t bg-gray-50 font-bold"><td className="py-1" colSpan={5}>إجمالي المشتريات</td><td className="py-1 text-red-700">{fmt(purchases.total)}</td></tr>
+                      <tr className="border-t bg-gray-50 font-bold"><td className="py-1" colSpan={6}>إجمالي المشتريات</td><td className="py-1 text-red-700">{fmt(purchases.total)}</td></tr>
                     </tbody>
                   </table>
                 ) : <p className="text-gray-400 text-sm">لا توجد فواتير على المركب في {monthLabel(month)}.</p>}
@@ -839,12 +846,12 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
                   </table>
                 )}
                 <table>
-                  <thead><tr><th>رقم الفاتورة</th><th>المورد</th><th>البند</th><th>المبلغ الأصلي</th><th>شهور الإهلاك</th><th>القسط الشهري (USD)</th></tr></thead>
+                  <thead><tr><th>رقم الفاتورة</th><th>التاريخ</th><th>المورد</th><th>البند</th><th>المبلغ الأصلي</th><th>شهور الإهلاك</th><th>القسط الشهري (USD)</th></tr></thead>
                   <tbody>
                     {purchases.items.length ? purchases.items.map((i) => (
-                      <tr key={i.id}><td>{i.number}</td><td>{i.supplier}</td><td>{i.item}</td><td>{fmt(i.amount)} {i.currency}</td><td>{i.nMonths > 1 ? `${i.seq}/${i.nMonths}` : 'كامل'}</td><td>{i.missing ? 'سعر ناقص' : `${fmt(i.installment)}${i.usedDefault ? ' *' : ''}`}</td></tr>
-                    )) : (<tr><td colSpan={6}>لا توجد فواتير على المركب في هذا الشهر</td></tr>)}
-                    <tr className="tot"><td colSpan={5}>إجمالي المشتريات</td><td>{fmt(purchases.total)}</td></tr>
+                      <tr key={i.id}><td>{i.number}</td><td>{i.date || '—'}</td><td>{i.supplier}</td><td>{i.item}</td><td>{fmt(i.amount)} {i.currency}</td><td>{i.nMonths > 1 ? `${i.seq}/${i.nMonths}` : 'كامل'}</td><td>{i.missing ? 'سعر ناقص' : `${fmt(i.installment)}${i.usedDefault ? ' *' : ''}`}</td></tr>
+                    )) : (<tr><td colSpan={7}>لا توجد فواتير على المركب في هذا الشهر</td></tr>)}
+                    <tr className="tot"><td colSpan={6}>إجمالي المشتريات</td><td>{fmt(purchases.total)}</td></tr>
                   </tbody>
                 </table>
                 <table>
