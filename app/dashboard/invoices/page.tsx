@@ -28,7 +28,7 @@ interface BulkItem {
 }
 
 // كلمات دالة على وقود بحري → اختيار Bunker تلقائياً
-const BUNKER_RX = /\b(bunker|lsmgo|mgo|ifo|hfo|lfo|vlsfo|mdo|gas\s?oil|gasoil|fuel)\b|وقود|بنكر|سولار|ديزل/i;
+const BUNKER_RX = /\b(bunker|lsmgo|mgo|ifo|hfo|lfo|vlsfo|mdo|gas\s?oil|gasoil|fuel|mobil\w*|lubricant|lube|grease|gear\s?oil|cylinder\s?oil)\b|وقود|بنكر|سولار|ديزل|زيت|شحم/i;
 
 interface Invoice {
   id: string;
@@ -341,13 +341,7 @@ function InvoicesContent() {
         }
       }
 
-      let vesselId = '';
-      if (d.vessel_name) {
-        const existingVessel = vessels.find((v) =>
-          v.name.toLowerCase().trim() === d.vessel_name.toLowerCase().trim()
-        );
-        if (existingVessel) vesselId = existingVessel.id;
-      }
+      const vesselId = matchVessel(d.vessel_name || '');
 
       let poId = '';
       let autoVesselId = vesselId;
@@ -424,6 +418,16 @@ function InvoicesContent() {
   const bunkerItemId = () => items.find((it) => (it.name || '').toLowerCase().includes('bunker'))?.id || '';
   const detectItem = (desc: string) => (desc && BUNKER_RX.test(desc) ? bunkerItemId() : '');
 
+  // مطابقة مرنة لاسم المركب: تطابق تام (بعد التطبيع) ثم احتواء جزئي
+  const matchVessel = (name: string, list = vessels) => {
+    const n = (name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (!n) return '';
+    const exact = list.find((v) => (v.name || '').toLowerCase().replace(/[^a-z0-9]/g, '') === n);
+    if (exact) return exact.id;
+    const partial = list.find((v) => { const vn = (v.name || '').toLowerCase().replace(/[^a-z0-9]/g, ''); return vn.length >= 3 && (vn.includes(n) || n.includes(vn)); });
+    return partial?.id || '';
+  };
+
   async function processBulkFile(index: number, file: File, currentSuppliers: any[]) {
     setBulkItems((prev) => prev.map((it, i) => i === index ? { ...it, status: 'extracting' } : it));
     try {
@@ -451,13 +455,7 @@ function InvoicesContent() {
         }
       }
 
-      let vesselId = '';
-      if (d.vessel_name) {
-        const existing = vessels.find(
-          (v) => v.name.toLowerCase().trim() === d.vessel_name.toLowerCase().trim()
-        );
-        if (existing) vesselId = existing.id;
-      }
+      const vesselId = matchVessel(d.vessel_name || '');
 
       setBulkItems((prev) => prev.map((it, i) =>
         i === index ? {
@@ -1074,6 +1072,17 @@ function InvoicesContent() {
                               >
                                 <option value="">— اختر —</option>
                                 {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                              </select>
+                            </div>
+                            <div>
+                              <label className="text-xs text-gray-500">المركب</label>
+                              <select value={item.data.vessel_id}
+                                onChange={(e) => setBulkItems((prev) => prev.map((it, idx) =>
+                                  idx === i ? { ...it, data: { ...it.data, vessel_id: e.target.value } } : it
+                                ))}
+                                className="w-full border rounded px-2 py-1 text-xs mt-0.5 focus:outline-none focus:ring-1 focus:ring-blue-400">
+                                <option value="">— اختر المركب —</option>
+                                {vessels.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
                               </select>
                             </div>
                             <div>

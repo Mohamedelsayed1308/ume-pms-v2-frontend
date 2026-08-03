@@ -231,6 +231,26 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
     return def != null ? String(def) : '';
   };
 
+  // الشهر السابق ('YYYY-MM')
+  const prevMonthOf = (m: string) => {
+    const [y, mm] = m.split('-').map(Number); const t = y * 12 + (mm - 1) - 1;
+    return `${Math.floor(t / 12)}-${String((t % 12) + 1).padStart(2, '0')}`;
+  };
+  // الرصيد الافتتاحي الفعّال: اليدوي إن وُجد، وإلا مخزون آخر المدة للشهر السابق (ترحيل)
+  const openingOf = (m: string) => {
+    const v = manual[m]?.opening;
+    if (v !== undefined && v !== '') return v;
+    const pc = manual[prevMonthOf(m)]?.closing;
+    return pc !== undefined && pc !== '' ? pc : '';
+  };
+  // سعر صرف عملة لشهر (سعر الشهر ثم الافتراضي)
+  const rateFor = (curr: string, pm: string) => {
+    if (curr === 'USD') return 1;
+    const mr = Number(rates[pm]?.[curr]); if (mr > 0) return mr;
+    return Number(rates['default']?.[curr]) || DEFAULT_RATES[curr] || 0;
+  };
+  const isBunkerInv = (inv: any) => (inv.item?.name || '').toLowerCase().includes('bunker');
+
   // reset + load saved when the vessel changes
   useEffect(() => {
     setVoyages([]); setManual({}); setMonth(''); setFileName(''); setError('');
@@ -292,35 +312,50 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
   const months = useMemo(() => [...new Set(voyages.map((v) => v.month!))].sort(), [voyages]);
   const sel = useMemo(() => voyages.filter((v) => v.month === month), [voyages, month]);
 
+  // فواتير البنكر للشهر (بند = Bunker) — بالدولار، تُحمّل كاملة في شهرها (بدون إهلاك)
+  const bunkerInvoiceUSD = useMemo(() => {
+    if (!cfg.linkInvoices || !month) return 0;
+    let sum = 0;
+    for (const inv of invoices) {
+      if (!isBunkerInv(inv)) continue;
+      const pm = (inv.invoice_date || '').slice(0, 7);
+      if (pm !== month) continue;
+      const rate = rateFor(inv.currency || 'USD', pm);
+      if (rate > 0) sum += Number(inv.total_amount) / rate;
+    }
+    return sum;
+  }, [cfg.linkInvoices, invoices, rates, month]);
+
   const data = useMemo(() => {
     if (!sel.length) return null;
     const E = aggSide(sel, 'E'), I = aggSide(sel, 'I');
     const revE = sideRevenue(E), revI = sideRevenue(I);
     const expE = Object.values(E.exp).reduce((a, b) => a + b, 0);
     const expI = Object.values(I.exp).reduce((a, b) => a + b, 0);
-    const supplies = sel.reduce((s, v) => s + v.bunker, 0);
+    const suppliesExcel = sel.reduce((s, v) => s + v.bunker, 0);
+    const supplies = suppliesExcel + bunkerInvoiceUSD; // تموينات الشهر = إكسيل + فواتير البنكر
     const netBalance = sel.reduce((s, v) => s + v.net, 0);
     const O = sel.reduce((s, v) => s + v.O, 0);
     const P = sel.reduce((s, v) => s + v.P, 0);
     const revenue = revE + revI;
-    const mm = manual[month] || { opening: '', closing: '', salaries: '' };
-    const opening = parseFloat(mm.opening) || 0;
-    const closing = parseFloat(mm.closing) || 0;
+    const opening = parseFloat(openingOf(month)) || 0;
+    const closing = parseFloat(manual[month]?.closing ?? '') || 0;
     const bunkerCost = opening + supplies - closing;
     const salariesN = parseFloat(salaryOf(month)) || 0;
-    const net = netBalance - opening + closing - salariesN;
+    const net = netBalance - opening + closing - salariesN - bunkerInvoiceUSD;
     return {
-      E, I, revE, revI, expE, expI, supplies, opening, closing, bunkerCost, salaries: salariesN,
+      E, I, revE, revI, expE, expI, suppliesExcel, bunkerInvoiceUSD, supplies, opening, closing, bunkerCost, salaries: salariesN,
       net, O, P, revenue, count: sel.length, expenses: revenue - net,
       liqBassam: O, liqIttihad: P - O,
     };
-  }, [sel, manual, month]);
+  }, [sel, manual, month, bunkerInvoiceUSD]);
 
   // بند المشتريات (فواتير المركب) — قسط ثابت بالدولار محوّل بسعر صرف شهر الشراء
   const purchases = useMemo(() => {
     if (!cfg.linkInvoices || !month) return null;
     const items = invoices
       .map((inv) => {
+        if (isBunkerInv(inv)) return null; // البنكر يتحمّل على بند البنكر مش المشتريات
         const pm = (inv.invoice_date || '').slice(0, 7);
         if (!pm) return null;
         const nMonths = inv.depreciation_months && inv.depreciation_months > 1 ? inv.depreciation_months : 1;
@@ -582,12 +617,17 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
 
             <div className="bg-white rounded-xl shadow p-4">
               <h3 className="font-bold text-gray-700 mb-3">⛽ البنكر (مخزون)</h3>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 items-end text-sm">
-                <div><label className="block text-xs text-gray-500 mb-1">رصيد أول المدة (يدوي)</label><input value={cur.opening} onChange={(e) => setCur({ opening: e.target.value })} inputMode="decimal" placeholder="0" className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" /></div>
-                <div><p className="text-xs text-gray-500 mb-1">+ تموينات الشهر (من الإكسيل)</p><p className="border rounded-lg px-3 py-2 bg-gray-50 font-medium">{fmt(data.supplies)}</p></div>
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-3 items-end text-sm">
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">رصيد أول المدة {manual[month]?.opening === undefined || manual[month]?.opening === '' ? (openingOf(month) ? '(مُرحّل)' : '(يدوي)') : '(يدوي)'}</label>
+                  <input value={openingOf(month)} onChange={(e) => setCur({ opening: e.target.value })} inputMode="decimal" placeholder="0" className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
+                <div><p className="text-xs text-gray-500 mb-1">+ تموينات (إكسيل)</p><p className="border rounded-lg px-3 py-2 bg-gray-50 font-medium">{fmt(data.suppliesExcel)}</p></div>
+                <div><p className="text-xs text-gray-500 mb-1">+ فواتير البنكر</p><p className="border rounded-lg px-3 py-2 bg-amber-50 font-medium text-amber-700">{fmt(data.bunkerInvoiceUSD)}</p></div>
                 <div><label className="block text-xs text-gray-500 mb-1">− مخزون آخر المدة (يدوي)</label><input value={cur.closing} onChange={(e) => setCur({ closing: e.target.value })} inputMode="decimal" placeholder="0" className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" /></div>
                 <div><p className="text-xs text-gray-500 mb-1">= البنكر المستهلك</p><p className="border rounded-lg px-3 py-2 bg-red-50 font-bold text-red-700">{fmt(data.bunkerCost)}</p></div>
               </div>
+              {data.bunkerInvoiceUSD > 0 && <p className="text-xs text-amber-600 mt-2">⛽ فواتير بند «Bunker» ({fmt(data.bunkerInvoiceUSD)}) اتحمّلت هنا مش في المشتريات. مخزون آخر المدة بيترحّل رصيد افتتاحي للشهر الجاي.</p>}
             </div>
 
             <div className="bg-white rounded-xl shadow p-4 flex items-end justify-between flex-wrap gap-3">

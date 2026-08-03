@@ -46,6 +46,7 @@ export default function SuppliersPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [showDup, setShowDup] = useState(false);
+  const [keepSel, setKeepSel] = useState<Record<string, string>>({});
 
   async function load() {
     const res = await api.get('/api/suppliers');
@@ -97,6 +98,21 @@ export default function SuppliersPage() {
     }
   }
 
+  async function mergeGroup(g: Supplier[]) {
+    const gid = g[0].id;
+    const keepId = keepSel[gid] || g[0].id;
+    const removeIds = g.filter((s) => s.id !== keepId).map((s) => s.id);
+    if (!removeIds.length) return;
+    const keepName = g.find((s) => s.id === keepId)?.name;
+    if (!confirm(`دمج ${g.length} موردين في «${keepName}»؟\nكل فواتير وأوامر الباقي هتتحول للمورد ده، والباقي هيتحذف.`)) return;
+    try {
+      await api.post('/api/suppliers/merge', { keepId, removeIds });
+      load();
+    } catch (e: any) {
+      alert(e?.response?.data?.message || 'فشل الدمج، حاول مرة أخرى.');
+    }
+  }
+
   const f = (key: keyof typeof empty) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm({ ...form, [key]: e.target.value });
 
@@ -126,19 +142,30 @@ export default function SuppliersPage() {
       {showDup && (() => {
         const { exactGroups, similarGroups } = findDuplicates(suppliers);
         const none = exactGroups.length === 0 && similarGroups.length === 0;
-        const Group = ({ g, kind }: { g: Supplier[]; kind: 'exact' | 'similar' }) => (
-          <div className={`rounded-lg border p-3 ${kind === 'exact' ? 'border-red-200 bg-red-50' : 'border-amber-200 bg-amber-50'}`}>
-            {g.map((s) => (
-              <div key={s.id} className="flex items-center justify-between py-1 border-b last:border-0 border-black/5">
-                <span className="font-medium text-gray-800">{s.name}</span>
-                <span className="flex gap-3">
-                  <button onClick={() => openEdit(s)} className="text-blue-600 hover:underline text-xs">تعديل</button>
-                  <button onClick={() => handleDelete(s.id, s.name)} className="text-red-500 hover:underline text-xs">حذف</button>
-                </span>
+        const Group = ({ g, kind }: { g: Supplier[]; kind: 'exact' | 'similar' }) => {
+          const gid = g[0].id;
+          const keepId = keepSel[gid] || g[0].id;
+          return (
+            <div className={`rounded-lg border p-3 ${kind === 'exact' ? 'border-red-200 bg-red-50' : 'border-amber-200 bg-amber-50'}`}>
+              {g.map((s) => (
+                <div key={s.id} className="flex items-center justify-between py-1 border-b last:border-0 border-black/5">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="radio" name={`keep-${gid}`} checked={keepId === s.id} onChange={() => setKeepSel((k) => ({ ...k, [gid]: s.id }))} />
+                    <span className="font-medium text-gray-800">{s.name}</span>
+                    {keepId === s.id && <span className="text-emerald-600 text-[11px]">← الأصلي</span>}
+                  </label>
+                  <span className="flex gap-3">
+                    <button onClick={() => openEdit(s)} className="text-blue-600 hover:underline text-xs">تعديل</button>
+                    <button onClick={() => handleDelete(s.id, s.name)} className="text-red-500 hover:underline text-xs">حذف</button>
+                  </span>
+                </div>
+              ))}
+              <div className="mt-2 text-left">
+                <button onClick={() => mergeGroup(g)} className="bg-indigo-600 text-white text-xs px-3 py-1.5 rounded-lg hover:bg-indigo-700">🔗 دمج المجموعة في المورد المختار</button>
               </div>
-            ))}
-          </div>
-        );
+            </div>
+          );
+        };
         return (
           <div className="bg-white rounded-xl shadow p-4 mb-6">
             <h3 className="font-bold text-gray-700 mb-3">🔎 كشف الموردين المكررين</h3>
