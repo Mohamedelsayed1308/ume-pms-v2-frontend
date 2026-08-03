@@ -698,7 +698,7 @@ function InvoicesContent() {
               );
             })}
             {displayed.length === 0 && (
-              <tr><td colSpan={10} className="text-center py-8 text-gray-400">لا توجد فواتير</td></tr>
+              <tr><td colSpan={14} className="text-center py-8 text-gray-400">لا توجد فواتير</td></tr>
             )}
           </tbody>
         </table>
@@ -804,7 +804,7 @@ function InvoicesContent() {
                 <select value={form.item_id} onChange={(e) => setForm({ ...form, item_id: e.target.value })}
                   className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
                   <option value="">— اختر البند —</option>
-                  {items.filter((it) => it.is_active !== false).map((it) => <option key={it.id} value={it.id}>{it.name}</option>)}
+                  {items.filter((it) => it.is_active !== false || it.id === form.item_id).map((it) => <option key={it.id} value={it.id}>{it.name}{it.is_active === false ? ' (موقوف)' : ''}</option>)}
                 </select>
               </div>
               <div className="col-span-2">

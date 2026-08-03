@@ -40,7 +40,7 @@ export default function ItemsPage() {
   async function remove(it: Item) {
     if (!confirm(`حذف البند "${it.name}"؟`)) return;
     try { await api.delete(`/api/items/${it.id}`); load(); }
-    catch { alert('لا يمكن الحذف — البند مستخدم في فواتير. أوقفه بدل الحذف.'); }
+    catch (e: any) { alert(e?.response?.data?.message || 'تعذّر حذف البند، حاول مرة أخرى.'); }
   }
 
   return (
