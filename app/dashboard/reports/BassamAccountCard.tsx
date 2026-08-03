@@ -24,9 +24,14 @@ function parsePastedTransfers(text: string): Transfer[] {
       let y = dm[3]; if (y.length === 2) y = '20' + y;
       if (mo) { month = `${y}-${mo}`; date = `${y}-${mo}-${d}`; }
     }
-    const nums = (line.match(/\d[\d,]*(?:\.\d+)?/g) || []).map((s) => parseFloat(s.replace(/,/g, ''))).filter((n) => !isNaN(n) && n > 0);
-    const big = nums.filter((n) => n >= 1000);
-    const amount = (big.length ? Math.max(...big) : (nums.length ? Math.max(...nums) : 0));
+    // المبلغ = الأرقام ذات العلامة العشرية أولاً، ثم فاصلة الآلاف، ثم الأكبر (لتجنّب أرقام المذكرات/الفواتير الصحيحة الضخمة)
+    const tokens = line.match(/\d[\d,]*(?:\.\d+)?/g) || [];
+    const val = (t: string) => parseFloat(t.replace(/,/g, ''));
+    const dec = tokens.filter((t) => /\.\d/.test(t)).map(val).filter((n) => n > 0);
+    const com = tokens.filter((t) => t.includes(',')).map(val).filter((n) => n > 0);
+    const all = tokens.map(val).filter((n) => n > 0);
+    const big = all.filter((n) => n >= 1000);
+    const amount = dec.length ? Math.max(...dec) : com.length ? Math.max(...com) : big.length ? Math.max(...big) : (all.length ? Math.max(...all) : 0);
     const noteM = line.match(/[؀-ۿ][؀-ۿ\s()\-.،0-9A-Za-z]*/);
     const note = noteM ? noteM[0].trim() : '';
     if (amount > 0) out.push({ month, date, amount: String(amount), note });
