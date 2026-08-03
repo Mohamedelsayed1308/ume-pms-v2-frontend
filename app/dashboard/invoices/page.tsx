@@ -506,6 +506,14 @@ function InvoicesContent() {
     for (let i = 0; i < bulkItems.length; i++) {
       const item = bulkItems[i];
       if (item.status !== 'ready') continue;
+      // تحقق الإهلاك (نفس قاعدة الفورم العادي) قبل الحفظ
+      if (item.data.charge_type === 'depreciate') {
+        const m = parseInt(item.data.depreciation_months);
+        if (!m || m < 2) {
+          setBulkItems((prev) => prev.map((it, idx) => idx === i ? { ...it, status: 'error', error: 'أدخل عدد شهور الإهلاك (شهرين أو أكثر) أو غيّر نوع التحميل لِـ «تخص شهرها»' } : it));
+          continue;
+        }
+      }
       setBulkItems((prev) => prev.map((it, idx) => idx === i ? { ...it, status: 'saving' } : it));
       try {
         const { charge_type, depreciation_months, item_id, ...restData } = item.data;
