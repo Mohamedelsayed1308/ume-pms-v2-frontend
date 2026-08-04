@@ -25,7 +25,9 @@ function parsePastedTransfers(text: string): Transfer[] {
       if (mo) { month = `${y}-${mo}`; date = `${y}-${mo}-${d}`; }
     }
     // المبلغ = الأرقام ذات العلامة العشرية أولاً، ثم فاصلة الآلاف، ثم الأكبر (لتجنّب أرقام المذكرات/الفواتير الصحيحة الضخمة)
-    const tokens = line.match(/\d[\d,]*(?:\.\d+)?/g) || [];
+    // نشيل التاريخ من السطر الأول عشان أرقامه (خصوصاً سنة 4 خانات) ماتتحسبش كمبلغ
+    const amountSrc = dm ? line.replace(dm[0], ' ') : line;
+    const tokens = amountSrc.match(/\d[\d,]*(?:\.\d+)?/g) || [];
     const val = (t: string) => parseFloat(t.replace(/,/g, ''));
     const dec = tokens.filter((t) => /\.\d/.test(t)).map(val).filter((n) => n > 0);
     const com = tokens.filter((t) => t.includes(',')).map(val).filter((n) => n > 0);
@@ -78,7 +80,14 @@ export default function BassamAccountCard({ vesselKey = 'Alcudia', storageKey = 
     }).catch(() => {});
   }, [vesselKey, storageKey]);
 
-  const months = useMemo(() => [...new Set(Object.keys(liqByMonth))].sort(), [liqByMonth]);
+  // الشهور = اتحاد كل المصادر (سيولة + إضافات + بنكر + تحويلات) عشان أي قيمة مُدخلة تظهر وتأثّر في الرصيد ولا تتبلع بصمت
+  const months = useMemo(() => {
+    const s = new Set<string>(Object.keys(liqByMonth));
+    for (const m of Object.keys(acc.add)) if (m) s.add(m);
+    for (const m of Object.keys(acc.bunker)) if (m) s.add(m);
+    for (const t of acc.transfers) if (t.month) s.add(t.month);
+    return [...s].sort();
+  }, [liqByMonth, acc]);
 
   useEffect(() => {
     if (months.length) { setFrom((f) => f || months[0]); setTo((t) => t || months[months.length - 1]); }
