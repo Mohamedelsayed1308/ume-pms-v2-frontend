@@ -59,6 +59,7 @@ export interface VesselConfig {
   dbVesselName?: string;   // اسم السفينة في قاعدة البيانات (لجلب فواتيرها)
   salariesByMonth?: Record<string, number>; // مرتبات افتراضية لكل شهر ('YYYY-MM' → USD)
   bassamAccount?: boolean; // زر حساب وكيل البسّام داخل الكارت
+  bassamStorageKey?: string; // مفتاح تخزين حساب البسّام المستقل (افتراضي BassamAccount)
   hideAgentLiquidity?: boolean; // إخفاء عرض السيولة عند الوكلاء
   col: {
     type: number; ref: number; date: number; collection: number;
@@ -72,7 +73,8 @@ export interface VesselConfig {
 
 export const PELAGOS: VesselConfig = {
   vessel: 'Pelagos', sheetKey: 'PELAGOS', agentExport: 'وكيل الاتحاد', agentImport: 'وكيل البسّام',
-  col: { type: 0, ref: 1, date: 3, collection: 4, truckC: 5, truck: 6, vehC: 7, veh: 8, passC: 9, pass: 10, houryaC: 11, discharge: 12, O: 14, P: 15, bunker: 23, balance: 32 },
+  bassamAccount: true, bassamStorageKey: 'BassamAccountPelagos',
+  col: { type: 0, ref: 1, date: 3, collection: 4, truckC: 5, truck: 6, vehC: 7, veh: 8, passC: 9, pass: 10, houryaC: 11, discharge: 12, O: 14, P: 15, bunker: 23, balance: 32, bassamLiq: 39 },
   exportExp: [
     { key: 'shipOrder60', label: 'عمولة إذن الشحن 60%', col: 24 },
     { key: 'freeZone2', label: 'Free Zone 2%', col: 25 },
@@ -911,7 +913,7 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
               <h3 className="font-bold text-gray-800">📒 حساب وكيل البسّام — {cfg.vessel}</h3>
               <button onClick={() => setShowBassam(false)} className="text-gray-400 hover:text-gray-700 text-xl">✕</button>
             </div>
-            <div className="p-4"><BassamAccountCard /></div>
+            <div className="p-4"><BassamAccountCard vesselKey={cfg.vessel} storageKey={cfg.bassamStorageKey || 'BassamAccount'} vesselLabel={cfg.vessel} /></div>
           </div>
         </div>
       )}

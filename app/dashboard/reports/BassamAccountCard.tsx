@@ -39,7 +39,13 @@ function parsePastedTransfers(text: string): Transfer[] {
   return out;
 }
 
-export default function BassamAccountCard() {
+interface BassamAccountCardProps {
+  vesselKey?: string;   // مفتاح رحلات المركب في /api/vessel-profit (مصدر السيولة الشهرية)
+  storageKey?: string;  // مفتاح تخزين بيانات الحساب اليدوية (مستقل لكل مركب)
+  vesselLabel?: string; // اسم المركب للعرض في رسالة عدم وجود بيانات
+}
+
+export default function BassamAccountCard({ vesselKey = 'Alcudia', storageKey = 'BassamAccount', vesselLabel = 'الكوديا' }: BassamAccountCardProps = {}) {
   const [liqByMonth, setLiqByMonth] = useState<Record<string, number>>({});
   const [acc, setAcc] = useState<Account>({ opening0: '', add: {}, bunker: {}, transfers: [] });
   const [saving, setSaving] = useState(false);
@@ -56,8 +62,8 @@ export default function BassamAccountCard() {
   const [showPasteBunk, setShowPasteBunk] = useState(false);
 
   useEffect(() => {
-    // السيولة طرف البسّام لكل شهر من بيانات الكوديا المحفوظة (مجموع عمود AK)
-    api.get('/api/vessel-profit/Alcudia').then((res) => {
+    // السيولة طرف البسّام لكل شهر من رحلات المركب المحفوظة (مجموع عمود bassamLiq)
+    api.get(`/api/vessel-profit/${vesselKey}`).then((res) => {
       const voyages = res.data?.voyages;
       if (Array.isArray(voyages)) {
         const m: Record<string, number> = {};
@@ -65,12 +71,12 @@ export default function BassamAccountCard() {
         setLiqByMonth(m);
       }
     }).catch(() => {}).finally(() => setLoaded(true));
-    // بيانات حساب البسّام المحفوظة
-    api.get('/api/vessel-profit/BassamAccount').then((res) => {
+    // بيانات حساب البسّام المحفوظة (مفتاح مستقل لكل مركب)
+    api.get(`/api/vessel-profit/${storageKey}`).then((res) => {
       const man = res.data?.manual;
       if (man && typeof man === 'object') setAcc({ opening0: man.opening0 || '', add: man.add || {}, bunker: man.bunker || {}, transfers: Array.isArray(man.transfers) ? man.transfers : [] });
     }).catch(() => {});
-  }, []);
+  }, [vesselKey, storageKey]);
 
   const months = useMemo(() => [...new Set(Object.keys(liqByMonth))].sort(), [liqByMonth]);
 
@@ -153,7 +159,7 @@ export default function BassamAccountCard() {
   async function save() {
     setSaving(true); setSavedMsg('');
     try {
-      await api.put('/api/vessel-profit/BassamAccount', { manual: acc });
+      await api.put(`/api/vessel-profit/${storageKey}`, { manual: acc });
       setSavedMsg('تم الحفظ ✅'); setTimeout(() => setSavedMsg(''), 2500);
     } catch { setSavedMsg('فشل الحفظ'); } finally { setSaving(false); }
   }
@@ -180,7 +186,7 @@ export default function BassamAccountCard() {
 
       {loaded && months.length === 0 && (
         <div className="bg-amber-50 border border-amber-200 text-amber-800 text-sm rounded-lg px-4 py-3">
-          مفيش بيانات سيولة — احفظ بيانات مركب الكوديا الأول (كارت ربح Alcudia) عشان السيولة الشهرية تظهر هنا، أو أضف القيم يدوياً كإضافات.
+          مفيش بيانات سيولة — احفظ بيانات مركب {vesselLabel} الأول (كارت ربح {vesselKey}) عشان السيولة الشهرية تظهر هنا، أو أضف القيم يدوياً كإضافات.
         </div>
       )}
 
