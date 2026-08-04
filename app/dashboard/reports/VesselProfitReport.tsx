@@ -74,7 +74,7 @@ export interface VesselConfig {
 export const PELAGOS: VesselConfig = {
   vessel: 'Pelagos', sheetKey: 'PELAGOS', agentExport: 'وكيل الاتحاد', agentImport: 'وكيل البسّام',
   bassamAccount: true, bassamStorageKey: 'BassamAccountPelagos',
-  col: { type: 0, ref: 1, date: 3, collection: 4, truckC: 5, truck: 6, vehC: 7, veh: 8, passC: 9, pass: 10, houryaC: 11, discharge: 12, O: 14, P: 15, bunker: 23, balance: 32, bassamLiq: 39 },
+  col: { type: 0, ref: 1, date: 3, collection: 4, truckC: 5, truck: 6, vehC: 7, veh: 8, passC: 9, pass: 10, houryaC: 11, discharge: 12, O: 14, P: 15, bunker: 23, balance: 32, bassamLiq: 36 },
   exportExp: [
     { key: 'shipOrder60', label: 'عمولة إذن الشحن 60%', col: 24 },
     { key: 'freeZone2', label: 'Free Zone 2%', col: 25 },
