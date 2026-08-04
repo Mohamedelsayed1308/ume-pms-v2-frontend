@@ -59,11 +59,12 @@ export interface VesselConfig {
   dbVesselName?: string;   // اسم السفينة في قاعدة البيانات (لجلب فواتيرها)
   salariesByMonth?: Record<string, number>; // مرتبات افتراضية لكل شهر ('YYYY-MM' → USD)
   bassamAccount?: boolean; // زر حساب وكيل البسّام داخل الكارت
+  hideAgentLiquidity?: boolean; // إخفاء عرض السيولة عند الوكلاء
   col: {
     type: number; ref: number; date: number; collection: number;
     truckC: number; truck: number; vehC: number; veh: number;
     passC: number; pass: number; houryaC: number; discharge: number;
-    O: number; P: number; bunker: number; balance: number;
+    O: number; P: number; bunker: number; balance: number; bassamLiq?: number;
   };
   exportExp: ExpItem[];
   importExp: ExpItem[];
@@ -93,12 +94,12 @@ export const PELAGOS: VesselConfig = {
 
 export const ALCUDIA: VesselConfig = {
   vessel: 'Alcudia', sheetKey: 'ALCUDIA', agentExport: 'وكيل بدوي', agentImport: 'وكيل البسّام',
-  linkInvoices: true, dbVesselName: 'Alcudia Express', bassamAccount: true,
+  linkInvoices: true, dbVesselName: 'Alcudia Express', bassamAccount: true, hideAgentLiquidity: true,
   salariesByMonth: {
     '2026-01': 110871.89, '2026-02': 99685.48, '2026-03': 107177.70,
     '2026-04': 142512.74, '2026-05': 104033.26, '2026-06': 104334.94,
   },
-  col: { type: 0, ref: 1, date: 3, collection: 4, truckC: 5, truck: 6, vehC: 7, veh: 8, passC: 9, pass: 10, houryaC: 11, discharge: 12, O: 14, P: 15, bunker: 25, balance: 35 },
+  col: { type: 0, ref: 1, date: 3, collection: 4, truckC: 5, truck: 6, vehC: 7, veh: 8, passC: 9, pass: 10, houryaC: 11, discharge: 12, O: 14, P: 15, bunker: 25, balance: 35, bassamLiq: 36 },
   exportExp: [
     { key: 'otherExpsE', label: 'Other EXPS', col: 24 },
     { key: 'dischargeOrderTax', label: 'Discharge Order Tax', col: 26 },
@@ -141,7 +142,7 @@ interface Side {
   truckC: number; truck: number; vehC: number; veh: number; passC: number; pass: number; houryaC: number; discharge: number;
   exp: Record<string, number>;
 }
-interface Voyage { ref: any; month: string | null; E: Side; I: Side; bunker: number; net: number; O: number; P: number; }
+interface Voyage { ref: any; month: string | null; E: Side; I: Side; bunker: number; net: number; O: number; P: number; bassamLiq: number; }
 const emptySide = (): Side => ({ truckC: 0, truck: 0, vehC: 0, veh: 0, passC: 0, pass: 0, houryaC: 0, discharge: 0, exp: {} });
 
 function parseWorkbook(wb: XLSX.WorkBook, cfg: VesselConfig): Voyage[] {
@@ -166,7 +167,7 @@ function parseWorkbook(wb: XLSX.WorkBook, cfg: VesselConfig): Voyage[] {
     if (row[C.ref] != null && String(row[C.ref]).trim() !== '') cur = row[C.ref];
     if (cur == null) continue;
     const key = String(cur);
-    if (!voy[key]) voy[key] = { ref: cur, month: null, E: emptySide(), I: emptySide(), bunker: 0, net: 0, O: 0, P: 0 };
+    if (!voy[key]) voy[key] = { ref: cur, month: null, E: emptySide(), I: emptySide(), bunker: 0, net: 0, O: 0, P: 0, bassamLiq: 0 };
     const V = voy[key];
     const side = t === 'Exp.' ? V.E : V.I;
     if (t === 'Exp.' && V.month == null && typeof row[C.date] === 'number') V.month = serialToMonth(row[C.date]);
@@ -177,6 +178,7 @@ function parseWorkbook(wb: XLSX.WorkBook, cfg: VesselConfig): Voyage[] {
     V.bunker += num(row[C.bunker]);
     V.net += num(row[C.balance]);
     V.O += num(row[C.O]); V.P += num(row[C.P]);
+    if (C.bassamLiq != null) V.bassamLiq += num(row[C.bassamLiq]);
     const set = t === 'Exp.' ? cfg.exportExp : cfg.importExp;
     for (const e of set) side.exp[e.key] = (side.exp[e.key] || 0) + num(row[e.col]);
   }
@@ -573,7 +575,7 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
               </div>
               <div className="bg-white rounded-xl shadow p-4"><p className="text-xs text-gray-500">إجمالي الإيراد</p><p className="text-xl font-bold text-gray-800 mt-1">{fmt(data.revenue)}</p></div>
               <div className="bg-white rounded-xl shadow p-4"><p className="text-xs text-gray-500">إجمالي المصروفات</p><p className="text-xl font-bold text-red-600 mt-1">{fmt(data.expenses)}</p><p className="text-[11px] text-gray-400 mt-1">بنكر منها: {fmt(data.bunkerCost)}</p></div>
-              <div className="bg-white rounded-xl shadow p-4"><p className="text-xs text-gray-500">السيولة عند الوكلاء</p><p className="text-sm font-semibold text-indigo-700 mt-1">{cfg.agentExport}: {fmt(data.liqIttihad)}</p><p className="text-sm font-semibold text-purple-700">{cfg.agentImport}: {fmt(data.liqBassam)}</p></div>
+              {!cfg.hideAgentLiquidity && <div className="bg-white rounded-xl shadow p-4"><p className="text-xs text-gray-500">السيولة عند الوكلاء</p><p className="text-sm font-semibold text-indigo-700 mt-1">{cfg.agentExport}: {fmt(data.liqIttihad)}</p><p className="text-sm font-semibold text-purple-700">{cfg.agentImport}: {fmt(data.liqBassam)}</p></div>}
             </div>
 
             <div className="bg-white rounded-xl shadow p-4">
@@ -719,6 +721,7 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
               </div>
             )}
 
+            {!cfg.hideAgentLiquidity && (
             <div className="bg-white rounded-xl shadow p-4">
               <h3 className="font-bold text-gray-700 mb-3">السيولة عند كل وكيل</h3>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
@@ -727,6 +730,7 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
                 <div className="bg-gray-50 rounded-lg p-3"><p className="text-gray-500 text-xs">إجمالي التحصيل (P)</p><p className="text-lg font-bold text-gray-800">{fmt(data.P)}</p></div>
               </div>
             </div>
+            )}
 
             {allocVoy.length > 0 && (
               <div className="bg-white rounded-xl shadow p-4 overflow-x-auto">
@@ -855,8 +859,10 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
                 <h3>مصروفات أخرى</h3><table><tbody><tr><td>مرتبات الشهر</td><td>{fmt(data.salaries)}</td></tr></tbody></table>
               </div>
               <div>
-                <h3>السيولة عند الوكلاء</h3>
-                <table><thead><tr><th>{cfg.agentExport} (P−O)</th><th>{cfg.agentImport} (O)</th><th>إجمالي التحصيل (P)</th></tr></thead><tbody><tr><td>{fmt(data.liqIttihad)}</td><td>{fmt(data.liqBassam)}</td><td>{fmt(data.P)}</td></tr></tbody></table>
+                {!cfg.hideAgentLiquidity && <>
+                  <h3>السيولة عند الوكلاء</h3>
+                  <table><thead><tr><th>{cfg.agentExport} (P−O)</th><th>{cfg.agentImport} (O)</th><th>إجمالي التحصيل (P)</th></tr></thead><tbody><tr><td>{fmt(data.liqIttihad)}</td><td>{fmt(data.liqBassam)}</td><td>{fmt(data.P)}</td></tr></tbody></table>
+                </>}
               </div>
             </div>
             {purchases && (

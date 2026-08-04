@@ -7,7 +7,7 @@ const monthLabel = (m: string) => { const [y, mm] = m.split('-'); return `${MONT
 const fmt = (n: number) => Number(n || 0).toLocaleString('en-US', { maximumFractionDigits: 2 });
 
 interface Transfer { month: string; date: string; amount: string; note: string }
-interface Account { opening0: string; add: Record<string, string>; transfers: Transfer[] }
+interface Account { opening0: string; add: Record<string, string>; bunker: Record<string, string>; transfers: Transfer[] }
 
 const MONTHS_EN: Record<string, string> = { jan: '01', feb: '02', mar: '03', apr: '04', may: '05', jun: '06', jul: '07', aug: '08', sep: '09', oct: '10', nov: '11', dec: '12' };
 // تحليل تحويلات ملصوقة من إكسيل (كل سطر: تاريخ + مبلغ + بيان)
@@ -41,7 +41,7 @@ function parsePastedTransfers(text: string): Transfer[] {
 
 export default function BassamAccountCard() {
   const [liqByMonth, setLiqByMonth] = useState<Record<string, number>>({});
-  const [acc, setAcc] = useState<Account>({ opening0: '', add: {}, transfers: [] });
+  const [acc, setAcc] = useState<Account>({ opening0: '', add: {}, bunker: {}, transfers: [] });
   const [saving, setSaving] = useState(false);
   const [savedMsg, setSavedMsg] = useState('');
   const [loaded, setLoaded] = useState(false);
@@ -52,21 +52,23 @@ export default function BassamAccountCard() {
   const [showTransfers, setShowTransfers] = useState(true);
   const [pasteAddText, setPasteAddText] = useState('');
   const [showPasteAdd, setShowPasteAdd] = useState(false);
+  const [pasteBunkText, setPasteBunkText] = useState('');
+  const [showPasteBunk, setShowPasteBunk] = useState(false);
 
   useEffect(() => {
-    // سيولة البسّام لكل شهر من بيانات الكوديا المحفوظة (مجموع عمود O لكل شهر)
+    // السيولة طرف البسّام لكل شهر من بيانات الكوديا المحفوظة (مجموع عمود AK)
     api.get('/api/vessel-profit/Alcudia').then((res) => {
       const voyages = res.data?.voyages;
       if (Array.isArray(voyages)) {
         const m: Record<string, number> = {};
-        for (const v of voyages) { if (v.month) m[v.month] = (m[v.month] || 0) + (Number(v.O) || 0); }
+        for (const v of voyages) { if (v.month) m[v.month] = (m[v.month] || 0) + (Number(v.bassamLiq) || 0); }
         setLiqByMonth(m);
       }
     }).catch(() => {}).finally(() => setLoaded(true));
     // بيانات حساب البسّام المحفوظة
     api.get('/api/vessel-profit/BassamAccount').then((res) => {
       const man = res.data?.manual;
-      if (man && typeof man === 'object') setAcc({ opening0: man.opening0 || '', add: man.add || {}, transfers: Array.isArray(man.transfers) ? man.transfers : [] });
+      if (man && typeof man === 'object') setAcc({ opening0: man.opening0 || '', add: man.add || {}, bunker: man.bunker || {}, transfers: Array.isArray(man.transfers) ? man.transfers : [] });
     }).catch(() => {});
   }, []);
 
@@ -82,10 +84,11 @@ export default function BassamAccountCard() {
       const opening = i === 0 ? (parseFloat(acc.opening0) || 0) : prevClosing;
       const liq = liqByMonth[m] || 0;
       const additions = parseFloat(acc.add[m] || '') || 0;
+      const bunker = parseFloat(acc.bunker[m] || '') || 0;
       const transfersOut = acc.transfers.filter((t) => t.month === m).reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
-      const closing = opening + liq + additions - transfersOut;
+      const closing = opening + liq + additions - transfersOut - bunker;
       prevClosing = closing;
-      return { m, opening, liq, additions, transfersOut, closing };
+      return { m, opening, liq, additions, bunker, transfersOut, closing };
     });
   }, [months, liqByMonth, acc]);
 
@@ -102,6 +105,7 @@ export default function BassamAccountCard() {
   const totalTransfers = acc.transfers.reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
 
   const setAdd = (m: string, v: string) => setAcc((a) => ({ ...a, add: { ...a.add, [m]: v } }));
+  const setBunk = (m: string, v: string) => setAcc((a) => ({ ...a, bunker: { ...a.bunker, [m]: v } }));
   const addTransfer = () => setAcc((a) => ({ ...a, transfers: [...a.transfers, { month: months[months.length - 1] || '', date: '', amount: '', note: '' }] }));
   const setTransfer = (idx: number, patch: Partial<Transfer>) => setAcc((a) => ({ ...a, transfers: a.transfers.map((t, i) => i === idx ? { ...t, ...patch } : t) }));
   const removeTransfer = (idx: number) => setAcc((a) => ({ ...a, transfers: a.transfers.filter((_, i) => i !== idx) }));
@@ -124,6 +128,21 @@ export default function BassamAccountCard() {
       return { ...a, add };
     });
     setPasteAddText(''); setShowPasteAdd(false);
+    if (skipped) alert(`تم التجاهل: ${skipped} سطر بدون تاريخ صالح.`);
+  }
+  // لصق بنكر — تجميع حسب الشهر وإضافته للقيمة الحالية (يُطرح من الحساب)
+  function importPastedBunker() {
+    const parsed = parsePastedTransfers(pasteBunkText);
+    if (!parsed.length) { alert('لم يتم العثور على بيانات بنكر — تأكد إن كل سطر فيه تاريخ ومبلغ.'); return; }
+    const byMonth: Record<string, number> = {};
+    for (const p of parsed) { if (p.month) byMonth[p.month] = (byMonth[p.month] || 0) + (parseFloat(p.amount) || 0); }
+    const skipped = parsed.filter((p) => !p.month).length;
+    setAcc((a) => {
+      const bunker = { ...a.bunker };
+      for (const [m, v] of Object.entries(byMonth)) bunker[m] = String((parseFloat(bunker[m] || '') || 0) + v);
+      return { ...a, bunker };
+    });
+    setPasteBunkText(''); setShowPasteBunk(false);
     if (skipped) alert(`تم التجاهل: ${skipped} سطر بدون تاريخ صالح.`);
   }
 
@@ -167,6 +186,7 @@ export default function BassamAccountCard() {
           <div className="flex items-center gap-3">
             <h3 className="font-bold text-gray-700">📒 كشف حساب وكيل البسّام (شهري)</h3>
             <button onClick={() => setShowPasteAdd((v) => !v)} className="text-xs px-3 py-1.5 rounded-lg border hover:bg-gray-50">📋 لصق إضافات</button>
+            <button onClick={() => setShowPasteBunk((v) => !v)} className="text-xs px-3 py-1.5 rounded-lg border hover:bg-gray-50">⛽ لصق بنكر</button>
           </div>
           {months.length > 0 && (
             <div className="flex items-end gap-2 text-sm">
@@ -197,6 +217,18 @@ export default function BassamAccountCard() {
             </div>
           </div>
         )}
+        {showPasteBunk && (
+          <div className="mb-3 border rounded-lg p-3 bg-gray-50">
+            <p className="text-xs text-gray-500 mb-2">الصق بيانات البنكر من الإكسيل (كل سطر فيه تاريخ ومبلغ) — هتتجمّع على الشهر المناسب وتُطرح من الحساب:</p>
+            <textarea value={pasteBunkText} onChange={(e) => setPasteBunkText(e.target.value)} rows={5}
+              placeholder={'13-Jan-26\tبيان\t\t50,000.00'}
+              className="w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500" dir="ltr" />
+            <div className="flex gap-2 mt-2">
+              <button onClick={importPastedBunker} className="bg-blue-600 text-white text-sm px-4 py-1.5 rounded-lg hover:bg-blue-700">تحليل وطرح</button>
+              <button onClick={() => { setShowPasteBunk(false); setPasteBunkText(''); }} className="text-sm px-4 py-1.5 rounded-lg border hover:bg-gray-100">إلغاء</button>
+            </div>
+          </div>
+        )}
         <table className="w-full text-sm whitespace-nowrap">
           <thead className="text-gray-500 text-xs">
             <tr>
@@ -204,6 +236,7 @@ export default function BassamAccountCard() {
               <th className="text-right py-2 px-2">رصيد أول المدة</th>
               <th className="text-right py-2 px-2">+ سيولة البسّام</th>
               <th className="text-right py-2 px-2">+ إضافات يدوية</th>
+              <th className="text-right py-2 px-2">− بنكر</th>
               <th className="text-right py-2 px-2">− تحويلات لك</th>
               <th className="text-right py-2 px-2">= رصيد آخر المدة</th>
             </tr>
@@ -218,11 +251,15 @@ export default function BassamAccountCard() {
                   <input inputMode="decimal" value={acc.add[r.m] || ''} onChange={(e) => setAdd(r.m, e.target.value)}
                     placeholder="0" className="w-28 border rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400" />
                 </td>
+                <td className="py-1.5 px-2">
+                  <input inputMode="decimal" value={acc.bunker[r.m] || ''} onChange={(e) => setBunk(r.m, e.target.value)}
+                    placeholder="0" className="w-28 border rounded-lg px-2 py-1 text-sm text-red-600 focus:outline-none focus:ring-1 focus:ring-red-400" />
+                </td>
                 <td className="py-1.5 px-2 text-red-600">{r.transfersOut ? fmt(r.transfersOut) : '—'}</td>
                 <td className="py-1.5 px-2 font-bold text-indigo-800">{fmt(r.closing)}</td>
               </tr>
             ))}
-            {displayedRows.length === 0 && <tr><td colSpan={6} className="text-center py-6 text-gray-400">لا توجد شهور في الفترة</td></tr>}
+            {displayedRows.length === 0 && <tr><td colSpan={7} className="text-center py-6 text-gray-400">لا توجد شهور في الفترة</td></tr>}
           </tbody>
         </table>
       </div>
