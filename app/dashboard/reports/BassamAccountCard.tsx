@@ -103,6 +103,10 @@ export default function BassamAccountCard() {
 
   const currentBalance = (rows.length ? rows[rows.length - 1].closing : (parseFloat(acc.opening0) || 0)) - orphanTransfers;
   const totalTransfers = acc.transfers.reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
+  // إجماليات الفترة المعروضة
+  const totals = useMemo(() => displayedRows.reduce((a, r) => ({
+    liq: a.liq + r.liq, additions: a.additions + r.additions, bunker: a.bunker + r.bunker, transfersOut: a.transfersOut + r.transfersOut,
+  }), { liq: 0, additions: 0, bunker: 0, transfersOut: 0 }), [displayedRows]);
 
   const setAdd = (m: string, v: string) => setAcc((a) => ({ ...a, add: { ...a.add, [m]: v } }));
   const setBunk = (m: string, v: string) => setAcc((a) => ({ ...a, bunker: { ...a.bunker, [m]: v } }));
@@ -261,6 +265,19 @@ export default function BassamAccountCard() {
             ))}
             {displayedRows.length === 0 && <tr><td colSpan={7} className="text-center py-6 text-gray-400">لا توجد شهور في الفترة</td></tr>}
           </tbody>
+          {displayedRows.length > 0 && (
+            <tfoot className="border-t-2 border-gray-300 font-bold">
+              <tr>
+                <td className="py-2 px-2 text-gray-700">الإجمالي</td>
+                <td className="py-2 px-2 text-gray-400">—</td>
+                <td className="py-2 px-2 text-emerald-700">{fmt(totals.liq)}</td>
+                <td className="py-2 px-2 text-gray-700">{fmt(totals.additions)}</td>
+                <td className="py-2 px-2 text-red-600">{fmt(totals.bunker)}</td>
+                <td className="py-2 px-2 text-red-600">{fmt(totals.transfersOut)}</td>
+                <td className="py-2 px-2 text-gray-400">—</td>
+              </tr>
+            </tfoot>
+          )}
         </table>
       </div>
 
