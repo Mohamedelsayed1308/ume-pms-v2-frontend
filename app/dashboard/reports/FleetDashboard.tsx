@@ -215,13 +215,15 @@ export default function FleetDashboard() {
           <div className="space-y-2.5">
             {rankedByMetric.map((v) => {
               const val = Number(v[metric]) || 0;
-              const share = totals[metric] ? (val / totals[metric]) * 100 : 0;
+              // الحصة تُعرض فقط للمؤشرات التراكمية الموجبة (الصافي/السيولة ممكن تبقى سالبة أو مختلطة الإشارة فالنسبة تبقى بلا معنى)
+              const showShare = totals[metric] > 0 && metric !== 'net' && metric !== 'liquidity';
+              const share = showShare ? (val / totals[metric]) * 100 : 0;
               const i = data.vessels.indexOf(v.vessel);
               return (
                 <div key={v.vessel}>
                   <div className="flex items-center justify-between text-xs mb-1">
                     <span className="font-medium text-gray-700">{v.vessel}</span>
-                    <span className="text-gray-500">{fmt(val)}{activeMetric.money ? ' $' : ''} · {fmt1(share)}%</span>
+                    <span className="text-gray-500">{fmt(val)}{activeMetric.money ? ' $' : ''}{showShare ? ` · ${fmt1(share)}%` : ''}</span>
                   </div>
                   <div className="h-3 rounded-full bg-gray-100 overflow-hidden">
                     <div className="h-full rounded-full" style={{ width: `${(Math.abs(val) / maxMetric) * 100}%`, background: val < 0 ? '#dc2626' : VESSEL_COLORS[i % VESSEL_COLORS.length] }} />
