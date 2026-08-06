@@ -5,11 +5,12 @@ import * as XLSX from 'xlsx';
 import VesselProfitReport, { PELAGOS, ALCUDIA } from './VesselProfitReport';
 import GubalProfitReport from './GubalProfitReport';
 import ExchangeRatesCard from './ExchangeRatesCard';
+import FleetDashboard from './FleetDashboard';
 
 const statusLabel: Record<string, string> = { unpaid: 'غير مدفوعة', partial: 'جزئي', paid: 'مدفوعة', cancelled: 'ملغاة' };
 const statusColor: Record<string, string> = { unpaid: 'bg-red-100 text-red-700', partial: 'bg-yellow-100 text-yellow-700', paid: 'bg-green-100 text-green-700', cancelled: 'bg-gray-100 text-gray-500' };
 
-type ReportType = 'supplier-statement' | 'unpaid-supplier' | 'unpaid-vessel' | 'vessel-suppliers' | 'due-alerts' | 'user-activity' | 'dept-delays' | 'vessel-profit' | 'alcudia-profit' | 'gubal-profit' | 'exchange-rates';
+type ReportType = 'fleet-dashboard' | 'supplier-statement' | 'unpaid-supplier' | 'unpaid-vessel' | 'vessel-suppliers' | 'due-alerts' | 'user-activity' | 'dept-delays' | 'vessel-profit' | 'alcudia-profit' | 'gubal-profit' | 'exchange-rates';
 
 interface UserReport {
   user_id: string;
@@ -44,7 +45,7 @@ function exportMultiToExcel(sheets: { name: string; rows: any[] }[], filename: s
 const num = (n: any) => Number(n || 0).toLocaleString();
 
 export default function ReportsPage() {
-  const [reportType, setReportType] = useState<ReportType>('due-alerts');
+  const [reportType, setReportType] = useState<ReportType>('fleet-dashboard');
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [vessels, setVessels] = useState<any[]>([]);
   const [selectedSuppliers, setSelectedSuppliers] = useState<string[]>([]);
@@ -134,6 +135,13 @@ export default function ReportsPage() {
   }
 
   const reportGroups = [
+    {
+      title: 'لوحة الأسطول', dot: 'bg-indigo-500',
+      sel: 'border-indigo-500 bg-indigo-50 ring-1 ring-indigo-200', idle: 'border-gray-200 bg-white hover:border-indigo-300',
+      items: [
+        { id: 'fleet-dashboard', label: '🚢 لوحة الأسطول التنفيذية', desc: 'مؤشرات ومقارنات وأعداد المنقولات لكل الأسطول + مساعد ذكي' },
+      ],
+    },
     {
       title: 'المستحقات والتنبيهات', dot: 'bg-red-500',
       sel: 'border-red-500 bg-red-50 ring-1 ring-red-200', idle: 'border-gray-200 bg-white hover:border-red-300',
@@ -244,13 +252,14 @@ export default function ReportsPage() {
       </div>
 
       {/* Vessel profit — self-contained reports */}
+      {reportType === 'fleet-dashboard' && <FleetDashboard />}
       {reportType === 'vessel-profit' && <VesselProfitReport config={PELAGOS} />}
       {reportType === 'alcudia-profit' && <VesselProfitReport config={ALCUDIA} />}
       {reportType === 'gubal-profit' && <GubalProfitReport />}
       {reportType === 'exchange-rates' && <ExchangeRatesCard />}
 
       {/* Filters */}
-      {reportType !== 'vessel-profit' && reportType !== 'alcudia-profit' && reportType !== 'gubal-profit' && reportType !== 'exchange-rates' && (
+      {reportType !== 'fleet-dashboard' && reportType !== 'vessel-profit' && reportType !== 'alcudia-profit' && reportType !== 'gubal-profit' && reportType !== 'exchange-rates' && (
       <div className="bg-white rounded-xl shadow p-4 mb-6 flex items-end gap-4 flex-wrap">
         {needsSupplier && (
           <div className="flex-1 min-w-[280px]">
