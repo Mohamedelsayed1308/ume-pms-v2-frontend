@@ -752,6 +752,17 @@ function InvoicesContent() {
                     <span title={inv.comment || ''} className="line-clamp-2">{inv.comment || '—'}</span>
                   </td>
                   <td className="px-4 py-3 flex gap-2">
+                    {inv.status !== 'paid' && inv.status !== 'cancelled' && (
+                      <button
+                        onClick={async () => {
+                          if (!confirm(`تسجيل الفاتورة "${inv.invoice_number}" كمدفوعة بالكامل (${Number(inv.total_amount).toLocaleString()} ${inv.currency})؟`)) return;
+                          const today = new Date().toISOString().slice(0, 10);
+                          await api.put(`/api/invoices/${inv.id}`, { approval_status: 'paid', approval_status_date: today });
+                          load();
+                        }}
+                        className="text-emerald-600 hover:underline text-xs font-medium"
+                      >💵 دفع</button>
+                    )}
                     <button onClick={() => openEdit(inv)} className="text-blue-600 hover:underline text-xs">تعديل</button>
                     <button onClick={() => openAttachments(inv)} className="text-green-600 hover:underline text-xs">📎 مرفقات</button>
                     <button onClick={() => handleDelete(inv.id, inv.invoice_number)} className="text-red-500 hover:underline text-xs">حذف</button>
