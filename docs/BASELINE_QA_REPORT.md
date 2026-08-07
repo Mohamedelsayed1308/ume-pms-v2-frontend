@@ -11,7 +11,7 @@ Reference snapshot of the CURRENT production system. Every future phase is teste
 
 | # | Route | Loads | API | Data | Create | Edit | Delete | Search | Filters | Responsive | Notes |
 |---|-------|:----:|:---:|:----:|:------:|:----:|:------:|:------:|:-------:|:----------:|-------|
-| 1 | `/login` | ⏳ | ⏳ | — | — | — | — | — | — | ⏳ | JWT → localStorage |
+| 1 | `/login` | ✅ | ✅ | ✅ | — | — | — | — | — | ✅ | 200; assets 200; 0 console errors; renders on mobile 375px |
 | 2 | `/dashboard` | ⏳ | ⏳ | ⏳ | — | — | — | — | — | ⏳ | current home |
 | 3 | `/dashboard/vessels` | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | |
 | 4 | `/dashboard/suppliers` | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | merge/dedupe exists |
@@ -27,6 +27,18 @@ Reference snapshot of the CURRENT production system. Every future phase is teste
 | 14 | `/dashboard/profit-distribution` | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | |
 | 15 | `/dashboard/tasks` | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | AI assistant |
 | 16 | `/dashboard/users` (admin) | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | — | — | ⏳ | permissions screen |
+
+## Smoke test — session 1 (unauthenticated surface)
+- Backend reachable post security-deploy: `/` → 404 (no root route), `/api/vessels` → 401, `/api/fleet/dashboard` → 401. Clean 401s + `synchronize:true` (which needs a live DB at boot) ⇒ **backend booted and DB connection succeeded**.
+- Frontend `/login`: 200, all `_next` assets 200, **0 console errors**, form renders on desktop and mobile (375px).
+- Confirmed issue: browser tab title is "Create Next App" (default metadata) — cosmetic.
+
+## Blocked — needs an authenticated session (routes 2–16 + CRUD)
+The 15 dashboard routes and CRUD flows require login. Claude will not enter passwords. To complete this section, choose one:
+1. You log in yourself and walk the checklist, or
+2. Authorize a Claude-in-Chrome session where you are already logged in (Claude drives read-only page loads), or
+3. Provide a disposable test account via your password manager (values never shown to Claude).
+CRUD smoke tests will use clearly-labeled disposable test records only (e.g. `TEST-QA-<timestamp>`), never real production records.
 
 ## Known issues observed during static discovery
 - Root `app/layout.tsx` sets `lang="en"` and default `metadata` ("Create Next App") while the app is Arabic/RTL — cosmetic/SEO/i18n inconsistency.
