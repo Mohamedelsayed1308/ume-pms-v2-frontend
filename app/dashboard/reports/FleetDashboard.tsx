@@ -14,19 +14,26 @@ const MONTH_AR = ['ينا', 'فبر', 'مار', 'أبر', 'ماي', 'يون', '�
 const monthLabel = (m: string) => { const [y, mm] = m.split('-'); return `${MONTH_AR[+mm - 1]} ${y.slice(2)}`; };
 const fmt = (n: number) => Math.round(Number(n) || 0).toLocaleString('en-US');
 const fmt1 = (n: number) => (Number(n) || 0).toLocaleString('en-US', { maximumFractionDigits: 1 });
+// صيغة مختصرة للأرقام الكبيرة (2.3M / 45.6K) مع الحفاظ على العلامة
+function fmtC(n: number): string {
+  const v = Number(n) || 0; const a = Math.abs(v); const s = v < 0 ? '-' : '';
+  if (a >= 1e6) return `${s}${(a / 1e6).toFixed(a >= 1e7 ? 0 : 1)}M`;
+  if (a >= 1e4) return `${s}${(a / 1e3).toFixed(0)}K`;
+  return fmt(v);
+}
 
-const VESSEL_COLORS = ['#2563eb', '#059669', '#d97706', '#7c3aed', '#dc2626', '#0891b2', '#db2777', '#65a30d'];
+const VESSEL_COLORS = ['#4f46e5', '#059669', '#d97706', '#7c3aed', '#dc2626', '#0891b2', '#db2777', '#65a30d'];
 
 type MetricKey = 'voyages' | 'trucks' | 'vehicles' | 'passengers' | 'net' | 'revenue' | 'expenses' | 'liquidity';
-const METRICS: { key: MetricKey; label: string; money: boolean; goodUp: boolean }[] = [
-  { key: 'voyages', label: 'الرحلات', money: false, goodUp: true },
-  { key: 'trucks', label: 'الشاحنات', money: false, goodUp: true },
-  { key: 'vehicles', label: 'السيارات', money: false, goodUp: true },
-  { key: 'passengers', label: 'الركاب', money: false, goodUp: true },
-  { key: 'net', label: 'صافي الربح', money: true, goodUp: true },
-  { key: 'revenue', label: 'الإيراد', money: true, goodUp: true },
-  { key: 'expenses', label: 'المصروفات', money: true, goodUp: false },
-  { key: 'liquidity', label: 'السيولة', money: true, goodUp: true },
+const METRICS: { key: MetricKey; label: string; money: boolean; goodUp: boolean; icon: string; color: string; grad: [string, string] }[] = [
+  { key: 'voyages', label: 'الرحلات', money: false, goodUp: true, icon: '🧭', color: '#4f46e5', grad: ['#6366f1', '#4f46e5'] },
+  { key: 'trucks', label: 'الشاحنات', money: false, goodUp: true, icon: '🚚', color: '#2563eb', grad: ['#3b82f6', '#2563eb'] },
+  { key: 'vehicles', label: 'السيارات', money: false, goodUp: true, icon: '🚗', color: '#d97706', grad: ['#f59e0b', '#d97706'] },
+  { key: 'passengers', label: 'الركاب', money: false, goodUp: true, icon: '👥', color: '#7c3aed', grad: ['#8b5cf6', '#7c3aed'] },
+  { key: 'net', label: 'صافي الربح', money: true, goodUp: true, icon: '💰', color: '#059669', grad: ['#10b981', '#059669'] },
+  { key: 'revenue', label: 'الإيراد', money: true, goodUp: true, icon: '📈', color: '#0891b2', grad: ['#06b6d4', '#0891b2'] },
+  { key: 'expenses', label: 'المصروفات', money: true, goodUp: false, icon: '💸', color: '#e11d48', grad: ['#f43f5e', '#e11d48'] },
+  { key: 'liquidity', label: 'السيولة', money: true, goodUp: true, icon: '💧', color: '#0284c7', grad: ['#38bdf8', '#0284c7'] },
 ];
 
 function sum(rows: MonthRow[], k: MetricKey) { return rows.reduce((s, r) => s + (Number(r[k]) || 0), 0); }
@@ -59,28 +66,24 @@ export default function FleetDashboard() {
   useEffect(() => { load(false); }, []);
 
   const months = data?.months || [];
-  // نطبّع لو المستخدم اختار «من» بعد «إلى»
   const lo = from && to ? (from <= to ? from : to) : (from || to);
   const hi = from && to ? (from <= to ? to : from) : (to || from);
   const inRange = (m: string) => (!lo || m >= lo) && (!hi || m <= hi);
   const monthsInRange = useMemo(() => months.filter(inRange), [months, lo, hi]);
 
-  // صفوف الفترة والمراكب المختارة
   const rows = useMemo(
     () => (data?.monthly || []).filter((r) => inRange(r.month) && selVessels.includes(r.vessel)),
     [data, lo, hi, selVessels],
   );
-  // الفترة السابقة (نفس عدد الشهور قبل بداية المدى تمامًا) للمقارنة — تُلغى لو مفيش تاريخ كافٍ
   const prevRows = useMemo(() => {
     if (!data || !lo) return [];
     const i = months.indexOf(lo);
     const len = monthsInRange.length;
-    if (i < 0 || len === 0 || i - len < 0) return []; // نافذة سابقة غير مكتملة → بلا مقارنة مضلِّلة
+    if (i < 0 || len === 0 || i - len < 0) return [];
     const set = new Set(months.slice(i - len, i));
     return data.monthly.filter((r) => set.has(r.month) && selVessels.includes(r.vessel));
   }, [data, lo, selVessels, monthsInRange]);
 
-  // تجميع لكل مركب على الفترة
   const perVessel = useMemo(() => {
     const map: Record<string, MonthRow> = {};
     for (const r of rows) {
@@ -105,14 +108,23 @@ export default function FleetDashboard() {
     return t;
   }, [prevRows]);
 
+  // إجمالي الأسطول لكل شهر (لكل مؤشر) — يغذّي الـ sparkline في بطاقات المؤشرات
+  const fleetMonthly = useMemo(() => monthsInRange.map((m) => {
+    const mr = rows.filter((r) => r.month === m);
+    const o: Record<string, number> = { month: m as any };
+    for (const mt of METRICS) o[mt.key] = sum(mr, mt.key);
+    return o;
+  }), [rows, monthsInRange]);
+
   const toggleVessel = (v: string) =>
     setSelVessels((s) => s.includes(v) ? (s.length > 1 ? s.filter((x) => x !== v) : s) : [...s, v]);
 
-  if (loading) return <div className="bg-white rounded-xl shadow p-10 text-center text-gray-400">جاري تحميل بيانات الأسطول…</div>;
+  if (loading) return <Skeleton />;
   if (error) return (
-    <div className="bg-white rounded-xl shadow p-6 text-center">
-      <p className="text-red-500 mb-3">{error}</p>
-      <button onClick={() => load(true)} className="bg-blue-600 text-white text-sm px-4 py-2 rounded-lg">إعادة المحاولة</button>
+    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-10 text-center">
+      <div className="text-4xl mb-3">📡</div>
+      <p className="text-red-500 mb-4 font-medium">{error}</p>
+      <button onClick={() => load(true)} className="bg-indigo-600 text-white text-sm px-5 py-2.5 rounded-xl hover:bg-indigo-700 shadow-sm">إعادة المحاولة</button>
     </div>
   );
   if (!data) return null;
@@ -121,8 +133,8 @@ export default function FleetDashboard() {
   const maxMetric = Math.max(1, ...perVessel.map((v) => Math.abs(Number(v[metric]) || 0)));
   const rankedByMetric = [...perVessel].sort((a, b) => (Number(b[metric]) || 0) - (Number(a[metric]) || 0));
   const rankedTable = [...perVessel].sort((a, b) => (Number(b[sortKey]) || 0) - (Number(a[sortKey]) || 0));
+  const topVessel = rankedTable[0]?.vessel;
 
-  // سلاسل الاتجاه الشهري لكل مركب — نفس تعيين اللون في كل مكان (حسب ترتيب data.vessels)
   const series = selVessels.map((v) => ({
     name: v, color: VESSEL_COLORS[Math.max(0, data.vessels.indexOf(v)) % VESSEL_COLORS.length],
     values: monthsInRange.map((m) => {
@@ -131,41 +143,57 @@ export default function FleetDashboard() {
     }),
   }));
 
+  const RANK_BADGE = ['🥇', '🥈', '🥉'];
+
   return (
-    <div className="space-y-4">
-      {/* رأس اللوحة + فلاتر */}
-      <div className="bg-gradient-to-l from-indigo-600 to-blue-600 text-white rounded-xl shadow p-4">
-        <div className="flex items-center justify-between flex-wrap gap-3">
+    <div className="space-y-5" dir="rtl">
+      {/* ── رأس اللوحة (Hero) ── */}
+      <div className="relative overflow-hidden rounded-2xl shadow-lg text-white p-5"
+        style={{ background: 'linear-gradient(120deg,#312e81 0%,#4f46e5 45%,#2563eb 100%)' }}>
+        <div className="absolute -top-16 -left-16 w-64 h-64 rounded-full opacity-20" style={{ background: 'radial-gradient(circle,#a5b4fc,transparent 70%)' }} />
+        <div className="relative flex items-start justify-between flex-wrap gap-3">
           <div>
-            <h2 className="text-xl font-bold flex items-center gap-2">🚢 لوحة الأسطول التنفيذية</h2>
-            <p className="text-xs opacity-80 mt-1">قراءة حيّة من شيت جوجل — آخر تحديث: {new Date(data.generatedAt).toLocaleString('ar-EG')}</p>
+            <h2 className="text-2xl font-extrabold flex items-center gap-2 tracking-tight">🚢 لوحة الأسطول التنفيذية</h2>
+            <div className="flex items-center gap-2 mt-2 text-xs">
+              <span className="inline-flex items-center gap-1.5 bg-emerald-400/20 text-emerald-100 px-2 py-0.5 rounded-full">
+                <span className="relative flex h-2 w-2"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-300 opacity-75" /><span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-300" /></span>
+                مباشر من جوجل شيت
+              </span>
+              <span className="opacity-75">آخر تحديث: {new Date(data.generatedAt).toLocaleString('ar-EG', { dateStyle: 'medium', timeStyle: 'short' })}</span>
+            </div>
           </div>
-          <button onClick={() => load(true)} disabled={refreshing} className="bg-white/15 hover:bg-white/25 text-sm px-4 py-2 rounded-lg disabled:opacity-50">
-            {refreshing ? 'جاري التحديث…' : '🔄 تحديث البيانات'}
+          <button onClick={() => load(true)} disabled={refreshing}
+            className="bg-white/15 hover:bg-white/25 backdrop-blur text-sm px-4 py-2 rounded-xl disabled:opacity-50 transition-all flex items-center gap-2 shadow-sm">
+            <span className={refreshing ? 'inline-block animate-spin' : ''}>🔄</span>{refreshing ? 'جاري التحديث…' : 'تحديث'}
           </button>
         </div>
-        <div className="flex items-end gap-3 flex-wrap mt-4">
+
+        <div className="relative flex items-end gap-3 flex-wrap mt-5">
           <div>
-            <label className="block text-xs opacity-80 mb-1">من</label>
-            <select value={from} onChange={(e) => setFrom(e.target.value)} className="text-gray-800 rounded-lg px-2 py-1.5 text-sm">
+            <label className="block text-[11px] opacity-75 mb-1">من شهر</label>
+            <select value={from} onChange={(e) => setFrom(e.target.value)} className="text-gray-800 rounded-xl px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-white/60">
               {months.map((m) => <option key={m} value={m}>{monthLabel(m)}</option>)}
             </select>
           </div>
           <div>
-            <label className="block text-xs opacity-80 mb-1">إلى</label>
-            <select value={to} onChange={(e) => setTo(e.target.value)} className="text-gray-800 rounded-lg px-2 py-1.5 text-sm">
+            <label className="block text-[11px] opacity-75 mb-1">إلى شهر</label>
+            <select value={to} onChange={(e) => setTo(e.target.value)} className="text-gray-800 rounded-xl px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-white/60">
               {months.map((m) => <option key={m} value={m}>{monthLabel(m)}</option>)}
             </select>
           </div>
-          <div className="flex-1 min-w-[200px]">
-            <label className="block text-xs opacity-80 mb-1">المراكب</label>
+          <div className="flex-1 min-w-[220px]">
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-[11px] opacity-75">المراكب ({selVessels.length}/{data.vessels.length})</label>
+              <button onClick={() => setSelVessels(data.vessels)} className="text-[11px] underline opacity-80 hover:opacity-100">تحديد الكل</button>
+            </div>
             <div className="flex flex-wrap gap-1.5">
               {data.vessels.map((v, i) => {
                 const on = selVessels.includes(v);
+                const c = VESSEL_COLORS[i % VESSEL_COLORS.length];
                 return (
                   <button key={v} onClick={() => toggleVessel(v)}
-                    className={`text-xs px-2.5 py-1 rounded-full border transition-all ${on ? 'bg-white text-indigo-700 border-white font-medium' : 'bg-transparent text-white/80 border-white/40'}`}>
-                    <span className="inline-block w-2 h-2 rounded-full ml-1 align-middle" style={{ background: VESSEL_COLORS[i % VESSEL_COLORS.length] }} />
+                    className={`text-xs px-2.5 py-1 rounded-full border transition-all ${on ? 'bg-white text-gray-800 border-white font-semibold shadow-sm' : 'bg-transparent text-white/70 border-white/30 hover:border-white/60'}`}>
+                    <span className="inline-block w-2 h-2 rounded-full ml-1 align-middle" style={{ background: on ? c : 'currentColor' }} />
                     {v}
                   </button>
                 );
@@ -175,7 +203,7 @@ export default function FleetDashboard() {
         </div>
       </div>
 
-      {/* مؤشرات رئيسية */}
+      {/* ── بطاقات المؤشرات ── */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {METRICS.map((m) => {
           const cur = totals[m.key] || 0;
@@ -183,101 +211,120 @@ export default function FleetDashboard() {
           const pct = prev > 0 ? ((cur - prev) / prev) * 100 : null;
           const up = cur >= prev;
           const good = pct == null ? null : (up === m.goodUp);
+          const spark = fleetMonthly.map((x) => Number(x[m.key]) || 0);
+          const active = metric === m.key;
           return (
-            <div key={m.key} className="bg-white rounded-xl shadow p-4">
-              <p className="text-xs text-gray-500">{m.label}{m.money ? ' ($)' : ''}</p>
-              <p className="text-xl font-bold text-gray-800 mt-1">{fmt(cur)}</p>
-              {pct != null && (
-                <p className={`text-xs mt-1 ${good ? 'text-emerald-600' : 'text-red-500'}`}>
-                  {up ? '▲' : '▼'} {fmt1(Math.abs(pct))}% عن الفترة السابقة
-                </p>
-              )}
-            </div>
+            <button key={m.key} onClick={() => setMetric(m.key)}
+              className={`text-right bg-white rounded-2xl border p-4 transition-all hover:shadow-md ${active ? 'ring-2 shadow-md' : 'border-gray-100 shadow-sm'}`}
+              style={active ? { borderColor: m.color, boxShadow: `0 0 0 2px ${m.color}33` } : {}}>
+              <div className="flex items-center justify-between">
+                <span className="w-9 h-9 rounded-xl flex items-center justify-center text-lg" style={{ background: `${m.color}15` }}>{m.icon}</span>
+                {pct != null && (
+                  <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${good ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-500'}`}>
+                    {up ? '▲' : '▼'} {fmt1(Math.abs(pct))}%
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-gray-500 mt-3">{m.label}{m.money ? ' ($)' : ''}</p>
+              <p className="text-2xl font-extrabold text-gray-800 mt-0.5 tabular-nums" title={fmt(cur)}>{m.money ? fmtC(cur) : fmt(cur)}</p>
+              <div className="mt-2 h-7"><Sparkline values={spark} color={m.color} /></div>
+            </button>
           );
         })}
       </div>
 
-      {/* اختيار المؤشر للرسوم */}
-      <div className="bg-white rounded-xl shadow p-3 flex items-center gap-2 flex-wrap">
-        <span className="text-sm text-gray-500">المؤشر:</span>
-        {METRICS.map((m) => (
-          <button key={m.key} onClick={() => setMetric(m.key)}
-            className={`text-xs px-3 py-1.5 rounded-full border ${metric === m.key ? 'bg-indigo-600 text-white border-indigo-600' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
-            {m.label}
-          </button>
-        ))}
-      </div>
-
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* مقارنة المراكب + الحصص */}
-        <div className="bg-white rounded-xl shadow p-4">
-          <h3 className="font-bold text-gray-700 mb-3">مقارنة المراكب — {activeMetric.label}</h3>
-          <div className="space-y-2.5">
-            {rankedByMetric.map((v) => {
+        {/* ── مقارنة المراكب ── */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-bold text-gray-800">ترتيب المراكب</h3>
+            <span className="text-xs px-2.5 py-1 rounded-full" style={{ background: `${activeMetric.color}15`, color: activeMetric.color }}>{activeMetric.icon} {activeMetric.label}</span>
+          </div>
+          <div className="space-y-3">
+            {rankedByMetric.map((v, rank) => {
               const val = Number(v[metric]) || 0;
-              // الحصة تُعرض فقط للمؤشرات التراكمية الموجبة (الصافي/السيولة ممكن تبقى سالبة أو مختلطة الإشارة فالنسبة تبقى بلا معنى)
               const showShare = totals[metric] > 0 && metric !== 'net' && metric !== 'liquidity';
               const share = showShare ? (val / totals[metric]) * 100 : 0;
               const i = data.vessels.indexOf(v.vessel);
+              const c = VESSEL_COLORS[i % VESSEL_COLORS.length];
               return (
                 <div key={v.vessel}>
-                  <div className="flex items-center justify-between text-xs mb-1">
-                    <span className="font-medium text-gray-700">{v.vessel}</span>
-                    <span className="text-gray-500">{fmt(val)}{activeMetric.money ? ' $' : ''}{showShare ? ` · ${fmt1(share)}%` : ''}</span>
+                  <div className="flex items-center justify-between text-xs mb-1.5">
+                    <span className="font-semibold text-gray-700 flex items-center gap-1.5">
+                      <span className="w-5 text-center">{RANK_BADGE[rank] || `${rank + 1}.`}</span>
+                      <span className="inline-block w-2 h-2 rounded-full" style={{ background: c }} />
+                      {v.vessel}
+                    </span>
+                    <span className="text-gray-500 tabular-nums">{fmt(val)}{activeMetric.money ? ' $' : ''}{showShare ? ` · ${fmt1(share)}%` : ''}</span>
                   </div>
-                  <div className="h-3 rounded-full bg-gray-100 overflow-hidden">
-                    <div className="h-full rounded-full" style={{ width: `${(Math.abs(val) / maxMetric) * 100}%`, background: val < 0 ? '#dc2626' : VESSEL_COLORS[i % VESSEL_COLORS.length] }} />
+                  <div className="h-2.5 rounded-full bg-gray-100 overflow-hidden">
+                    <div className="h-full rounded-full transition-all" style={{ width: `${(Math.abs(val) / maxMetric) * 100}%`, background: val < 0 ? 'linear-gradient(90deg,#f87171,#dc2626)' : `linear-gradient(90deg,${c},${c}bb)` }} />
                   </div>
                 </div>
               );
             })}
-            {rankedByMetric.length === 0 && <p className="text-gray-400 text-sm text-center py-6">لا توجد بيانات في الفترة</p>}
+            {rankedByMetric.length === 0 && <p className="text-gray-400 text-sm text-center py-8">لا توجد بيانات في الفترة</p>}
           </div>
         </div>
 
-        {/* الاتجاه الشهري */}
-        <div className="bg-white rounded-xl shadow p-4">
-          <h3 className="font-bold text-gray-700 mb-3">الاتجاه الشهري — {activeMetric.label}</h3>
+        {/* ── الاتجاه الشهري ── */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-bold text-gray-800">الاتجاه الشهري</h3>
+            <span className="text-xs px-2.5 py-1 rounded-full" style={{ background: `${activeMetric.color}15`, color: activeMetric.color }}>{activeMetric.icon} {activeMetric.label}</span>
+          </div>
           <LineChart months={monthsInRange} series={series} money={activeMetric.money} />
         </div>
       </div>
 
-      {/* جدول الأداء التفصيلي */}
-      <div className="bg-white rounded-xl shadow p-4 overflow-x-auto">
-        <h3 className="font-bold text-gray-700 mb-3">جدول الأداء التفصيلي (اضغط العنوان للفرز)</h3>
+      {/* ── اختيار المؤشر ── */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-2 flex items-center gap-1.5 flex-wrap">
+        {METRICS.map((m) => (
+          <button key={m.key} onClick={() => setMetric(m.key)}
+            className={`text-xs px-3 py-2 rounded-xl transition-all flex items-center gap-1.5 ${metric === m.key ? 'text-white shadow-sm' : 'text-gray-600 hover:bg-gray-50'}`}
+            style={metric === m.key ? { background: m.color } : {}}>
+            <span>{m.icon}</span>{m.label}
+          </button>
+        ))}
+      </div>
+
+      {/* ── جدول الأداء ── */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 overflow-x-auto">
+        <h3 className="font-bold text-gray-800 mb-3">جدول الأداء التفصيلي <span className="text-xs font-normal text-gray-400">(اضغط العنوان للفرز)</span></h3>
         <table className="w-full text-sm whitespace-nowrap">
-          <thead className="text-gray-500 text-xs border-b">
-            <tr>
-              <th className="text-right py-2 px-2">المركب</th>
+          <thead>
+            <tr className="text-gray-500 text-xs border-b-2 border-gray-100">
+              <th className="text-right py-2.5 px-2 sticky right-0 bg-white">المركب</th>
               {METRICS.map((m) => (
-                <th key={m.key} onClick={() => setSortKey(m.key)} className={`text-left py-2 px-2 cursor-pointer hover:text-indigo-600 ${sortKey === m.key ? 'text-indigo-600 font-bold' : ''}`}>
+                <th key={m.key} onClick={() => setSortKey(m.key)} className={`text-left py-2.5 px-2 cursor-pointer select-none hover:text-indigo-600 ${sortKey === m.key ? 'text-indigo-600 font-bold' : ''}`}>
                   {m.label}{sortKey === m.key ? ' ▾' : ''}
                 </th>
               ))}
-              <th className="text-left py-2 px-2">متوسط الصافي/رحلة</th>
+              <th className="text-left py-2.5 px-2">متوسط الصافي/رحلة</th>
             </tr>
           </thead>
           <tbody>
             {rankedTable.map((v) => {
               const i = data.vessels.indexOf(v.vessel);
+              const isTop = v.vessel === topVessel;
               return (
-                <tr key={v.vessel} className="border-b last:border-0 hover:bg-gray-50">
-                  <td className="py-2 px-2 font-medium">
+                <tr key={v.vessel} className={`border-b border-gray-50 hover:bg-indigo-50/40 transition-colors ${isTop ? 'bg-emerald-50/40' : ''}`}>
+                  <td className="py-2.5 px-2 font-semibold sticky right-0 bg-inherit">
                     <span className="inline-block w-2.5 h-2.5 rounded-full ml-1.5 align-middle" style={{ background: VESSEL_COLORS[i % VESSEL_COLORS.length] }} />
-                    {v.vessel}
+                    {v.vessel}{isTop && <span className="text-[10px] text-emerald-600 mr-1">★</span>}
                   </td>
                   {METRICS.map((m) => (
-                    <td key={m.key} className={`text-left py-2 px-2 ${m.key === 'net' ? (v.net >= 0 ? 'text-emerald-700' : 'text-red-600') : 'text-gray-700'}`}>{fmt(Number(v[m.key]) || 0)}</td>
+                    <td key={m.key} className={`text-left py-2.5 px-2 tabular-nums ${m.key === 'net' ? (v.net >= 0 ? 'text-emerald-700 font-medium' : 'text-red-600 font-medium') : 'text-gray-700'}`}>{fmt(Number(v[m.key]) || 0)}</td>
                   ))}
-                  <td className="text-left py-2 px-2 text-indigo-700 font-medium">{fmt(v.avgNet)}</td>
+                  <td className="text-left py-2.5 px-2 text-indigo-700 font-semibold tabular-nums">{fmt(v.avgNet)}</td>
                 </tr>
               );
             })}
             {rankedTable.length > 0 && (
-              <tr className="border-t-2 border-gray-300 font-bold">
-                <td className="py-2 px-2">الإجمالي</td>
-                {METRICS.map((m) => <td key={m.key} className="text-left py-2 px-2">{fmt(totals[m.key] || 0)}</td>)}
-                <td className="text-left py-2 px-2 text-indigo-800">{fmt(totals.avgNet || 0)}</td>
+              <tr className="border-t-2 border-gray-200 font-extrabold bg-gray-50/60">
+                <td className="py-2.5 px-2 sticky right-0 bg-gray-50">الإجمالي</td>
+                {METRICS.map((m) => <td key={m.key} className="text-left py-2.5 px-2 tabular-nums">{fmt(totals[m.key] || 0)}</td>)}
+                <td className="text-left py-2.5 px-2 text-indigo-800 tabular-nums">{fmt(totals.avgNet || 0)}</td>
               </tr>
             )}
           </tbody>
@@ -289,8 +336,29 @@ export default function FleetDashboard() {
   );
 }
 
+// ── Sparkline صغير للبطاقات ──
+function Sparkline({ values, color }: { values: number[]; color: string }) {
+  if (!values.length) return null;
+  const W = 100, H = 28, P = 2;
+  const max = Math.max(...values), min = Math.min(0, ...values);
+  const n = values.length;
+  const x = (i: number) => (n <= 1 ? W / 2 : P + (i / (n - 1)) * (W - 2 * P));
+  const y = (v: number) => H - P - ((v - min) / (max - min || 1)) * (H - 2 * P);
+  const pts = values.map((v, i) => `${x(i)},${y(v)}`).join(' ');
+  const area = `${x(0)},${H} ${pts} ${x(n - 1)},${H}`;
+  const gid = `sg-${color.replace('#', '')}`;
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="w-full h-full">
+      <defs><linearGradient id={gid} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={color} stopOpacity="0.25" /><stop offset="100%" stopColor={color} stopOpacity="0" /></linearGradient></defs>
+      {n > 1 && <polygon points={area} fill={`url(#${gid})`} />}
+      <polyline points={pts} fill="none" stroke={color} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+    </svg>
+  );
+}
+
+// ── رسم الاتجاه متعدد المراكب ──
 function LineChart({ months, series, money }: { months: string[]; series: { name: string; color: string; values: number[] }[]; money: boolean }) {
-  const W = 560, H = 240, PL = 48, PR = 12, PT = 14, PB = 28;
+  const W = 560, H = 250, PL = 46, PR = 14, PT = 12, PB = 30;
   const iw = W - PL - PR, ih = H - PT - PB;
   const allVals = series.flatMap((s) => s.values);
   const max = Math.max(1, ...allVals);
@@ -299,39 +367,69 @@ function LineChart({ months, series, money }: { months: string[]; series: { name
   const x = (i: number) => PL + (n <= 1 ? iw / 2 : (i / (n - 1)) * iw);
   const y = (v: number) => PT + ih - ((v - min) / (max - min || 1)) * ih;
   const ticks = 4;
-  if (!n) return <p className="text-gray-400 text-sm text-center py-10">لا توجد بيانات في الفترة</p>;
+  const single = series.length === 1;
+  if (!n) return <p className="text-gray-400 text-sm text-center py-12">لا توجد بيانات في الفترة</p>;
   return (
     <div>
       <div className="w-full overflow-x-auto">
-        <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ minWidth: 360 }}>
+        <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ minWidth: 340 }}>
+          <defs>
+            {single && (
+              <linearGradient id="lc-area" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={series[0].color} stopOpacity="0.28" />
+                <stop offset="100%" stopColor={series[0].color} stopOpacity="0" />
+              </linearGradient>
+            )}
+          </defs>
           {Array.from({ length: ticks + 1 }).map((_, t) => {
             const val = min + ((max - min) * t) / ticks;
             const yy = y(val);
             return (
               <g key={t}>
                 <line x1={PL} y1={yy} x2={W - PR} y2={yy} stroke="#f1f5f9" />
-                <text x={PL - 6} y={yy + 3} textAnchor="end" fontSize="9" fill="#94a3b8">{money ? fmt(val) : fmt1(val)}</text>
+                <text x={PL - 6} y={yy + 3} textAnchor="end" fontSize="9" fill="#94a3b8">{money ? fmtC(val) : fmt1(val)}</text>
               </g>
             );
           })}
           {months.map((m, i) => (
-            <text key={m} x={x(i)} y={H - 8} textAnchor="middle" fontSize="9" fill="#94a3b8">{monthLabel(m)}</text>
+            <text key={m} x={x(i)} y={H - 9} textAnchor="middle" fontSize="9" fill="#94a3b8">{monthLabel(m)}</text>
           ))}
+          {single && (
+            <polygon points={`${x(0)},${PT + ih} ${series[0].values.map((v, i) => `${x(i)},${y(v)}`).join(' ')} ${x(n - 1)},${PT + ih}`} fill="url(#lc-area)" />
+          )}
           {series.map((s) => (
             <g key={s.name}>
-              <polyline fill="none" stroke={s.color} strokeWidth="2" points={s.values.map((v, i) => `${x(i)},${y(v)}`).join(' ')} />
-              {s.values.map((v, i) => <circle key={i} cx={x(i)} cy={y(v)} r="2.5" fill={s.color} />)}
+              <polyline fill="none" stroke={s.color} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round"
+                points={s.values.map((v, i) => `${x(i)},${y(v)}`).join(' ')} />
+              {s.values.map((v, i) => <circle key={i} cx={x(i)} cy={y(v)} r="2.5" fill="#fff" stroke={s.color} strokeWidth="1.5" />)}
             </g>
           ))}
         </svg>
       </div>
-      <div className="flex flex-wrap gap-3 mt-2">
+      <div className="flex flex-wrap gap-x-4 gap-y-1.5 mt-2">
         {series.map((s) => (
-          <span key={s.name} className="text-xs text-gray-600 flex items-center gap-1">
+          <span key={s.name} className="text-xs text-gray-600 flex items-center gap-1.5">
             <span className="inline-block w-3 h-1.5 rounded-full" style={{ background: s.color }} />{s.name}
           </span>
         ))}
       </div>
+    </div>
+  );
+}
+
+// ── حالة التحميل (skeleton) ──
+function Skeleton() {
+  return (
+    <div className="space-y-5 animate-pulse" dir="rtl">
+      <div className="h-32 rounded-2xl bg-gradient-to-l from-indigo-200 to-blue-200" />
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {Array.from({ length: 8 }).map((_, i) => <div key={i} className="h-32 rounded-2xl bg-gray-100" />)}
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="h-72 rounded-2xl bg-gray-100" />
+        <div className="h-72 rounded-2xl bg-gray-100" />
+      </div>
+      <div className="h-64 rounded-2xl bg-gray-100" />
     </div>
   );
 }

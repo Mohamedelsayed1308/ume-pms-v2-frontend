@@ -38,9 +38,12 @@ export default function FleetAssistant({ filters }: { filters?: any }) {
   }
 
   return (
-    <div className="bg-white rounded-xl shadow">
-      <button onClick={() => setOpen((v) => !v)} className="w-full flex items-center justify-between px-4 py-3 text-right">
-        <span className="font-bold text-gray-800 flex items-center gap-2">🤖 المساعد الذكي للأسطول</span>
+    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden" dir="rtl">
+      <button onClick={() => setOpen((v) => !v)} className="w-full flex items-center justify-between px-4 py-3.5 text-right hover:bg-gray-50/60 transition-colors">
+        <span className="font-bold text-gray-800 flex items-center gap-2.5">
+          <span className="w-8 h-8 rounded-xl flex items-center justify-center text-white text-sm" style={{ background: 'linear-gradient(135deg,#6366f1,#2563eb)' }}>🤖</span>
+          المساعد الذكي للأسطول
+        </span>
         <span className="text-gray-400">{open ? '▾' : '▸'}</span>
       </button>
       {open && (
@@ -74,7 +77,7 @@ export default function FleetAssistant({ filters }: { filters?: any }) {
               placeholder="اكتب سؤالك عن الأسطول..."
               className="flex-1 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
-            <button onClick={() => send(input)} disabled={loading || !input.trim()} className="bg-indigo-600 text-white text-sm px-4 py-2 rounded-lg hover:bg-indigo-700 disabled:opacity-50">إرسال</button>
+            <button onClick={() => send(input)} disabled={loading || !input.trim()} className="text-white text-sm px-5 py-2 rounded-xl disabled:opacity-50 shadow-sm transition-all" style={{ background: 'linear-gradient(135deg,#6366f1,#2563eb)' }}>إرسال</button>
           </div>
         </div>
       )}
