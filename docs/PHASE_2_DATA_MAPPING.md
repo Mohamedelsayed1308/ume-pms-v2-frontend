@@ -66,5 +66,18 @@ Separate operational sources: **Fleet dashboard** (`/api/fleet/dashboard`, USD, 
 ## 5. Performance & endpoints
 Reuse existing list endpoints (`/api/invoices`, `/api/hire-invoices`, `/api/management-invoices`, `/api/payments`, `/api/tasks`, `/api/fleet/dashboard`) and aggregate in the frontend (datasets are modest: ~218 invoices, ~17 payments, etc.). **No new backend endpoints** in Phase 2. Future recommendation (documented, not built): a backend `/api/dashboard/summary` that returns pre-aggregated, currency-normalized totals to avoid multiple client fetches.
 
+## 5b. Financial reconciliation (live data, computed with the dashboard's exact formulas)
+Confirmed decisions applied: per-currency (no conversion); revenue = hire + fleet shown separately; expenses = supplier invoices; management = separate vessel charge.
+
+| KPI | Source | Formula | Currency treatment | Number (live) |
+|-----|--------|---------|--------------------|---------------|
+| Outstanding Payables | `GET /api/invoices` (218) | Σ(total_amount−paid_amount) where status∈{unpaid,partial} | per currency | USD 1,283,727.57 · EUR 110,873.03 · SAR 890 |
+| Outstanding Receivables | `GET /api/hire-invoices` (10) | Σ(total_amount−paid_amount) open | per currency | EUR 1,760,000 |
+| Management fees due | `GET /api/management-invoices` (17) | Σ(amount−paid_amount) open | per currency | USD 137,000 |
+| Overdue payables (count) | `GET /api/invoices/alerts/due?days=30` | items where is_overdue | — | 25 |
+| Invoice status distribution | `GET /api/invoices` | count by status | — | unpaid 74 · paid 144 (74+144 = 218 ✓) |
+
+Cross-check: 74 open invoices reconcile with the payables spread across USD/EUR/SAR; total invoices 218 = 74 unpaid + 144 paid. Multi-currency correctly kept separate — no cross-currency summation.
+
 ## 6. Guardrails honored
 No DB/entity/schema/backend change. No production deploy. No secrets exposed. No new data sent to external AI. All new components bilingual (Phase 1 i18n) + per-currency formatting + loading/empty/error states.
