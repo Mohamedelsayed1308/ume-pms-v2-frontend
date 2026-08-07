@@ -155,7 +155,7 @@ export default function VesselsPage() {
           <SummaryCard icon="receipt" color="#d97706" label={t('ves.withOutstanding')} value={fmtNum(summary.withOut)} />
           <Card className="p-4">
             <div className="flex items-center gap-2 mb-1"><span className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: '#0891b215', color: '#0891b2' }}><Icon name="chart" size={16} /></span><p className="text-xs text-gray-500">{t('ves.fleetOperational')} <span className="text-gray-300">· USD</span></p></div>
-            {summary.fleetHas ? <><p className="text-lg font-extrabold text-gray-800 tabular-nums leading-tight">{fmtMoney(summary.fRev)} <span className="text-[11px] text-gray-400">USD</span></p><p className="text-[11px] text-gray-400">{t('ves.opNet')}: {fmtMoneyC(summary.fNet, 'USD')}</p></> : <p className="text-lg font-bold text-gray-300">—</p>}
+            {summary.fleetHas ? <><p className="text-lg font-extrabold text-gray-800 tabular-nums leading-tight">{fmtMoneyC(summary.fRev, 'USD')}</p><p className="text-[11px] text-gray-400">{t('ves.opNet')}: {fmtMoneyC(summary.fNet, 'USD')}</p><p className="text-[10px] text-gray-400 mt-0.5">{t('ves.fleetCumulative')}</p></> : <p className="text-lg font-bold text-gray-300">—</p>}
           </Card>
         </div>
       )}

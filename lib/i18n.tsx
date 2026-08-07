@@ -157,6 +157,7 @@ const DICT: Record<string, { ar: string; en: string }> = {
   'ves.inactive': { ar: 'غير نشطة', en: 'Inactive' },
   'ves.withOutstanding': { ar: 'عليها تكاليف مستحقة', en: 'With outstanding costs' },
   'ves.fleetOperational': { ar: 'الأسطول التشغيلي', en: 'Fleet (operational)' },
+  'ves.fleetCumulative': { ar: 'تراكمي — كل الفترات (شيت الأسطول)', en: 'Cumulative — all periods (fleet sheet)' },
   'ves.search': { ar: 'بحث بالاسم/IMO/النوع/العلم/المالك…', en: 'Search name/IMO/type/flag/owner…' },
   'ves.status': { ar: 'الحالة', en: 'Status' },
   'ves.type': { ar: 'النوع', en: 'Type' },
