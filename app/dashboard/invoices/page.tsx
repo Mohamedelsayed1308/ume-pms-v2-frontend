@@ -1,8 +1,11 @@
 ﻿'use client';
-import { useEffect, useState, useRef, Suspense } from 'react';
+import { useEffect, useState, useRef, useMemo, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import api from '@/lib/api';
 import { CURRENCIES } from '@/lib/currencies';
+import { useI18n } from '@/lib/i18n';
+import { Card, Button, Badge, Select as UISelect, Drawer, Icon, cx } from '@/components/ui';
+import { fmtNum, fmtMoney, fmtMoneyC, ccyEntries, n0 } from '@/lib/format';
 import InvoiceAssistant from './InvoiceAssistant';
 
 const VESSEL_PREFIX: Record<string, string> = {
@@ -87,6 +90,10 @@ const statusLabel: Record<string, string> = { unpaid: 'غير مدفوعة', par
 const statusColor: Record<string, string> = { unpaid: 'bg-red-100 text-red-700', partial: 'bg-yellow-100 text-yellow-700', paid: 'bg-green-100 text-green-700', cancelled: 'bg-gray-100 text-gray-500' };
 const typeLabel: Record<string, string> = { preliminary: 'أولية', final: 'نهائية' };
 
+function MiniStat({ label, value }: { label: string; value: React.ReactNode }) {
+  return <div className="rounded-xl border border-gray-100 p-2.5"><p className="text-[11px] text-gray-400">{label}</p><p className="text-sm font-semibold text-gray-800 truncate">{value}</p></div>;
+}
+
 function InvoicesContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -103,7 +110,6 @@ function InvoicesContent() {
   const [multiItem, setMultiItem] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [filterStatus, setFilterStatus] = useState('');
   const [sort, setSort] = useState<{ key: string; dir: 'asc' | 'desc' }>({ key: 'created', dir: 'desc' });
   const [attachModal, setAttachModal] = useState<Invoice | null>(null);
   const [payInv, setPayInv] = useState<Invoice | null>(null);
@@ -127,6 +133,16 @@ function InvoicesContent() {
   const extractRef = useRef<HTMLInputElement>(null);
   const bulkInputRef = useRef<HTMLInputElement>(null);
   const supplierDropRef = useRef<HTMLDivElement>(null);
+  const { t, locale } = useI18n();
+  // workspace controls (Phase 3 modernization — presentation only)
+  const [q, setQ] = useState('');
+  const [preset, setPreset] = useState<'all' | 'unpaid' | 'paid' | 'overdue' | 'duesoon' | 'approval'>('all');
+  const [supFilter, setSupFilter] = useState('');
+  const [vesFilter, setVesFilter] = useState('');
+  const [ccyFilter, setCcyFilter] = useState('');
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
+  const [detail, setDetail] = useState<Invoice | null>(null);
 
   async function load() {
     const [invRes, supRes, vesRes, poRes, itemRes] = await Promise.all([
@@ -638,18 +654,62 @@ function InvoicesContent() {
   const toggleSort = (key: string) =>
     setSort((s) => (s.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' }));
 
-  const displayed = invoices
-    .filter((i) => !filterStatus || i.status === filterStatus)
-    .filter((i) => !filterPoId || i.purchase_order?.id === filterPoId);
+  // financial rules (match backend; outstanding uses STORED paid_amount, never sum of payments)
+  const _today = new Date(); _today.setHours(0, 0, 0, 0);
+  const _soon = new Date(_today); _soon.setDate(_soon.getDate() + 7);
+  const isOpen = (i: Invoice) => ['unpaid', 'partial'].includes(i.status);
+  const outOf = (i: Invoice) => n0(i.total_amount) - n0(i.paid_amount);
+  const isOverdue = (i: Invoice) => !!i.due_date && new Date(i.due_date) < _today && i.status !== 'paid' && i.status !== 'cancelled';
+  const isDueSoon = (i: Invoice) => !!i.due_date && new Date(i.due_date) >= _today && new Date(i.due_date) <= _soon && i.status !== 'paid' && i.status !== 'cancelled';
+  const isAwaiting = (i: Invoice) => !!i.approval_status && i.approval_status !== 'paid';
+  const byC = (arr: Invoice[], f: (i: Invoice) => number) => { const o: Record<string, number> = {}; for (const x of arr) { const k = (x.currency || 'USD').toUpperCase(); o[k] = (o[k] || 0) + f(x); } return o; };
+
+  const ql = q.trim().toLowerCase();
+  const filtered = invoices.filter((i) => {
+    if (filterPoId && i.purchase_order?.id !== filterPoId) return false;
+    if (preset === 'unpaid' && !isOpen(i)) return false;
+    if (preset === 'paid' && i.status !== 'paid') return false;
+    if (preset === 'overdue' && !isOverdue(i)) return false;
+    if (preset === 'duesoon' && !isDueSoon(i)) return false;
+    if (preset === 'approval' && !isAwaiting(i)) return false;
+    if (supFilter && i.supplier?.id !== supFilter) return false;
+    if (vesFilter && i.vessel?.id !== vesFilter) return false;
+    if (ccyFilter && (i.currency || 'USD').toUpperCase() !== ccyFilter) return false;
+    const d = (i.invoice_date || '').slice(0, 10);
+    if (fromDate && d && d < fromDate) return false;
+    if (toDate && d && d > toDate) return false;
+    if (ql) { const hay = [i.invoice_number, i.supplier?.name, i.vessel?.name, i.purchase_order?.po_number, i.description].map((x) => (x || '').toLowerCase()).join(' '); if (!hay.includes(ql)) return false; }
+    return true;
+  });
 
   const sortGetter = SORT_GETTERS[sort.key];
   const sorted = sortGetter
-    ? [...displayed].sort((a, b) => {
+    ? [...filtered].sort((a, b) => {
         const va = sortGetter(a), vb = sortGetter(b);
         const c = typeof va === 'number' && typeof vb === 'number' ? va - vb : String(va).localeCompare(String(vb), 'ar');
         return sort.dir === 'asc' ? c : -c;
       })
-    : displayed;
+    : filtered;
+
+  // global AP summary (reconciles to source; outstanding = total − stored paid_amount, per currency)
+  const openInv = invoices.filter(isOpen);
+  const overdueInv = invoices.filter(isOverdue);
+  const summary = {
+    total: invoices.length,
+    unpaid: invoices.filter((i) => i.status === 'unpaid').length,
+    partial: invoices.filter((i) => i.status === 'partial').length,
+    paid: invoices.filter((i) => i.status === 'paid').length,
+    outstanding: byC(openInv, outOf),
+    overdueCount: overdueInv.length,
+    overdueAmt: byC(overdueInv, outOf),
+    dueSoonCount: invoices.filter(isDueSoon).length,
+    awaitingCount: invoices.filter(isAwaiting).length,
+  };
+  const currencies = [...new Set(invoices.map((i) => (i.currency || 'USD').toUpperCase()))].sort();
+  const activeFilterCount = [q, supFilter, vesFilter, ccyFilter, fromDate, toDate, preset !== 'all' ? preset : ''].filter(Boolean).length;
+  const resetFilters = () => { setQ(''); setPreset('all'); setSupFilter(''); setVesFilter(''); setCcyFilter(''); setFromDate(''); setToDate(''); };
+  // approval-paid with no real payment transaction (current backend behavior — shown truthfully)
+  const isApprovalPaidNoTxn = (i: Invoice) => i.status === 'paid' && i.approval_status === 'paid';
 
   const SortTh = ({ k, label }: { k: string; label: string }) => (
     <th className="px-4 py-3 cursor-pointer select-none hover:text-blue-600 whitespace-nowrap" onClick={() => toggleSort(k)}>
@@ -665,130 +725,231 @@ function InvoicesContent() {
           <button onClick={() => router.push('/dashboard/invoices')} className="mr-auto text-blue-600 hover:underline text-xs">✕ إلغاء الفلتر</button>
         </div>
       )}
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-2xl font-bold text-gray-800">الفواتير</h2>
+      {/* ===== Header ===== */}
+      <div className="flex items-start justify-between flex-wrap gap-3 mb-4">
+        <div><h1 className="text-2xl font-extrabold text-navy-900">{t('inv.title')}</h1><p className="text-sm text-gray-500 mt-0.5">{t('inv.subtitle')}</p></div>
         <div className="flex gap-2">
-          <button onClick={() => { setBulkItems([]); setShowBulkModal(true); }}
-            className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 flex items-center gap-2">
-            <span>⚡</span> رفع متعدد
-          </button>
-          <button onClick={openAdd} className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">
-            + إضافة فاتورة
-          </button>
+          <Button variant="secondary" icon="plus" onClick={() => { setBulkItems([]); setShowBulkModal(true); }}>{t('inv.bulk')}</Button>
+          <Button icon="plus" onClick={openAdd}>{t('inv.add')}</Button>
         </div>
       </div>
 
-      {/* Filter */}
-      <div className="flex gap-2 mb-4">
-        {['', 'unpaid', 'partial', 'paid', 'cancelled'].map((s) => (
-          <button key={s} onClick={() => setFilterStatus(s)}
-            className={`px-3 py-1 rounded-full text-sm border transition-colors ${filterStatus === s ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-300 hover:border-blue-400'}`}>
-            {s === '' ? 'الكل' : statusLabel[s]}
-          </button>
+      {/* ===== Financial summary (per currency) ===== */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+          <div className="flex items-center gap-2 mb-1"><span className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: '#2563eb15', color: '#2563eb' }}><Icon name="receipt" size={16} /></span><p className="text-xs text-gray-500">{t('inv.total')}</p></div>
+          <p className="text-2xl font-extrabold text-gray-800 tabular-nums">{fmtNum(summary.total)}</p>
+          <p className="text-[11px] text-gray-400 mt-0.5">{t('st.unpaid')}: {summary.unpaid} · {t('st.paid')}: {summary.paid}</p>
+        </div>
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+          <div className="flex items-center gap-2 mb-1"><span className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: '#e11d4815', color: '#e11d48' }}><Icon name="coins" size={16} /></span><p className="text-xs text-gray-500">{t('inv.outstanding')}</p></div>
+          {ccyEntries(summary.outstanding).length ? ccyEntries(summary.outstanding).map((e) => <p key={e.ccy} className="text-sm font-bold text-gray-800 tabular-nums leading-tight">{fmtMoney(e.value)} <span className="text-[11px] text-gray-400">{e.ccy}</span></p>) : <p className="text-lg font-bold text-gray-300">0</p>}
+        </div>
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+          <div className="flex items-center gap-2 mb-1"><span className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: '#d9770615', color: '#d97706' }}><Icon name="bell" size={16} /></span><p className="text-xs text-gray-500">{t('inv.overdue')} ({summary.overdueCount})</p></div>
+          {ccyEntries(summary.overdueAmt).length ? ccyEntries(summary.overdueAmt).map((e) => <p key={e.ccy} className="text-sm font-bold text-red-600 tabular-nums leading-tight">{fmtMoney(e.value)} <span className="text-[11px] text-gray-400">{e.ccy}</span></p>) : <p className="text-lg font-bold text-gray-300">0</p>}
+        </div>
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+          <div className="flex items-center gap-2 mb-1"><span className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: '#0891b215', color: '#0891b2' }}><Icon name="clipboard" size={16} /></span><p className="text-xs text-gray-500">{t('inv.attention')}</p></div>
+          <p className="text-sm text-gray-700 leading-tight">{t('inv.dueSoon')}: <b className="tabular-nums">{summary.dueSoonCount}</b></p>
+          <p className="text-sm text-gray-700 leading-tight">{t('inv.awaitingApproval')}: <b className="tabular-nums">{summary.awaitingCount}</b></p>
+        </div>
+      </div>
+
+      {/* ===== Needs attention (real data only; missing-PO is NOT an alert) ===== */}
+      {(summary.overdueCount > 0 || summary.dueSoonCount > 0 || summary.awaitingCount > 0) && (
+        <Card className="p-3 mb-4">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs font-semibold text-gray-500 flex items-center gap-1.5"><Icon name="bell" size={15} className="text-amber-500" />{t('sec.attention')}:</span>
+            {summary.overdueCount > 0 && <button onClick={() => setPreset('overdue')} className="text-xs rounded-full px-3 py-1 bg-red-50 text-red-600 hover:bg-red-100">{t('att.overdueInv')} {summary.overdueCount}</button>}
+            {summary.dueSoonCount > 0 && <button onClick={() => setPreset('duesoon')} className="text-xs rounded-full px-3 py-1 bg-amber-50 text-amber-700 hover:bg-amber-100">{t('att.dueSoon')} {summary.dueSoonCount}</button>}
+            {summary.awaitingCount > 0 && <button onClick={() => setPreset('approval')} className="text-xs rounded-full px-3 py-1 bg-sky-50 text-sky-700 hover:bg-sky-100">{t('inv.awaitingApproval')} {summary.awaitingCount}</button>}
+          </div>
+        </Card>
+      )}
+
+      {/* ===== Preset views ===== */}
+      <div className="flex items-center gap-1.5 flex-wrap mb-3">
+        {([['all', t('sup.all')], ['unpaid', t('st.unpaid')], ['paid', t('st.paid')], ['overdue', t('inv.overdue')], ['duesoon', t('att.dueSoon')], ['approval', t('inv.awaitingApproval')]] as const).map(([k, lbl]) => (
+          <button key={k} onClick={() => setPreset(k as any)} className={cx('text-xs px-3 py-1.5 rounded-full border transition-colors', preset === k ? 'bg-brand-600 text-white border-brand-600' : 'bg-white text-gray-600 border-gray-200 hover:border-brand-300')}>{lbl}</button>
         ))}
       </div>
 
-      <div className="bg-white rounded-xl shadow overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-50 text-gray-600 text-right">
+      {/* ===== Controls ===== */}
+      <Card className="p-3 mb-4 flex flex-wrap items-center gap-2">
+        <div className="relative flex-1 min-w-[180px]">
+          <span className="absolute inset-y-0 start-3 flex items-center text-gray-400 pointer-events-none"><Icon name="search" size={16} /></span>
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('inv.search')} className="w-full border border-gray-200 rounded-xl ps-9 pe-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/40" />
+        </div>
+        <UISelect value={supFilter} onChange={(e) => setSupFilter(e.target.value)} className="w-auto"><option value="">{t('po.allSuppliers')}</option>{suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</UISelect>
+        <UISelect value={vesFilter} onChange={(e) => setVesFilter(e.target.value)} className="w-auto"><option value="">{t('po.allVessels')}</option>{vessels.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}</UISelect>
+        <UISelect value={ccyFilter} onChange={(e) => setCcyFilter(e.target.value)} className="w-auto"><option value="">{t('inv.allCurrencies')}</option>{currencies.map((c) => <option key={c} value={c}>{c}</option>)}</UISelect>
+        <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="border border-gray-200 rounded-xl px-2 py-2 text-xs" title={t('po.fromDate')} />
+        <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="border border-gray-200 rounded-xl px-2 py-2 text-xs" title={t('po.toDate')} />
+        {activeFilterCount > 0 && <Button variant="ghost" size="sm" onClick={resetFilters}>{t('sup.reset')} ({activeFilterCount})</Button>}
+        <span className="text-xs text-gray-400 ms-auto">{sorted.length}/{invoices.length}</span>
+      </Card>
+
+      {/* ===== Desktop table ===== */}
+      <Card className="hidden lg:block overflow-x-auto">
+        <table className="w-full text-sm whitespace-nowrap">
+          <thead className="text-gray-500 text-xs border-b border-gray-100">
             <tr>
-              <SortTh k="invoice_number" label="رقم الفاتورة" />
-              <SortTh k="supplier" label="المورد" />
-              <SortTh k="vessel" label="السفينة" />
-              <SortTh k="item" label="البند" />
-              <SortTh k="type" label="النوع" />
-              <SortTh k="total_amount" label="المبلغ" />
-              <SortTh k="paid_amount" label="المدفوع" />
-              <SortTh k="remaining" label="المتبقي" />
-              <SortTh k="due_date" label="الاستحقاق" />
-              <SortTh k="status" label="الحالة" />
-              <SortTh k="approval_status" label="حالة الموافقة" />
-              <SortTh k="created_by_name" label="أضافها" />
-              <th className="px-4 py-3">تعليق</th>
-              <th className="px-4 py-3">إجراءات</th>
+              <SortTh k="invoice_number" label={t('inv.number')} />
+              <SortTh k="supplier" label={t('inv.supplier')} />
+              <SortTh k="vessel" label={t('inv.vessel')} />
+              <SortTh k="total_amount" label={t('inv.amount')} />
+              <SortTh k="paid_amount" label={t('inv.paid')} />
+              <SortTh k="remaining" label={t('inv.outstanding')} />
+              <SortTh k="due_date" label={t('inv.due')} />
+              <SortTh k="status" label={t('inv.payStatus')} />
+              <SortTh k="approval_status" label={t('inv.approval')} />
+              <th className="px-3 py-3 text-start">{t('inv.actions')}</th>
             </tr>
           </thead>
           <tbody>
             {sorted.map((inv) => {
-              const remaining = +inv.total_amount - +inv.paid_amount;
+              const remaining = outOf(inv);
               return (
-                <tr key={inv.id} className="border-t hover:bg-gray-50">
-                  <td className="px-4 py-3 font-mono font-medium text-blue-700">{inv.invoice_number}</td>
-                  <td className="px-4 py-3">{inv.supplier?.name || '—'}</td>
-                  <td className="px-4 py-3">{inv.vessel?.name || '—'}</td>
-                  <td className="px-4 py-3">{inv.line_items?.length ? <span title={inv.line_items.map((l) => l.item_name).join('، ')} className="text-indigo-600">متعدد ({inv.line_items.length})</span> : (inv.item?.name || '—')}</td>
-                  <td className="px-4 py-3">
-                    <span className={`px-2 py-1 rounded-full text-xs ${inv.type === 'final' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'}`}>
-                      {typeLabel[inv.type]}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 font-medium">{Number(inv.total_amount).toLocaleString()} {inv.currency}</td>
-                  <td className="px-4 py-3 text-green-600">{Number(inv.paid_amount).toLocaleString()}</td>
-                  <td className="px-4 py-3 text-red-600">{remaining.toLocaleString()}</td>
-                  <td className="px-4 py-3 text-gray-500">{inv.due_date?.slice(0, 10) || '—'}</td>
-                  <td className="px-4 py-3">
-                    <span className={`px-2 py-1 rounded-full text-xs ${statusColor[inv.status]}`}>
-                      {statusLabel[inv.status]}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex flex-col gap-1">
-                      <select
-                        value={inv.approval_status || ''}
-                        onChange={async (e) => {
-                          const newStatus = e.target.value || null;
-                          const today = new Date().toISOString().slice(0, 10);
-                          await api.put(`/api/invoices/${inv.id}`, {
-                            approval_status: newStatus,
-                            approval_status_date: newStatus ? today : null,
-                          });
-                          load();
-                        }}
-                        className={`text-xs border rounded-full px-2 py-1 cursor-pointer focus:outline-none ${inv.approval_status ? approvalColor[inv.approval_status] : 'bg-gray-50 text-gray-500'}`}
-                      >
-                        <option value="">— بدون —</option>
-                        <option value="booking_waiting_payment">Booking - Waiting Payment</option>
-                        <option value="waiting_approval">Waiting Approval</option>
-                        <option value="waiting_po">Waiting PO</option>
-                        <option value="send_to_pay">Send to Pay</option>
-                        <option value="hold">Hold</option>
-                        <option value="delivery_missing">Delivery Missing</option>
-                        <option value="paid">Paid</option>
-                      </select>
-                      {inv.approval_status && (
-                        <input
-                          type="date"
-                          value={inv.approval_status_date?.slice(0, 10) || ''}
-                          onChange={async (e) => {
-                            await api.put(`/api/invoices/${inv.id}`, { approval_status_date: e.target.value || null });
-                            load();
-                          }}
-                          className="text-xs border rounded px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-400 w-32"
-                        />
-                      )}
+                <tr key={inv.id} onClick={() => setDetail(inv)} className="border-b border-gray-50 last:border-0 hover:bg-brand-50/40 cursor-pointer">
+                  <td className="px-3 py-2.5 font-mono font-medium text-brand-700">{inv.invoice_number}{inv.line_items?.length ? <span className="text-[10px] text-indigo-500 ms-1">({inv.line_items.length})</span> : null}</td>
+                  <td className="px-3 py-2.5 text-gray-700">{inv.supplier?.name || '—'}</td>
+                  <td className="px-3 py-2.5 text-gray-500">{inv.vessel?.name || '—'}</td>
+                  <td className="px-3 py-2.5 font-medium tabular-nums">{fmtMoney(inv.total_amount)} <span className="text-[11px] text-gray-400">{inv.currency}</span></td>
+                  <td className="px-3 py-2.5 text-emerald-600 tabular-nums">{fmtMoney(inv.paid_amount)}</td>
+                  <td className={cx('px-3 py-2.5 tabular-nums', remaining > 0.005 ? 'text-red-600 font-medium' : 'text-gray-300')}>{remaining > 0.005 ? fmtMoney(remaining) : '—'}</td>
+                  <td className="px-3 py-2.5 text-gray-500 tabular-nums">{inv.due_date?.slice(0, 10) || '—'}</td>
+                  <td className="px-3 py-2.5"><Badge tone={inv.status === 'paid' ? 'success' : inv.status === 'partial' ? 'warning' : inv.status === 'cancelled' ? 'neutral' : 'danger'}>{statusLabel[inv.status]}</Badge></td>
+                  <td className="px-3 py-2.5">{inv.approval_status ? <Badge tone={inv.approval_status === 'paid' ? 'success' : 'info'}>{approvalLabel[inv.approval_status]}</Badge> : <span className="text-gray-300 text-xs">—</span>}</td>
+                  <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex gap-2 text-xs">
+                      <button onClick={() => setDetail(inv)} className="text-gray-500 hover:text-brand-600">{t('inv.details')}</button>
+                      {inv.status !== 'paid' && inv.status !== 'cancelled' && <button onClick={() => openPay(inv)} className="text-emerald-600 hover:underline font-medium">{t('inv.pay')}</button>}
+                      <button onClick={() => openEdit(inv)} className="text-brand-600 hover:underline">{t('inv.editShort')}</button>
+                      <button onClick={() => openAttachments(inv)} className="text-gray-500 hover:text-gray-800">{t('inv.attachShort')}</button>
+                      <button onClick={() => handleDelete(inv.id, inv.invoice_number)} className="text-red-400 hover:text-red-600">{t('inv.delShort')}</button>
                     </div>
-                  </td>
-                  <td className="px-4 py-3 text-xs text-gray-500">{inv.created_by_name || '—'}</td>
-                  <td className="px-4 py-3 text-xs text-gray-600 max-w-[160px]">
-                    <span title={inv.comment || ''} className="line-clamp-2">{inv.comment || '—'}</span>
-                  </td>
-                  <td className="px-4 py-3 flex gap-2">
-                    {inv.status !== 'paid' && inv.status !== 'cancelled' && (
-                      <button onClick={() => openPay(inv)} className="text-emerald-600 hover:underline text-xs font-medium">💵 دفع</button>
-                    )}
-                    <button onClick={() => openEdit(inv)} className="text-blue-600 hover:underline text-xs">تعديل</button>
-                    <button onClick={() => openAttachments(inv)} className="text-green-600 hover:underline text-xs">📎 مرفقات</button>
-                    <button onClick={() => handleDelete(inv.id, inv.invoice_number)} className="text-red-500 hover:underline text-xs">حذف</button>
                   </td>
                 </tr>
               );
             })}
-            {displayed.length === 0 && (
-              <tr><td colSpan={14} className="text-center py-8 text-gray-400">لا توجد فواتير</td></tr>
-            )}
+            {sorted.length === 0 && <tr><td colSpan={10} className="text-center py-10 text-gray-400">{t('inv.noResults')}</td></tr>}
           </tbody>
         </table>
+      </Card>
+
+      {/* ===== Mobile cards ===== */}
+      <div className="lg:hidden grid grid-cols-1 gap-3">
+        {sorted.map((inv) => {
+          const remaining = outOf(inv);
+          return (
+            <Card key={inv.id} className="p-4" onClick={() => setDetail(inv)}>
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0"><p className="font-mono font-bold text-brand-700 truncate">{inv.invoice_number}</p><p className="text-xs text-gray-500 truncate">{inv.supplier?.name || '—'}{inv.vessel?.name ? ` · ${inv.vessel.name}` : ''}</p></div>
+                <Badge tone={inv.status === 'paid' ? 'success' : inv.status === 'partial' ? 'warning' : inv.status === 'cancelled' ? 'neutral' : 'danger'}>{statusLabel[inv.status]}</Badge>
+              </div>
+              <div className="flex items-center justify-between mt-3 text-xs">
+                <span className="text-gray-700 tabular-nums font-medium">{fmtMoney(inv.total_amount, inv.currency)}</span>
+                <span className={cx('tabular-nums', remaining > 0.005 ? 'text-red-600' : 'text-emerald-600')}>{remaining > 0.005 ? `${t('inv.outstanding')}: ${fmtMoneyC(remaining, inv.currency)}` : t('st.paid')}</span>
+              </div>
+              <div className="flex items-center justify-between mt-1.5 text-[11px] text-gray-400">
+                <span>{t('inv.due')}: {inv.due_date?.slice(0, 10) || '—'}{isOverdue(inv) ? ` · ${t('att.overdueInv')}` : ''}</span>
+                {inv.status !== 'paid' && inv.status !== 'cancelled' && <button onClick={(e) => { e.stopPropagation(); openPay(inv); }} className="text-emerald-600 font-medium">{t('inv.pay')}</button>}
+              </div>
+            </Card>
+          );
+        })}
+        {sorted.length === 0 && <Card><p className="text-center py-8 text-gray-400 text-sm">{t('inv.noResults')}</p></Card>}
       </div>
+      <p className="text-[11px] text-gray-400 text-center mt-3">{t('note.currency')}</p>
+
+      {/* ===== Invoice detail drawer (clear separation: approval / payment status / actual transactions) ===== */}
+      <Drawer open={!!detail} onClose={() => setDetail(null)} title={detail?.invoice_number} width="max-w-lg">
+        {detail && (() => {
+          const inv = detail;
+          const remaining = outOf(inv);
+          const payRows: any[] = (inv as any).payments || [];
+          const approvalPaidNoTxn = inv.status === 'paid' && inv.approval_status === 'paid' && payRows.length === 0;
+          return (
+            <div className="space-y-5">
+              {/* Overview */}
+              <div>
+                <h4 className="text-xs font-semibold text-gray-400 uppercase mb-2">{t('po.overview')}</h4>
+                <div className="grid grid-cols-2 gap-2">
+                  <MiniStat label={t('inv.supplier')} value={inv.supplier?.name || '—'} />
+                  <MiniStat label={t('inv.vessel')} value={inv.vessel?.name || '—'} />
+                  <MiniStat label="PO" value={inv.purchase_order?.po_number || t('inv.noPO')} />
+                  <MiniStat label={t('inv.type')} value={typeLabel[inv.type] || inv.type} />
+                  <MiniStat label={t('inv.date')} value={inv.invoice_date?.slice(0, 10) || '—'} />
+                  <MiniStat label={t('inv.due')} value={inv.due_date?.slice(0, 10) || '—'} />
+                </div>
+                {inv.description && <div className="mt-2 rounded-xl border border-gray-100 p-3"><p className="text-[11px] text-gray-400 mb-0.5">{t('inv.description')}</p><p className="text-sm text-gray-700">{inv.description}</p></div>}
+                {(inv.line_items?.length || 0) > 0 && (
+                  <div className="mt-2 rounded-xl border border-gray-100 p-3">
+                    <p className="text-[11px] text-gray-400 mb-1">{t('po.items')} ({inv.line_items!.length})</p>
+                    {inv.line_items!.map((l, idx) => <div key={idx} className="flex justify-between text-sm py-0.5"><span className="text-gray-700">{l.item_name}</span><span className="tabular-nums text-gray-600">{fmtMoney(l.amount, inv.currency)}</span></div>)}
+                  </div>
+                )}
+              </div>
+
+              {/* Financial (amounts distinct) */}
+              <div>
+                <h4 className="text-xs font-semibold text-gray-400 uppercase mb-2">{t('inv.financial')}</h4>
+                <div className="grid grid-cols-3 gap-2 rounded-xl border border-gray-100 p-3 text-center">
+                  <div><p className="text-[11px] text-gray-400">{t('inv.amount')}</p><p className="text-sm font-bold text-gray-800 tabular-nums">{fmtMoneyC(inv.total_amount, inv.currency)}</p></div>
+                  <div><p className="text-[11px] text-gray-400">{t('inv.paid')}</p><p className="text-sm font-bold text-emerald-700 tabular-nums">{fmtMoneyC(inv.paid_amount, inv.currency)}</p></div>
+                  <div><p className="text-[11px] text-gray-400">{t('inv.outstanding')}</p><p className={cx('text-sm font-bold tabular-nums', remaining > 0.005 ? 'text-red-600' : 'text-gray-400')}>{fmtMoneyC(remaining, inv.currency)}</p></div>
+                </div>
+              </div>
+
+              {/* Payment status vs Approval status (distinct) */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-xl border border-gray-100 p-3">
+                  <p className="text-[11px] text-gray-400 mb-1">{t('inv.payStatus')}</p>
+                  <Badge tone={inv.status === 'paid' ? 'success' : inv.status === 'partial' ? 'warning' : inv.status === 'cancelled' ? 'neutral' : 'danger'}>{statusLabel[inv.status]}</Badge>
+                </div>
+                <div className="rounded-xl border border-gray-100 p-3">
+                  <p className="text-[11px] text-gray-400 mb-1">{t('inv.approval')}</p>
+                  <select value={inv.approval_status || ''}
+                    onChange={async (e) => { const ns = e.target.value || null; const today = new Date().toISOString().slice(0, 10); await api.put(`/api/invoices/${inv.id}`, { approval_status: ns, approval_status_date: ns ? today : null }); await load(); setDetail((d) => d ? { ...d, approval_status: ns || '', approval_status_date: ns ? today : '' } as any : d); }}
+                    className={cx('text-xs border rounded-full px-2 py-1 cursor-pointer focus:outline-none', inv.approval_status ? approvalColor[inv.approval_status] : 'bg-gray-50 text-gray-500')}>
+                    <option value="">— {t('sup.none')} —</option>
+                    <option value="booking_waiting_payment">Booking - Waiting Payment</option>
+                    <option value="waiting_approval">Waiting Approval</option>
+                    <option value="waiting_po">Waiting PO</option>
+                    <option value="send_to_pay">Send to Pay</option>
+                    <option value="hold">Hold</option>
+                    <option value="delivery_missing">Delivery Missing</option>
+                    <option value="paid">Paid</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Actual payment transactions (real Payment rows only) */}
+              <div>
+                <h4 className="text-xs font-semibold text-gray-400 uppercase mb-2">{t('inv.transactions')}</h4>
+                {payRows.length ? (
+                  <div className="space-y-1">{payRows.map((p, idx) => (
+                    <div key={idx} className="flex items-center justify-between text-sm py-1 border-b border-gray-50 last:border-0">
+                      <span className="text-gray-700">{p.payment_date?.slice(0, 10) || '—'} · {p.payment_method || ''}</span>
+                      <span className="tabular-nums text-emerald-700">{fmtMoneyC(p.amount, p.currency || inv.currency)}</span>
+                    </div>
+                  ))}</div>
+                ) : approvalPaidNoTxn ? (
+                  <div className="rounded-xl border border-amber-100 bg-amber-50/50 p-3 text-xs text-amber-800">{t('inv.paidNoTxn')}</div>
+                ) : <p className="text-xs text-gray-400">{t('inv.noTxn')}</p>}
+              </div>
+
+              {/* Actions */}
+              <div className="flex flex-wrap gap-2">
+                {inv.status !== 'paid' && inv.status !== 'cancelled' && <Button size="sm" variant="success" icon="card" onClick={() => { setDetail(null); openPay(inv); }}>{t('inv.pay')}</Button>}
+                <Button size="sm" variant="outline" icon="clipboard" onClick={() => { setDetail(null); openEdit(inv); }}>{t('inv.editShort')}</Button>
+                <Button size="sm" variant="outline" icon="file" onClick={() => { setDetail(null); openAttachments(inv); }}>{t('inv.attachments')}</Button>
+              </div>
+            </div>
+          );
+        })()}
+      </Drawer>
 
       {payInv && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
