@@ -1,20 +1,74 @@
 @import "tailwindcss";
 
+/* ============ UME Design Tokens (Phase 1) ============ */
+@theme {
+  /* Brand — Deep Navy (sidebar / headers) */
+  --color-navy-950: #070d1c;
+  --color-navy-900: #0b1531;
+  --color-navy-800: #12224a;
+  --color-navy-700: #1b3160;
+  --color-navy-600: #274279;
+
+  /* Primary — Professional Blue */
+  --color-brand-50: #eff5ff;
+  --color-brand-100: #dbe8fe;
+  --color-brand-200: #bfd6fe;
+  --color-brand-300: #93b8fd;
+  --color-brand-400: #6091fa;
+  --color-brand-500: #3b6bf5;
+  --color-brand-600: #2551e6;
+  --color-brand-700: #1d40c9;
+  --color-brand-800: #1e37a3;
+  --color-brand-900: #1e3381;
+
+  /* Surfaces */
+  --color-canvas: #f4f6fb;
+  --color-surface: #ffffff;
+
+  /* Fonts */
+  --font-sans: var(--font-cairo), "Segoe UI", system-ui, sans-serif;
+}
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f4f6fb;
+  --foreground: #0b1531;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+* {
+  border-color: #e5e9f2;
 }
 
+html { -webkit-text-size-adjust: 100%; }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-cairo), "Segoe UI", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Refined scrollbars */
+* { scrollbar-width: thin; scrollbar-color: #c7cfdd transparent; }
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-thumb { background: #c7cfdd; border-radius: 9999px; }
+*::-webkit-scrollbar-thumb:hover { background: #aab4c7; }
+
+/* Visible, consistent focus for accessibility */
+:where(button, a, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--color-brand-500);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* Numeric alignment for finance tables */
+.tabular-nums { font-variant-numeric: tabular-nums; }
+
+/* Reusable motion */
+@keyframes ume-fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@keyframes ume-slide-in-rtl { from { transform: translateX(-100%); } to { transform: none; } }
+@keyframes ume-slide-in-ltr { from { transform: translateX(100%); } to { transform: none; } }
+.ume-fade-in { animation: ume-fade-in .18s ease-out; }
+
+@media print {
+  .no-print { display: none !important; }
 }

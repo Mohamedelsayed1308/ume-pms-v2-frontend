@@ -1,28 +1,49 @@
+export type GroupKey = 'overview' | 'procurement' | 'fleet' | 'revenue' | 'finance' | 'operations' | 'admin';
+
 export interface Screen {
   href: string;
-  label: string;
-  icon: string;
-  adminOnly?: boolean; // يظهر للأدمن فقط ولا يخضع لقائمة الصلاحيات
-  always?: boolean;     // متاح دائماً لكل مستخدم (لا يُقيَّد)
+  label: string;        // العربية (متوافق رجعياً)
+  icon: string;         // إيموجي (متوافق رجعياً)
+  iconName?: string;    // اسم أيقونة SVG الاحترافية (Icon component)
+  group?: GroupKey;     // مجموعة التنقّل
+  adminOnly?: boolean;  // للأدمن فقط
+  always?: boolean;     // متاح دائماً لكل مستخدم
 }
+
+// ترتيب مجموعات التنقّل + مفاتيح الترجمة
+export const GROUPS: { key: GroupKey; i18nKey: string }[] = [
+  { key: 'overview', i18nKey: 'group.overview' },
+  { key: 'procurement', i18nKey: 'group.procurement' },
+  { key: 'fleet', i18nKey: 'group.fleet' },
+  { key: 'revenue', i18nKey: 'group.revenue' },
+  { key: 'finance', i18nKey: 'group.finance' },
+  { key: 'operations', i18nKey: 'group.operations' },
+  { key: 'admin', i18nKey: 'group.admin' },
+];
 
 // كل شاشات النظام — مصدر واحد للسايدبار ولشاشة الصلاحيات
 export const SCREENS: Screen[] = [
-  { href: '/dashboard', label: 'الرئيسية', icon: '🏠', always: true },
-  { href: '/dashboard/vessels', label: 'السفن', icon: '🚢' },
-  { href: '/dashboard/suppliers', label: 'الموردين', icon: '🏭' },
-  { href: '/dashboard/purchase-orders', label: 'أوامر الشراء', icon: '📋' },
-  { href: '/dashboard/invoices', label: 'الفواتير', icon: '🧾' },
-  { href: '/dashboard/items', label: 'بنود الفواتير', icon: '🏷️' },
-  { href: '/dashboard/payments', label: 'المدفوعات', icon: '💳' },
-  { href: '/dashboard/reports', label: 'التقارير', icon: '📊' },
-  { href: '/dashboard/customers', label: 'العملاء', icon: '🤝' },
-  { href: '/dashboard/hire-invoices', label: 'فواتير الإيجار', icon: '🚢💰' },
-  { href: '/dashboard/shipping-companies', label: 'شركات الشحن', icon: '🏢' },
-  { href: '/dashboard/management-invoices', label: 'فواتير الإدارة', icon: '📄' },
-  { href: '/dashboard/profit-distribution', label: 'توزيع الأرباح', icon: '💰' },
-  { href: '/dashboard/tasks', label: 'مهام الفريق', icon: '✅' },
-  { href: '/dashboard/users', label: 'الصلاحيات', icon: '🔐', adminOnly: true },
+  { href: '/dashboard', label: 'الرئيسية', icon: '🏠', iconName: 'home', group: 'overview', always: true },
+  { href: '/dashboard/reports', label: 'التقارير', icon: '📊', iconName: 'chart', group: 'overview' },
+
+  { href: '/dashboard/suppliers', label: 'الموردين', icon: '🏭', iconName: 'factory', group: 'procurement' },
+  { href: '/dashboard/purchase-orders', label: 'أوامر الشراء', icon: '📋', iconName: 'clipboard', group: 'procurement' },
+  { href: '/dashboard/invoices', label: 'الفواتير', icon: '🧾', iconName: 'receipt', group: 'procurement' },
+  { href: '/dashboard/items', label: 'بنود الفواتير', icon: '🏷️', iconName: 'tag', group: 'procurement' },
+  { href: '/dashboard/payments', label: 'المدفوعات', icon: '💳', iconName: 'card', group: 'procurement' },
+
+  { href: '/dashboard/vessels', label: 'السفن', icon: '🚢', iconName: 'ship', group: 'fleet' },
+
+  { href: '/dashboard/customers', label: 'العملاء', icon: '🤝', iconName: 'users', group: 'revenue' },
+  { href: '/dashboard/hire-invoices', label: 'فواتير الإيجار', icon: '🚢💰', iconName: 'file', group: 'revenue' },
+  { href: '/dashboard/shipping-companies', label: 'شركات الشحن', icon: '🏢', iconName: 'building', group: 'revenue' },
+  { href: '/dashboard/management-invoices', label: 'فواتير الإدارة', icon: '📄', iconName: 'file', group: 'revenue' },
+
+  { href: '/dashboard/profit-distribution', label: 'توزيع الأرباح', icon: '💰', iconName: 'coins', group: 'finance' },
+
+  { href: '/dashboard/tasks', label: 'مهام الفريق', icon: '✅', iconName: 'check', group: 'operations' },
+
+  { href: '/dashboard/users', label: 'الصلاحيات', icon: '🔐', iconName: 'shield', group: 'admin', adminOnly: true },
 ];
 
 // الشاشات التي يمكن منحها/منعها في شاشة الصلاحيات (استبعاد الرئيسية والأدمن-فقط)
