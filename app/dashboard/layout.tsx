@@ -8,13 +8,16 @@ import { I18nProvider, useI18n } from '@/lib/i18n';
 import { ToastProvider, Icon, cx } from '@/components/ui';
 import { NotificationsProvider } from '@/lib/notifications';
 import NotificationBell from '@/components/NotificationBell';
+import { CommandPaletteProvider, useCommandPalette } from '@/components/CommandPalette';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
     <I18nProvider>
       <ToastProvider>
         <NotificationsProvider>
-          <Shell>{children}</Shell>
+          <CommandPaletteProvider>
+            <Shell>{children}</Shell>
+          </CommandPaletteProvider>
         </NotificationsProvider>
       </ToastProvider>
     </I18nProvider>
@@ -25,6 +28,8 @@ function Shell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const { t, locale, toggle } = useI18n();
+  const palette = useCommandPalette();
+  const isMac = typeof navigator !== 'undefined' && /mac/i.test(navigator.platform || navigator.userAgent);
   const [user, setUser] = useState<any>(null);
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -114,13 +119,18 @@ function Shell({ children }: { children: React.ReactNode }) {
           <h1 className="font-bold text-gray-800 truncate">{active?.label || t('app.name')}</h1>
 
           <div className="hidden lg:flex items-center gap-2 mr-4 flex-1 max-w-md">
-            <div className="relative w-full text-gray-400" title={t('topbar.searchHint')}>
-              <span className="absolute inset-y-0 right-3 flex items-center"><Icon name="search" size={16} /></span>
-              <input disabled placeholder={t('topbar.search')} className="w-full bg-gray-50 border border-gray-200 rounded-xl pr-9 pl-3 py-2 text-sm cursor-not-allowed" />
-            </div>
+            <button onClick={palette.open} title={t('topbar.searchHint')}
+              className="w-full flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-400 hover:border-gray-300 hover:bg-gray-100 transition">
+              <Icon name="search" size={16} />
+              <span className="flex-1 text-start truncate">{t('topbar.search')}</span>
+              <kbd className="text-[10px] border border-gray-200 rounded px-1.5 py-0.5 bg-white">{isMac ? '⌘K' : 'Ctrl K'}</kbd>
+            </button>
           </div>
 
           <div className="flex items-center gap-1.5 mr-auto">
+            <button onClick={palette.open} title={t('topbar.search')} aria-label={t('topbar.search')} className="lg:hidden text-gray-500 hover:text-gray-800 hover:bg-gray-100 rounded-lg p-2">
+              <Icon name="search" size={19} />
+            </button>
             <button onClick={toggle} title={t('topbar.language')} className="flex items-center gap-1 text-gray-500 hover:text-gray-800 hover:bg-gray-100 rounded-lg px-2 py-1.5 text-xs font-medium">
               <Icon name="globe" size={18} />{locale === 'ar' ? 'EN' : 'ع'}
             </button>

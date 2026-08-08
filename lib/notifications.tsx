@@ -60,23 +60,23 @@ export function computeNotifications(invoices: any[], tasks: any[], payments: an
         const critical = overdueDays >= THRESHOLDS.CRITICAL_OVERDUE_DAYS ||
           (overdueDays >= THRESHOLDS.CRITICAL_OVERDUE_DAYS_IF_MATERIAL && outstanding >= THRESHOLDS.CRITICAL_MATERIAL_AMOUNT);
         out.push({ id: `inv_overdue:${i.id}`, type: 'invoice_overdue', category: 'financial',
-          severity: critical ? 'critical' : 'warning', route: '/dashboard/invoices', sortDays: diff,
+          severity: critical ? 'critical' : 'warning', route: `/dashboard/invoices?q=${encodeURIComponent(num)}`, sortDays: diff,
           data: { num, days: overdueDays, amount: outstanding, currency: ccy, supplier } });
       } else if (diff <= THRESHOLDS.DUE_SOON_DAYS) {
         out.push({ id: `inv_due_soon:${i.id}`, type: 'invoice_due_soon', category: 'financial',
-          severity: 'warning', route: '/dashboard/invoices', sortDays: diff,
+          severity: 'warning', route: `/dashboard/invoices?q=${encodeURIComponent(num)}`, sortDays: diff,
           data: { num, days: diff, amount: outstanding, currency: ccy, supplier } });
       }
     }
     if (i.approval_status === 'waiting_approval') {
       out.push({ id: `inv_awaiting:${i.id}`, type: 'invoice_awaiting', category: 'financial',
-        severity: 'info', route: '/dashboard/invoices', sortDays: 100,
+        severity: 'info', route: `/dashboard/invoices?q=${encodeURIComponent(num)}`, sortDays: 100,
         data: { num, amount: outstanding, currency: ccy, supplier } });
     }
     // مدفوعة جزئياً وليست متأخرة/قريبة الاستحقاق (لتجنّب التكرار)
     if (i.status === 'partial' && (!due || dayDiff(due, today) > THRESHOLDS.DUE_SOON_DAYS)) {
       out.push({ id: `inv_partial:${i.id}`, type: 'invoice_partial', category: 'financial',
-        severity: 'info', route: '/dashboard/invoices', sortDays: 200,
+        severity: 'info', route: `/dashboard/invoices?q=${encodeURIComponent(num)}`, sortDays: 200,
         data: { num, amount: outstanding, currency: ccy, supplier } });
     }
   }
@@ -91,11 +91,11 @@ export function computeNotifications(invoices: any[], tasks: any[], payments: an
     const urgent = t.priority === 'urgent';
     if (diff < 0) {
       out.push({ id: `task_overdue:${t.id}`, type: 'task_overdue', category: 'tasks',
-        severity: urgent ? 'critical' : 'warning', route: '/dashboard/tasks', sortDays: diff,
+        severity: urgent ? 'critical' : 'warning', route: `/dashboard/tasks?q=${encodeURIComponent(t.title || '')}`, sortDays: diff,
         data: { title: t.title, days: Math.abs(diff), urgent, owner: t.owner } });
     } else if (diff === 0) {
       out.push({ id: `task_due_today:${t.id}`, type: 'task_due_today', category: 'tasks',
-        severity: urgent ? 'warning' : 'info', route: '/dashboard/tasks', sortDays: 0,
+        severity: urgent ? 'warning' : 'info', route: `/dashboard/tasks?q=${encodeURIComponent(t.title || '')}`, sortDays: 0,
         data: { title: t.title, urgent, owner: t.owner } });
     }
   }
@@ -107,12 +107,12 @@ export function computeNotifications(invoices: any[], tasks: any[], payments: an
     const num = p.invoice?.invoice_number || p.invoice_number || p.reference || p.id;
     if (invCcy && invCcy !== ccy) {
       out.push({ id: `pay_mismatch:${p.id}`, type: 'payment_mismatch', category: 'financial',
-        severity: 'warning', route: '/dashboard/payments', sortDays: 50,
+        severity: 'warning', route: `/dashboard/payments?q=${encodeURIComponent(num)}`, sortDays: 50,
         data: { num, currency: ccy, invCurrency: invCcy, amount: n0(p.amount) } });
     }
     if (Math.abs(n0(p.amount)) >= THRESHOLDS.LARGE_PAYMENT) {
       out.push({ id: `pay_large:${p.id}`, type: 'payment_large', category: 'financial',
-        severity: 'info', route: '/dashboard/payments', sortDays: 60,
+        severity: 'info', route: `/dashboard/payments?q=${encodeURIComponent(num)}`, sortDays: 60,
         data: { num, currency: ccy, amount: n0(p.amount) } });
     }
   }
@@ -130,7 +130,7 @@ export function computeNotifications(invoices: any[], tasks: any[], payments: an
     const maxV = Math.max(0, ...Object.values(map));
     if (maxV >= THRESHOLDS.MATERIAL_OUTSTANDING) {
       out.push({ id: `sup_outstanding:${name}`, type: 'supplier_outstanding', category: 'financial',
-        severity: 'warning', route: '/dashboard/suppliers', sortDays: 300 - maxV / 1e6,
+        severity: 'warning', route: `/dashboard/suppliers?q=${encodeURIComponent(name)}`, sortDays: 300 - maxV / 1e6,
         data: { name, ccyText: fmtCcyMap(map), count: list.length } });
     }
   }
@@ -139,7 +139,7 @@ export function computeNotifications(invoices: any[], tasks: any[], payments: an
     const maxV = Math.max(0, ...Object.values(map));
     if (maxV >= THRESHOLDS.MATERIAL_OUTSTANDING) {
       out.push({ id: `ves_outstanding:${name}`, type: 'vessel_outstanding', category: 'fleet',
-        severity: 'warning', route: '/dashboard/vessels', sortDays: 400 - maxV / 1e6,
+        severity: 'warning', route: `/dashboard/vessels?q=${encodeURIComponent(name)}`, sortDays: 400 - maxV / 1e6,
         data: { name, ccyText: fmtCcyMap(map), count: list.length } });
     }
   }

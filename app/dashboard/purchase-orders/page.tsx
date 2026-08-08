@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
+import { useInitialQuery } from '@/lib/useInitialQuery';
 import api from '@/lib/api';
 import * as XLSX from 'xlsx';
 import { getUser } from '@/lib/auth';
@@ -29,6 +30,7 @@ export default function PurchaseOrdersPage() {
   const [err, setErr] = useState(false);
 
   const [q, setQ] = useState('');
+  useInitialQuery(setQ);
   const [supFilter, setSupFilter] = useState('');
   const [vesFilter, setVesFilter] = useState('');
   const [invFilter, setInvFilter] = useState<'all' | 'invoiced' | 'none'>('all');

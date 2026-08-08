@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import api from '@/lib/api';
+import { useInitialQuery } from '@/lib/useInitialQuery';
 import TaskAssistant from './TaskAssistant';
 import { useI18n } from '@/lib/i18n';
 import { Icon } from '@/components/ui/Icon';
@@ -109,6 +110,7 @@ export default function TasksPage() {
   const [deleting, setDeleting] = useState(false);
 
   const [search, setSearch] = useState('');
+  useInitialQuery(setSearch);
   const [preset, setPreset] = useState<Preset>('all');
   const [fStatus, setFStatus] = useState('');
   const [fPriority, setFPriority] = useState('');

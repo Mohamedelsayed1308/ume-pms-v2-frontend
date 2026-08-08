@@ -2,6 +2,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import api from '@/lib/api';
 import { CURRENCIES } from '@/lib/currencies';
+import { useInitialQuery } from '@/lib/useInitialQuery';
 import { getUser } from '@/lib/auth';
 import { useI18n } from '@/lib/i18n';
 import { Card, Button, Badge, Select as UISelect, Drawer, Icon, cx } from '@/components/ui';
@@ -69,6 +70,7 @@ export default function PaymentsPage() {
   const { t, locale } = useI18n();
   const [user, setUser] = useState<any>(null);
   const [q, setQ] = useState('');
+  useInitialQuery(setQ);
   const [preset, setPreset] = useState<'all' | 'today' | 'week' | 'month' | 'high'>('all');
   const [supF, setSupF] = useState('');
   const [ccyF, setCcyF] = useState('');
