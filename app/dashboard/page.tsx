@@ -3,11 +3,11 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import api from '@/lib/api';
 import { getUser } from '@/lib/auth';
-import { SCREENS, canAccess } from '@/lib/screens';
 import { useI18n } from '@/lib/i18n';
 import { Card, Badge, Icon, Skeleton, EmptyState, cx } from '@/components/ui';
 import { fmtNum, fmtMoney, fmtMoneyC, sumByCurrency, ccyEntries, pctChange, n0 } from '@/lib/format';
 import { getRange, prevRange, inRange, PERIOD_KEYS, type PeriodKey } from '@/lib/period';
+import { canHref, deriveProfile, kpiOrder, PROFILE_LABEL } from '@/lib/profile';
 
 const OPEN = ['unpaid', 'partial'];
 const ym = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
@@ -28,25 +28,47 @@ export default function DashboardPage() {
     let alive = true;
     (async () => {
       setLoading(true); setErr(false);
-      const calls = [
-        api.get('/api/invoices'), api.get('/api/hire-invoices'), api.get('/api/management-invoices'),
-        api.get('/api/payments'), api.get('/api/tasks'), api.get('/api/invoices/alerts/due?days=30'),
-        api.get('/api/invoices/report/department-delays'), api.get('/api/fleet/dashboard'),
-      ];
+      // فحص الصلاحية ثم الجلب — لا نطلب بيانات وحدات لا يصلها المستخدم
+      const u = getUser();
+      const p = {
+        inv: canHref(u, '/dashboard/invoices'), hire: canHref(u, '/dashboard/hire-invoices'),
+        mgmt: canHref(u, '/dashboard/management-invoices'), pay: canHref(u, '/dashboard/payments'),
+        tasks: canHref(u, '/dashboard/tasks'), fleet: canHref(u, '/dashboard/vessels'),
+      };
+      const calls: Promise<any>[] = [];
+      const idx: Record<string, number> = {};
+      const add = (k: string, pr: Promise<any>) => { idx[k] = calls.length; calls.push(pr); };
+      if (p.inv) { add('invoices', api.get('/api/invoices')); add('due', api.get('/api/invoices/alerts/due?days=30')); add('delays', api.get('/api/invoices/report/department-delays')); }
+      if (p.hire) add('hire', api.get('/api/hire-invoices'));
+      if (p.mgmt) add('mgmt', api.get('/api/management-invoices'));
+      if (p.pay) add('payments', api.get('/api/payments'));
+      if (p.tasks) add('tasks', api.get('/api/tasks'));
+      if (p.fleet) add('fleet', api.get('/api/fleet/dashboard'));
+
+      if (!calls.length) { setD({ invoices: [], hire: [], mgmt: [], payments: [], tasks: [], due: [], delays: [], fleet: null }); setLoading(false); return; }
       const r = await Promise.allSettled(calls);
       if (!alive) return;
-      const val = (i: number, fb: any) => (r[i].status === 'fulfilled' ? (r[i] as any).value.data : fb);
+      const val = (k: string, fb: any) => (idx[k] == null ? fb : (r[idx[k]].status === 'fulfilled' ? (r[idx[k]] as any).value.data : fb));
       const anyOk = r.some((x) => x.status === 'fulfilled');
       if (!anyOk) { setErr(true); setLoading(false); return; }
       setD({
-        invoices: val(0, []) || [], hire: val(1, []) || [], mgmt: val(2, []) || [],
-        payments: val(3, []) || [], tasks: val(4, []) || [], due: val(5, []) || [],
-        delays: val(6, []) || [], fleet: val(7, null),
+        invoices: val('invoices', []) || [], hire: val('hire', []) || [], mgmt: val('mgmt', []) || [],
+        payments: val('payments', []) || [], tasks: val('tasks', []) || [], due: val('due', []) || [],
+        delays: val('delays', []) || [], fleet: val('fleet', null),
       });
       setLoading(false);
     })();
     return () => { alive = false; };
   }, []);
+
+  const profile = useMemo(() => deriveProfile(user), [user]);
+  const P = useMemo(() => ({
+    inv: canHref(user, '/dashboard/invoices'), hire: canHref(user, '/dashboard/hire-invoices'),
+    mgmt: canHref(user, '/dashboard/management-invoices'), pay: canHref(user, '/dashboard/payments'),
+    tasks: canHref(user, '/dashboard/tasks'), fleet: canHref(user, '/dashboard/vessels'),
+    suppliers: canHref(user, '/dashboard/suppliers'), reports: canHref(user, '/dashboard/reports'),
+  }), [user]);
+  const reportsHref = P.reports ? '/dashboard/reports' : '/dashboard/invoices';
 
   const range = useMemo(() => getRange(period, cFrom, cTo), [period, cFrom, cTo]);
   const prev = useMemo(() => prevRange(range), [range]);
@@ -110,7 +132,9 @@ export default function DashboardPage() {
     };
   }, [d, range, prev]);
 
-  const canDo = (href: string) => { const s = SCREENS.find((x) => x.href === href); return s ? canAccess(user, s) : false; };
+  const canDo = (href: string) => canHref(user, href);
+  const firstName = (user?.full_name || '').trim().split(' ')[0] || '';
+  const profLabel = locale === 'en' ? PROFILE_LABEL[profile].en : PROFILE_LABEL[profile].ar;
 
   return (
     <div className="space-y-5" dir={locale === 'ar' ? 'rtl' : 'ltr'}>
@@ -118,7 +142,10 @@ export default function DashboardPage() {
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-extrabold text-navy-900">{t('dash.title')}</h1>
-          <p className="text-sm text-gray-500 mt-0.5">{t('dash.subtitle')}</p>
+          <p className="text-sm text-gray-500 mt-0.5">
+            {firstName ? (locale === 'en' ? `Welcome, ${firstName}` : `مرحباً ${firstName}`) : t('dash.subtitle')}
+            {profile !== 'admin' && <span className="ms-2 text-[11px] px-2 py-0.5 rounded-full bg-brand-50 text-brand-600">{profLabel}</span>}
+          </p>
         </div>
         <div className="flex items-center gap-1 bg-white rounded-xl border border-gray-100 p-1 shadow-sm flex-wrap">
           {PERIOD_KEYS.map((k) => (
@@ -144,13 +171,18 @@ export default function DashboardPage() {
 
       {!loading && !err && m && (
         <>
-          {/* ===== Layer 1: KPIs ===== */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
-            <KpiMoney icon="card" color="#e11d48" label={t('kpi.payables')} map={m.payables} sub={`${m.payablesCount} ${t('kpi.openInvoices')}`} href="/dashboard/invoices" />
-            <KpiMoney icon="coins" color="#059669" label={t('kpi.receivables')} map={m.receivables} sub={`${m.receivablesCount}`} href="/dashboard/hire-invoices" />
-            <KpiMoney icon="receipt" color="#d97706" label={t('kpi.overdue')} map={m.overdueAmt} sub={`${m.overdueCount} ${t('att.overdueInv')}`} href="/dashboard/reports" tone={m.overdueCount ? 'danger' : undefined} />
-            <KpiMoney icon="chart" color="#2563eb" label={t('kpi.paymentsPeriod')} map={m.paymentsByCcy} delta={m.payCountDelta} deltaGoodUp sub={`${m.payCount}`} href="/dashboard/payments" />
-          </div>
+          {/* ===== Layer 1: KPIs (permission-gated + profile-ordered) ===== */}
+          {(() => {
+            const kpis: Record<string, ReactNode> = {
+              payables: P.inv ? <KpiMoney key="payables" icon="card" color="#e11d48" label={t('kpi.payables')} map={m.payables} sub={`${m.payablesCount} ${t('kpi.openInvoices')}`} href="/dashboard/invoices" /> : null,
+              receivables: P.hire ? <KpiMoney key="receivables" icon="coins" color="#059669" label={t('kpi.receivables')} map={m.receivables} sub={`${m.receivablesCount}`} href="/dashboard/hire-invoices" /> : null,
+              overdue: P.inv ? <KpiMoney key="overdue" icon="receipt" color="#d97706" label={t('kpi.overdue')} map={m.overdueAmt} sub={`${m.overdueCount} ${t('att.overdueInv')}`} href={reportsHref} tone={m.overdueCount ? 'danger' : undefined} /> : null,
+              payments: P.pay ? <KpiMoney key="payments" icon="chart" color="#2563eb" label={t('kpi.paymentsPeriod')} map={m.paymentsByCcy} delta={m.payCountDelta} deltaGoodUp sub={`${m.payCount}`} href="/dashboard/payments" /> : null,
+            };
+            const ordered = kpiOrder(profile).map((k) => kpis[k]).filter(Boolean);
+            if (!ordered.length) return null;
+            return <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">{ordered}</div>;
+          })()}
 
           {/* ===== Layer 2: Needs attention ===== */}
           <Card className="p-4">
@@ -160,11 +192,11 @@ export default function DashboardPage() {
             </div>
             {(() => {
               const items = [
-                { k: 'att.overdueInv', c: m.overdueCount, tone: 'danger' as const, href: '/dashboard/reports', icon: 'receipt' },
-                { k: 'att.dueSoon', c: m.dueSoonCount, tone: 'warning' as const, href: '/dashboard/reports', icon: 'bell' },
-                { k: 'att.approvalDelays', c: d!.delays.length, tone: 'warning' as const, href: '/dashboard/reports', icon: 'clipboard' },
-                { k: 'att.overdueTasks', c: m.overdueTasks.length, tone: 'danger' as const, href: '/dashboard/tasks', icon: 'check' },
-              ].filter((x) => x.c > 0);
+                { k: 'att.overdueInv', c: m.overdueCount, tone: 'danger' as const, href: reportsHref, icon: 'receipt', ok: P.inv },
+                { k: 'att.dueSoon', c: m.dueSoonCount, tone: 'warning' as const, href: reportsHref, icon: 'bell', ok: P.inv },
+                { k: 'att.approvalDelays', c: d!.delays.length, tone: 'warning' as const, href: reportsHref, icon: 'clipboard', ok: P.inv },
+                { k: 'att.overdueTasks', c: m.overdueTasks.length, tone: 'danger' as const, href: '/dashboard/tasks', icon: 'check', ok: P.tasks },
+              ].filter((x) => x.ok && x.c > 0);
               if (!items.length) return <p className="text-sm text-emerald-600 flex items-center gap-2"><Icon name="shield" size={16} />{t('att.allClear')}</p>;
               return (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
@@ -180,13 +212,16 @@ export default function DashboardPage() {
             })()}
           </Card>
 
-          {/* ===== Revenue streams (separate, per confirmed definition) ===== */}
+          {/* ===== Revenue streams + status distribution (permission-gated) ===== */}
+          {(P.hire || P.fleet || P.inv) && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            <Card className="p-4 lg:col-span-1">
+            {(P.hire || P.fleet) && (
+            <Card className={cx('p-4', P.inv ? 'lg:col-span-1' : 'lg:col-span-3')}>
               <h3 className="font-bold text-gray-800 mb-3">{t('sec.revStreams')}</h3>
               <div className="space-y-3">
-                <StreamRow label={t('lbl.revenueHire')} map={m.receivables} note="A/R" />
-                <div className="border-t border-gray-100" />
+                {P.hire && <StreamRow label={t('lbl.revenueHire')} map={m.receivables} note="A/R" />}
+                {P.hire && P.fleet && <div className="border-t border-gray-100" />}
+                {P.fleet && (
                 <div>
                   <p className="text-xs text-gray-500 mb-1">{t('lbl.revenueFleet')} <span className="text-gray-300">· USD</span></p>
                   {m.fleetHasData ? (
@@ -196,30 +231,37 @@ export default function DashboardPage() {
                     </div>
                   ) : <p className="text-xs text-gray-400">{t('common.empty')}</p>}
                 </div>
+                )}
               </div>
               <p className="text-[11px] text-gray-400 mt-3">{t('note.currency')}</p>
             </Card>
+            )}
 
             {/* ===== Layer 3: status distribution ===== */}
-            <Card className="p-4 lg:col-span-2">
+            {P.inv && (
+            <Card className={cx('p-4', (P.hire || P.fleet) ? 'lg:col-span-2' : 'lg:col-span-3')}>
               <h3 className="font-bold text-gray-800 mb-3">{t('sec.statusDist')}</h3>
               <StatusBars dist={m.statusDist} t={t} />
             </Card>
+            )}
           </div>
+          )}
 
           {/* ===== Layer 4: Fleet snapshot ===== */}
-          {m.fleetHasData && d!.fleet?.monthly && (
+          {P.fleet && m.fleetHasData && d!.fleet?.monthly && (
             <Card className="p-4 overflow-x-auto">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="font-bold text-gray-800">{t('sec.fleet')} <span className="text-xs font-normal text-gray-400">· USD</span></h3>
-                <Link href="/dashboard/reports" className="text-xs text-brand-600 hover:underline">{t('common.viewAll')}</Link>
+                {P.reports && <Link href="/dashboard/reports" className="text-xs text-brand-600 hover:underline">{t('common.viewAll')}</Link>}
               </div>
               <FleetSnapshot monthly={d!.fleet.monthly} range={range} t={t} />
             </Card>
           )}
 
+          {(P.inv || P.pay) && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {/* ===== Layer 5: Top suppliers ===== */}
+            {P.inv && (
             <Card className="p-4">
               <h3 className="font-bold text-gray-800 mb-3">{t('sec.topSuppliers')}</h3>
               {m.topSuppliers.length ? (
@@ -239,46 +281,65 @@ export default function DashboardPage() {
                 </div>
               ) : <EmptyState title={t('common.empty')} />}
             </Card>
+            )}
 
             {/* ===== Layer 6: Recent activity ===== */}
-            <Card className="p-4">
+            {(P.inv || P.pay) && (
+            <Card className={cx('p-4', !P.inv && 'lg:col-span-2')}>
               <h3 className="font-bold text-gray-800 mb-3">{t('sec.recent')}</h3>
               <div className="space-y-1.5 text-sm">
-                {m.recentInv.slice(0, 4).map((i) => (
+                {P.inv && m.recentInv.slice(0, 4).map((i) => (
                   <Link key={i.id} href="/dashboard/invoices" className="flex items-center justify-between py-1.5 border-b border-gray-50 last:border-0 hover:bg-gray-50 rounded-lg px-1">
                     <span className="flex items-center gap-2 text-gray-700 truncate"><Icon name="receipt" size={15} className="text-gray-400" />{i.invoice_number} · {i.supplier?.name || '—'}</span>
                     <span className="text-gray-500 tabular-nums shrink-0">{fmtMoneyC(i.total_amount, i.currency)}</span>
                   </Link>
                 ))}
-                {m.recentPay.slice(0, 3).map((p) => (
+                {P.pay && m.recentPay.slice(0, 3).map((p) => (
                   <Link key={p.id} href="/dashboard/payments" className="flex items-center justify-between py-1.5 border-b border-gray-50 last:border-0 hover:bg-gray-50 rounded-lg px-1">
                     <span className="flex items-center gap-2 text-gray-700 truncate"><Icon name="card" size={15} className="text-emerald-500" />{p.invoice?.supplier?.name || t('lbl.recentPayments')}</span>
                     <span className="text-emerald-700 tabular-nums shrink-0">{fmtMoneyC(p.amount, p.currency)}</span>
                   </Link>
                 ))}
-                {!m.recentInv.length && !m.recentPay.length && <EmptyState title={t('common.empty')} />}
+                {(!P.inv || !m.recentInv.length) && (!P.pay || !m.recentPay.length) && <EmptyState title={t('common.empty')} />}
               </div>
             </Card>
+            )}
           </div>
+          )}
 
-          {/* ===== Layer 7: Quick actions ===== */}
+          {/* ===== Limited-user welcome (no data widgets available) ===== */}
+          {!P.inv && !P.hire && !P.pay && !P.fleet && (
+            <Card className="p-6 text-center">
+              <span className="inline-flex w-12 h-12 rounded-2xl bg-brand-50 text-brand-600 items-center justify-center mb-3"><Icon name="home" size={24} /></span>
+              <h3 className="font-bold text-gray-800">{locale === 'en' ? `Welcome to UME PMS${firstName ? ', ' + firstName : ''}` : `أهلاً بك في UME PMS${firstName ? '، ' + firstName : ''}`}</h3>
+              <p className="text-sm text-gray-500 mt-1">{locale === 'en' ? 'Use the shortcuts below to reach the areas available to you.' : 'استخدم الاختصارات بالأسفل للوصول إلى ما هو متاح لك.'}</p>
+            </Card>
+          )}
+
+          {/* ===== Layer 7: Quick actions (permission-gated) ===== */}
+          {(() => {
+            const actions = [
+              { href: '/dashboard/invoices', icon: 'receipt', k: 'qa.addInvoice' },
+              { href: '/dashboard/payments', icon: 'card', k: 'qa.addPayment' },
+              { href: '/dashboard/suppliers', icon: 'factory', k: 'qa.addSupplier' },
+              { href: '/dashboard/purchase-orders', icon: 'clipboard', k: 'qa.addPO' },
+              { href: '/dashboard/tasks', icon: 'check', k: 'qa.addTask' },
+              { href: '/dashboard/reports', icon: 'chart', k: 'qa.reports' },
+            ].filter((a) => canDo(a.href));
+            if (!actions.length) return null;
+            return (
           <Card className="p-4">
             <h3 className="font-bold text-gray-800 mb-3">{t('sec.quickActions')}</h3>
             <div className="flex flex-wrap gap-2">
-              {[
-                { href: '/dashboard/invoices', icon: 'receipt', k: 'qa.addInvoice' },
-                { href: '/dashboard/payments', icon: 'card', k: 'qa.addPayment' },
-                { href: '/dashboard/suppliers', icon: 'factory', k: 'qa.addSupplier' },
-                { href: '/dashboard/purchase-orders', icon: 'clipboard', k: 'qa.addPO' },
-                { href: '/dashboard/tasks', icon: 'check', k: 'qa.addTask' },
-                { href: '/dashboard/reports', icon: 'chart', k: 'qa.reports' },
-              ].filter((a) => canDo(a.href)).map((a) => (
+              {actions.map((a) => (
                 <Link key={a.k} href={a.href} className="flex items-center gap-2 text-sm border border-gray-200 rounded-xl px-4 py-2.5 hover:bg-brand-50 hover:border-brand-300 text-gray-700 transition-colors">
                   <Icon name={a.icon} size={17} className="text-brand-600" />{t(a.k)}
                 </Link>
               ))}
             </div>
           </Card>
+            );
+          })()}
 
           <p className="text-[11px] text-gray-400 text-center pb-2">{t('note.asOf')}</p>
         </>

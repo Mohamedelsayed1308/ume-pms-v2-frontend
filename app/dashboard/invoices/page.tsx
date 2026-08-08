@@ -135,7 +135,7 @@ function InvoicesContent() {
   const supplierDropRef = useRef<HTMLDivElement>(null);
   const { t, locale } = useI18n();
   // workspace controls (Phase 3 modernization — presentation only)
-  const [q, setQ] = useState('');
+  const [q, setQ] = useState(searchParams.get('q') || '');
   const [preset, setPreset] = useState<'all' | 'unpaid' | 'paid' | 'overdue' | 'duesoon' | 'approval'>('all');
   const [supFilter, setSupFilter] = useState('');
   const [vesFilter, setVesFilter] = useState('');

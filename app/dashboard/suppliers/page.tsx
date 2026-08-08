@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import api from '@/lib/api';
 import { getUser } from '@/lib/auth';
+import { useInitialQuery } from '@/lib/useInitialQuery';
 import { useI18n } from '@/lib/i18n';
 import { Card, Button, Badge, Input, Field, Select, Modal, Drawer, Skeleton, EmptyState, Icon, useToast, cx } from '@/components/ui';
 import { fmtNum, fmtMoney, fmtMoneyC, ccyEntries, n0 } from '@/lib/format';
@@ -37,6 +38,7 @@ export default function SuppliersPage() {
   const [err, setErr] = useState(false);
 
   const [q, setQ] = useState('');
+  useInitialQuery(setQ);
   const [status, setStatus] = useState<'all' | 'active' | 'inactive'>('all');
   const [country, setCountry] = useState('');
   const [onlyOutstanding, setOnlyOutstanding] = useState(false);

@@ -1,16 +1,80 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import api from '@/lib/api';
 import * as XLSX from 'xlsx';
 import VesselProfitReport, { PELAGOS, ALCUDIA } from './VesselProfitReport';
 import GubalProfitReport from './GubalProfitReport';
 import ExchangeRatesCard from './ExchangeRatesCard';
 import FleetDashboard from './FleetDashboard';
+import { useI18n } from '@/lib/i18n';
+import { Icon } from '@/components/ui/Icon';
+import { fmtCcyMap, sumByCurrency } from '@/lib/format';
+import { getUser } from '@/lib/auth';
+import { canHref } from '@/lib/profile';
+
+// كل تقرير → الشاشة/البيانات المطلوبة للوصول (تصفية حسب الصلاحية داخل مركز التحليلات)
+const REPORT_REQUIRES: Record<string, string> = {
+  'fleet-dashboard': '/dashboard/vessels', 'vessel-profit': '/dashboard/vessels',
+  'alcudia-profit': '/dashboard/vessels', 'gubal-profit': '/dashboard/vessels',
+  'vessel-suppliers': '/dashboard/vessels',
+  'supplier-statement': '/dashboard/suppliers', 'unpaid-supplier': '/dashboard/suppliers',
+  'due-alerts': '/dashboard/invoices', 'unpaid-vessel': '/dashboard/invoices',
+  'dept-delays': '/dashboard/invoices', 'user-activity': '/dashboard/invoices',
+  'exchange-rates': '/dashboard/reports',
+};
 
 const statusLabel: Record<string, string> = { unpaid: 'غير مدفوعة', partial: 'جزئي', paid: 'مدفوعة', cancelled: 'ملغاة' };
 const statusColor: Record<string, string> = { unpaid: 'bg-red-100 text-red-700', partial: 'bg-yellow-100 text-yellow-700', paid: 'bg-green-100 text-green-700', cancelled: 'bg-gray-100 text-gray-500' };
 
 type ReportType = 'fleet-dashboard' | 'supplier-statement' | 'unpaid-supplier' | 'unpaid-vessel' | 'vessel-suppliers' | 'due-alerts' | 'user-activity' | 'dept-delays' | 'vessel-profit' | 'alcudia-profit' | 'gubal-profit' | 'exchange-rates';
+
+type CatKey = 'fleet' | 'suppliers' | 'cash' | 'ops' | 'tools';
+
+interface Bi { ar: string; en: string }
+interface ReportMeta { id: ReportType; cat: CatKey; icon: string; title: Bi; desc: Bi }
+
+// ── فئات مركز التحليلات (كل فئة مدعومة بتقارير حقيقية فقط) ──
+const CATEGORIES: { key: CatKey; icon: string; label: Bi; accent: string; ring: string; text: string; soft: string }[] = [
+  { key: 'fleet', icon: 'ship', label: { ar: 'الأسطول والأداء', en: 'Fleet & Performance' }, accent: 'bg-indigo-500', ring: 'ring-indigo-200 border-indigo-300', text: 'text-indigo-600', soft: 'bg-indigo-50' },
+  { key: 'suppliers', icon: 'factory', label: { ar: 'الموردون والمستحقات', en: 'Suppliers & Payables' }, accent: 'bg-blue-500', ring: 'ring-blue-200 border-blue-300', text: 'text-blue-600', soft: 'bg-blue-50' },
+  { key: 'cash', icon: 'card', label: { ar: 'النقدية والاستحقاق', en: 'Cash & Aging' }, accent: 'bg-red-500', ring: 'ring-red-200 border-red-300', text: 'text-red-600', soft: 'bg-red-50' },
+  { key: 'ops', icon: 'users', label: { ar: 'العمليات والفريق', en: 'Operations & Team' }, accent: 'bg-amber-500', ring: 'ring-amber-200 border-amber-300', text: 'text-amber-600', soft: 'bg-amber-50' },
+  { key: 'tools', icon: 'globe', label: { ar: 'أدوات', en: 'Tools' }, accent: 'bg-purple-500', ring: 'ring-purple-200 border-purple-300', text: 'text-purple-600', soft: 'bg-purple-50' },
+];
+
+// ── دليل التقارير ──
+const REPORTS: ReportMeta[] = [
+  { id: 'fleet-dashboard', cat: 'fleet', icon: 'chart', title: { ar: 'لوحة الأسطول التنفيذية', en: 'Fleet Executive Dashboard' }, desc: { ar: 'مؤشرات ومقارنات وأعداد المنقولات لكل الأسطول + مساعد ذكي', en: 'Fleet-wide KPIs, comparisons, movement counts + AI assistant' } },
+  { id: 'vessel-profit', cat: 'fleet', icon: 'coins', title: { ar: 'ربحية Pelagos', en: 'Pelagos Profitability' }, desc: { ar: 'إيرادات ومصروفات وسيولة بيلاجوس شهرياً', en: 'Monthly revenue, expenses & liquidity — Pelagos' } },
+  { id: 'alcudia-profit', cat: 'fleet', icon: 'coins', title: { ar: 'ربحية Alcudia', en: 'Alcudia Profitability' }, desc: { ar: 'إيرادات ومصروفات ومشتريات الكوديا شهرياً', en: 'Monthly revenue, expenses & purchases — Alcudia' } },
+  { id: 'gubal-profit', cat: 'fleet', icon: 'coins', title: { ar: 'ربحية Gubal', en: 'Gubal Profitability' }, desc: { ar: 'قائمة دخل شهرية / من فترة لفترة لمركب جوبال', en: 'Monthly / period income statement — Gubal' } },
+
+  { id: 'supplier-statement', cat: 'suppliers', icon: 'receipt', title: { ar: 'كشف حساب مورد', en: 'Supplier Statement' }, desc: { ar: 'مدين / دائن / رصيد متراكم', en: 'Debit / credit / running balance' } },
+  { id: 'unpaid-supplier', cat: 'suppliers', icon: 'factory', title: { ar: 'مستحقات مورد', en: 'Supplier Outstanding' }, desc: { ar: 'الفواتير غير المدفوعة أو الجزئية لمورد', en: 'Unpaid / partial invoices per supplier' } },
+  { id: 'vessel-suppliers', cat: 'suppliers', icon: 'clipboard', title: { ar: 'موردو المركب', en: 'Vessel Suppliers' }, desc: { ar: 'حجم تعامل كل مورد على المركب', en: 'Spend per supplier on a vessel' } },
+
+  { id: 'due-alerts', cat: 'cash', icon: 'bell', title: { ar: 'تنبيهات الاستحقاق', en: 'Due Alerts' }, desc: { ar: 'فواتير مستحقة خلال فترة محددة', en: 'Invoices due within a period' } },
+  { id: 'unpaid-vessel', cat: 'cash', icon: 'ship', title: { ar: 'مستحقات مركب', en: 'Outstanding by Vessel' }, desc: { ar: 'الفواتير غير المدفوعة على مركب معين', en: 'Unpaid invoices for a vessel' } },
+
+  { id: 'dept-delays', cat: 'ops', icon: 'bell', title: { ar: 'تأخرات الأقسام', en: 'Department Delays' }, desc: { ar: 'فواتير تجاوزت 3 أيام بدون إجراء', en: 'Invoices stuck >3 days without action' } },
+  { id: 'user-activity', cat: 'ops', icon: 'users', title: { ar: 'نشاط المستخدمين', en: 'User Activity' }, desc: { ar: 'عدد الفواتير لكل مستخدم حسب السفينة', en: 'Invoice count per user by vessel' } },
+
+  { id: 'exchange-rates', cat: 'tools', icon: 'globe', title: { ar: 'أسعار الصرف', en: 'Exchange Rates' }, desc: { ar: 'أسعار العملات مقابل الدولار لكل شهر', en: 'Monthly currency rates vs USD' } },
+];
+
+const REPORT_MAP: Record<string, ReportMeta> = Object.fromEntries(REPORTS.map((r) => [r.id, r]));
+const CAT_MAP: Record<string, (typeof CATEGORIES)[number]> = Object.fromEntries(CATEGORIES.map((c) => [c.key, c]));
+
+const RECENTS_KEY = 'ume_report_recents';
+function readRecents(): ReportType[] {
+  try { const v = JSON.parse(localStorage.getItem(RECENTS_KEY) || '[]'); return Array.isArray(v) ? v.filter((x) => REPORT_MAP[x]) : []; } catch { return []; }
+}
+function pushRecent(id: ReportType) {
+  try {
+    const cur = readRecents().filter((x) => x !== id);
+    localStorage.setItem(RECENTS_KEY, JSON.stringify([id, ...cur].slice(0, 4)));
+  } catch { /* noop */ }
+}
 
 interface UserReport {
   user_id: string;
@@ -45,7 +109,16 @@ function exportMultiToExcel(sheets: { name: string; rows: any[] }[], filename: s
 const num = (n: any) => Number(n || 0).toLocaleString();
 
 export default function ReportsPage() {
-  const [reportType, setReportType] = useState<ReportType>('fleet-dashboard');
+  const { locale, t } = useI18n();
+  const L = (b: Bi) => (locale === 'en' ? b.en : b.ar);
+  const [user, setUser] = useState<any>(null);
+  useEffect(() => { setUser(getUser()); }, []);
+  const canReport = (id: string) => canHref(user, REPORT_REQUIRES[id] || '/dashboard/reports');
+
+  const [selected, setSelected] = useState<ReportType | ''>('');
+  const [search, setSearch] = useState('');
+  const [recents, setRecents] = useState<ReportType[]>([]);
+
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [vessels, setVessels] = useState<any[]>([]);
   const [selectedSuppliers, setSelectedSuppliers] = useState<string[]>([]);
@@ -57,12 +130,29 @@ export default function ReportsPage() {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [attachments, setAttachments] = useState<Record<string, any[]>>({});
 
+  const reportType = selected; // توافق مع بقية المنطق
+
+  useEffect(() => { setRecents(readRecents()); }, []);
+
   useEffect(() => {
     Promise.all([api.get('/api/suppliers'), api.get('/api/vessels')]).then(([s, v]) => {
       setSuppliers(s.data);
       setVessels(v.data);
     });
   }, []);
+
+  function openReport(id: ReportType) {
+    if (!canReport(id)) return;
+    setSelected(id);
+    setData(null);
+    setAttachments({});
+    pushRecent(id);
+    setRecents(readRecents());
+  }
+  function backToHome() {
+    setSelected('');
+    setData(null);
+  }
 
   async function loadAttachments(invoices: any[]) {
     const map: Record<string, any[]> = {};
@@ -134,60 +224,24 @@ export default function ReportsPage() {
     }
   }
 
-  const reportGroups = [
-    {
-      title: 'لوحة الأسطول', dot: 'bg-indigo-500',
-      sel: 'border-indigo-500 bg-indigo-50 ring-1 ring-indigo-200', idle: 'border-gray-200 bg-white hover:border-indigo-300',
-      items: [
-        { id: 'fleet-dashboard', label: '🚢 لوحة الأسطول التنفيذية', desc: 'مؤشرات ومقارنات وأعداد المنقولات لكل الأسطول + مساعد ذكي' },
-      ],
-    },
-    {
-      title: 'المستحقات والتنبيهات', dot: 'bg-red-500',
-      sel: 'border-red-500 bg-red-50 ring-1 ring-red-200', idle: 'border-gray-200 bg-white hover:border-red-300',
-      items: [
-        { id: 'due-alerts', label: '⚠️ تنبيهات الاستحقاق', desc: 'فواتير مستحقة خلال فترة محددة' },
-        { id: 'unpaid-supplier', label: '🔴 مستحقات مورد', desc: 'الفواتير غير المدفوعة أو الجزئية لمورد' },
-        { id: 'unpaid-vessel', label: '🚢 مستحقات مركب', desc: 'الفواتير غير المدفوعة على مركب معين' },
-        { id: 'dept-delays', label: '🔔 تأخرات الأقسام', desc: 'فواتير تجاوزت 3 أيام بدون إجراء' },
-      ],
-    },
-    {
-      title: 'كشوف الحسابات', dot: 'bg-blue-500',
-      sel: 'border-blue-500 bg-blue-50 ring-1 ring-blue-200', idle: 'border-gray-200 bg-white hover:border-blue-300',
-      items: [
-        { id: 'supplier-statement', label: '📒 كشف حساب مورد', desc: 'مدين / دائن / رصيد متراكم' },
-        { id: 'vessel-suppliers', label: '📊 موردو المركب', desc: 'حجم تعامل كل مورد على المركب' },
-        { id: 'user-activity', label: '👤 نشاط المستخدمين', desc: 'عدد الفواتير لكل مستخدم حسب السفينة' },
-      ],
-    },
-    {
-      title: 'أرباح المراكب', dot: 'bg-emerald-500',
-      sel: 'border-emerald-500 bg-emerald-50 ring-1 ring-emerald-200', idle: 'border-gray-200 bg-white hover:border-emerald-300',
-      items: [
-        { id: 'vessel-profit', label: '🚢💰 ربح Pelagos', desc: 'إيرادات ومصروفات وسيولة بيلاجوس شهرياً' },
-        { id: 'alcudia-profit', label: '🚢💰 ربح Alcudia', desc: 'إيرادات ومصروفات ومشتريات الكوديا شهرياً' },
-      { id: 'gubal-profit', label: '🚢💰 ربح Gubal', desc: 'قائمة دخل شهرية / من فترة لفترة لمركب جوبال' },
-      ],
-    },
-    {
-      title: 'أدوات وإعدادات', dot: 'bg-purple-500',
-      sel: 'border-purple-500 bg-purple-50 ring-1 ring-purple-200', idle: 'border-gray-200 bg-white hover:border-purple-300',
-      items: [
-        { id: 'exchange-rates', label: '💱 أسعار الصرف', desc: 'أسعار العملات مقابل الدولار لكل شهر' },
-      ],
-    },
-  ];
-
   const needsSupplier = ['supplier-statement', 'unpaid-supplier'].includes(reportType);
   const needsVessel = ['unpaid-vessel', 'vessel-suppliers'].includes(reportType);
   const needsDays = reportType === 'due-alerts';
   const noFilter = reportType === 'user-activity' || reportType === 'dept-delays';
+  const selfContained = ['fleet-dashboard', 'vessel-profit', 'alcudia-profit', 'gubal-profit', 'exchange-rates'].includes(reportType);
 
   const filteredSuppliers = suppliers.filter((s) =>
     (s.name || '').toLowerCase().includes(supplierSearch.toLowerCase()));
   const toggleSupplier = (id: string) =>
     setSelectedSuppliers((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
+
+  // ── تصفية دليل التقارير حسب البحث ──
+  const q = search.trim().toLowerCase();
+  const catalog = useMemo(() => CATEGORIES.map((c) => ({
+    cat: c,
+    items: REPORTS.filter((r) => r.cat === c.key).filter((r) => canReport(r.id)).filter((r) =>
+      !q || L(r.title).toLowerCase().includes(q) || L(r.desc).toLowerCase().includes(q) || L(c.label).toLowerCase().includes(q)),
+  })).filter((g) => g.items.length > 0), [q, locale, user]);
 
   function AttachmentCell({ invoiceId }: { invoiceId: string }) {
     const files = attachments[invoiceId];
@@ -227,31 +281,118 @@ export default function ReportsPage() {
     'المرفقات': (attachments[inv.id] || []).map((f: any) => f.file_url).join(' | '),
   }));
 
-  return (
-    <div>
-      <h2 className="text-2xl font-bold text-gray-800 mb-6">التقارير</h2>
+  // ══════════════════════════ مركز التحليلات (الصفحة الرئيسية) ══════════════════════════
+  if (!selected) {
+    return (
+      <div>
+        <div className="mb-6">
+          <h2 className="text-2xl font-bold text-[var(--color-navy,#0f172a)] mb-1">{t('reports.center', locale === 'en' ? 'Analytics Center' : 'مركز التحليلات')}</h2>
+          <p className="text-sm text-gray-500">{t('reports.centerSub', locale === 'en' ? 'Answer a business question — pick a report by category or search.' : 'أجب عن سؤال إداري بسرعة — اختر تقريرًا حسب الفئة أو ابحث.')}</p>
+        </div>
 
-      <div className="space-y-5 mb-6">
-        {reportGroups.map((g) => (
-          <div key={g.title}>
+        {/* بحث */}
+        <div className="relative mb-6 max-w-xl">
+          <span className="absolute top-1/2 -translate-y-1/2 start-3 text-gray-400 pointer-events-none">
+            <Icon name="search" size={18} />
+          </span>
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder={locale === 'en' ? 'Search reports…' : 'ابحث في التقارير…'}
+            className="w-full border border-gray-200 rounded-xl ps-10 pe-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          />
+        </div>
+
+        {/* المستخدمة مؤخراً */}
+        {!q && recents.length > 0 && (
+          <div className="mb-6">
             <div className="flex items-center gap-2 mb-2">
-              <span className={`w-1.5 h-1.5 rounded-full ${g.dot}`} />
-              <span className="text-sm font-medium text-gray-500">{g.title}</span>
+              <span className="text-sm font-medium text-gray-500">{locale === 'en' ? 'Recently used' : 'المستخدمة مؤخراً'}</span>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              {g.items.map((r) => (
-                <button key={r.id} onClick={() => { setReportType(r.id as ReportType); setData(null); }}
-                  className={`p-3 rounded-xl border text-right transition-all ${reportType === r.id ? g.sel : g.idle}`}>
-                  <div className="font-medium text-sm">{r.label}</div>
-                  <div className="text-xs text-gray-500 mt-1">{r.desc}</div>
-                </button>
-              ))}
+              {recents.map((id) => {
+                const r = REPORT_MAP[id]; if (!r) return null;
+                const c = CAT_MAP[r.cat];
+                return (
+                  <button key={id} onClick={() => openReport(id)}
+                    className="flex items-center gap-3 p-3 rounded-xl border border-gray-200 bg-white hover:shadow-sm hover:border-gray-300 transition-all text-start">
+                    <span className={`shrink-0 w-9 h-9 rounded-lg flex items-center justify-center ${c.soft} ${c.text}`}>
+                      <Icon name={r.icon} size={18} />
+                    </span>
+                    <span className="text-sm font-medium text-gray-700 truncate">{L(r.title)}</span>
+                  </button>
+                );
+              })}
             </div>
           </div>
-        ))}
+        )}
+
+        {/* الفئات */}
+        <div className="space-y-7">
+          {catalog.map(({ cat, items }) => (
+            <div key={cat.key}>
+              <div className="flex items-center gap-2 mb-3">
+                <span className={`w-8 h-8 rounded-lg flex items-center justify-center text-white ${cat.accent}`}>
+                  <Icon name={cat.icon} size={18} />
+                </span>
+                <h3 className="text-base font-bold text-gray-800">{L(cat.label)}</h3>
+                <span className="text-xs text-gray-400">({items.length})</span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {items.map((r) => (
+                  <button key={r.id} onClick={() => openReport(r.id)}
+                    className={`group text-start p-4 rounded-xl border border-gray-200 bg-white hover:shadow-md hover:-translate-y-0.5 transition-all ${cat.ring.split(' ')[1]}`}>
+                    <div className="flex items-start gap-3">
+                      <span className={`shrink-0 w-10 h-10 rounded-lg flex items-center justify-center ${cat.soft} ${cat.text}`}>
+                        <Icon name={r.icon} size={20} />
+                      </span>
+                      <div className="min-w-0">
+                        <div className="font-semibold text-sm text-gray-800 group-hover:text-gray-900">{L(r.title)}</div>
+                        <div className="text-xs text-gray-500 mt-1 leading-relaxed">{L(r.desc)}</div>
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+          {catalog.length === 0 && (
+            <div className="text-center py-16 text-gray-400">
+              <Icon name="search" size={32} />
+              <p className="mt-3 text-sm">{locale === 'en' ? 'No reports match your search.' : 'لا يوجد تقرير مطابق للبحث.'}</p>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // ══════════════════════════ عرض تقرير مفرد ══════════════════════════
+  const meta = REPORT_MAP[selected];
+  const cat = meta ? CAT_MAP[meta.cat] : CATEGORIES[0];
+
+  return (
+    <div>
+      {/* رأس موحّد + رجوع */}
+      <div className="flex items-start gap-3 mb-6">
+        <button onClick={backToHome}
+          className="shrink-0 mt-0.5 w-9 h-9 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 flex items-center justify-center text-gray-600"
+          title={locale === 'en' ? 'Back to Analytics Center' : 'رجوع لمركز التحليلات'} aria-label="back">
+          <Icon name={locale === 'en' ? 'chevronLeft' : 'chevronRight'} size={20} />
+        </button>
+        <span className={`shrink-0 w-11 h-11 rounded-xl flex items-center justify-center ${cat.soft} ${cat.text}`}>
+          <Icon name={meta?.icon || 'chart'} size={22} />
+        </span>
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h2 className="text-xl font-bold text-gray-800">{meta ? L(meta.title) : ''}</h2>
+            <span className={`text-[11px] px-2 py-0.5 rounded-full ${cat.soft} ${cat.text} font-medium`}>{L(cat.label)}</span>
+          </div>
+          <p className="text-sm text-gray-500 mt-0.5">{meta ? L(meta.desc) : ''}</p>
+        </div>
       </div>
 
-      {/* Vessel profit — self-contained reports */}
+      {/* التقارير المستقلة بذاتها */}
       {reportType === 'fleet-dashboard' && <FleetDashboard />}
       {reportType === 'vessel-profit' && <VesselProfitReport config={PELAGOS} />}
       {reportType === 'alcudia-profit' && <VesselProfitReport config={ALCUDIA} />}
@@ -259,7 +400,7 @@ export default function ReportsPage() {
       {reportType === 'exchange-rates' && <ExchangeRatesCard />}
 
       {/* Filters */}
-      {reportType !== 'fleet-dashboard' && reportType !== 'vessel-profit' && reportType !== 'alcudia-profit' && reportType !== 'gubal-profit' && reportType !== 'exchange-rates' && (
+      {!selfContained && (
       <div className="bg-white rounded-xl shadow p-4 mb-6 flex items-end gap-4 flex-wrap">
         {needsSupplier && (
           <div className="flex-1 min-w-[280px]">
@@ -327,7 +468,10 @@ export default function ReportsPage() {
             const gC = secs.reduce((s, x) => s + Number(x.summary.total_credit), 0);
             return (
               <div className="bg-white rounded-xl shadow p-4 flex items-center justify-between flex-wrap gap-3">
-                <h3 className="font-bold text-gray-700">📒 كشف حساب — {secs.length} مورد</h3>
+                <div>
+                  <h3 className="font-bold text-gray-700">📒 كشف حساب — {secs.length} مورد</h3>
+                  <p className="text-[11px] text-amber-600 mt-1">⚠️ الإجماليات قد تشمل عملات مختلفة — راجع كل مورد على حدة.</p>
+                </div>
                 <div className="flex items-center gap-4 flex-wrap">
                   <div className="flex gap-5 text-sm">
                     <span className="text-red-600">إجمالي مدين: <strong>{num(gD)}</strong></span>
@@ -358,6 +502,7 @@ export default function ReportsPage() {
               {sec.transactions.length === 0 ? (
                 <p className="text-center py-4 text-gray-400 text-sm">لا توجد حركات لهذا المورد</p>
               ) : (
+                <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead className="bg-gray-50 text-gray-600 text-right">
                     <tr>
@@ -382,6 +527,7 @@ export default function ReportsPage() {
                     ))}
                   </tbody>
                 </table>
+                </div>
               )}
             </div>
           ))}
@@ -394,15 +540,15 @@ export default function ReportsPage() {
           {(() => {
             const secs = data.sections as UnpaidSec[];
             const all = secs.flatMap((s) => s.invoices);
-            const total = all.reduce((s, i: any) => s + +i.total_amount, 0);
-            const remaining = all.reduce((s, i: any) => s + (+i.total_amount - +i.paid_amount), 0);
+            const totalMap = sumByCurrency(all, (i: any) => +i.total_amount, (i: any) => i.currency);
+            const remMap = sumByCurrency(all, (i: any) => (+i.total_amount - +i.paid_amount), (i: any) => i.currency);
             return (
               <div className="bg-white rounded-xl shadow p-4 flex items-center justify-between flex-wrap gap-3">
                 <div>
                   <h3 className="font-bold text-gray-700">🔴 مستحقات — {secs.length} مورد · {all.length} فاتورة</h3>
-                  <div className="flex gap-6 text-sm mt-1">
-                    <span className="text-gray-600">إجمالي: <strong>{num(total)}</strong></span>
-                    <span className="text-red-600">المتبقي: <strong>{num(remaining)}</strong></span>
+                  <div className="flex gap-6 text-sm mt-1 flex-wrap">
+                    <span className="text-gray-600">إجمالي: <strong>{fmtCcyMap(totalMap)}</strong></span>
+                    <span className="text-red-600">المتبقي: <strong>{fmtCcyMap(remMap)}</strong></span>
                   </div>
                 </div>
                 <button onClick={() => exportMultiToExcel(secs.map((sec) => ({ name: sec.supplierName, rows: unpaidRows(sec.invoices, sec.supplierName) })), 'مستحقات-موردين')}
@@ -412,16 +558,16 @@ export default function ReportsPage() {
           })()}
 
           {(data.sections as UnpaidSec[]).map((sec) => {
-            const total = sec.invoices.reduce((s, i: any) => s + +i.total_amount, 0);
-            const remaining = sec.invoices.reduce((s, i: any) => s + (+i.total_amount - +i.paid_amount), 0);
+            const totalMap = sumByCurrency(sec.invoices, (i: any) => +i.total_amount, (i: any) => i.currency);
+            const remMap = sumByCurrency(sec.invoices, (i: any) => (+i.total_amount - +i.paid_amount), (i: any) => i.currency);
             return (
               <div key={sec.supplierId} className="bg-white rounded-xl shadow p-4">
                 <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
                   <div>
                     <h4 className="font-bold text-gray-800">🔴 {sec.supplierName} — {sec.invoices.length} فاتورة</h4>
-                    <div className="flex gap-6 text-sm mt-1">
-                      <span className="text-gray-600">إجمالي: <strong>{num(total)}</strong></span>
-                      <span className="text-red-600">المتبقي: <strong>{num(remaining)}</strong></span>
+                    <div className="flex gap-6 text-sm mt-1 flex-wrap">
+                      <span className="text-gray-600">إجمالي: <strong>{fmtCcyMap(totalMap)}</strong></span>
+                      <span className="text-red-600">المتبقي: <strong>{fmtCcyMap(remMap)}</strong></span>
                     </div>
                   </div>
                   <button onClick={() => exportToExcel(unpaidRows(sec.invoices, sec.supplierName), `مستحقات-${sec.supplierName}`)}
@@ -430,6 +576,7 @@ export default function ReportsPage() {
                 {sec.invoices.length === 0 ? (
                   <p className="text-center py-4 text-gray-400 text-sm">لا توجد فواتير مستحقة لهذا المورد</p>
                 ) : (
+                  <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead className="bg-gray-50 text-gray-600 text-right">
                       <tr>
@@ -458,6 +605,7 @@ export default function ReportsPage() {
                       ))}
                     </tbody>
                   </table>
+                  </div>
                 )}
               </div>
             );
@@ -488,6 +636,7 @@ export default function ReportsPage() {
                   📥 Excel
                 </button>
               </div>
+              <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 text-gray-600 text-right">
                   <tr>
@@ -521,6 +670,7 @@ export default function ReportsPage() {
                   {data.length === 0 && <tr><td colSpan={8} className="text-center py-6 text-gray-400">لا توجد فواتير مستحقة</td></tr>}
                 </tbody>
               </table>
+              </div>
             </>
           )}
 
@@ -530,9 +680,9 @@ export default function ReportsPage() {
               <div className="flex items-center justify-between mb-4">
                 <div>
                   <h3 className="font-bold text-gray-700 mb-1">🔴 الفواتير غير المسددة — {data.length} فاتورة</h3>
-                  <div className="flex gap-6 text-sm">
-                    <span className="text-gray-600">إجمالي: <strong>{num(data.reduce((s: number, i: any) => s + +i.total_amount, 0))}</strong></span>
-                    <span className="text-red-600">المتبقي: <strong>{num(data.reduce((s: number, i: any) => s + (+i.total_amount - +i.paid_amount), 0))}</strong></span>
+                  <div className="flex gap-6 text-sm flex-wrap">
+                    <span className="text-gray-600">إجمالي: <strong>{fmtCcyMap(sumByCurrency(data, (i: any) => +i.total_amount, (i: any) => i.currency))}</strong></span>
+                    <span className="text-red-600">المتبقي: <strong>{fmtCcyMap(sumByCurrency(data, (i: any) => (+i.total_amount - +i.paid_amount), (i: any) => i.currency))}</strong></span>
                   </div>
                 </div>
                 <button onClick={() => exportToExcel(data.map((inv: any) => ({
@@ -551,6 +701,7 @@ export default function ReportsPage() {
                   📥 Excel
                 </button>
               </div>
+              <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 text-gray-600 text-right">
                   <tr>
@@ -582,6 +733,7 @@ export default function ReportsPage() {
                   {data.length === 0 && <tr><td colSpan={8} className="text-center py-6 text-gray-400">لا توجد فواتير مستحقة</td></tr>}
                 </tbody>
               </table>
+              </div>
             </>
           )}
 
@@ -601,6 +753,7 @@ export default function ReportsPage() {
                   📥 Excel
                 </button>
               </div>
+              <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 text-gray-600 text-right">
                   <tr>
@@ -624,6 +777,7 @@ export default function ReportsPage() {
                   {data.length === 0 && <tr><td colSpan={5} className="text-center py-6 text-gray-400">لا توجد بيانات</td></tr>}
                 </tbody>
               </table>
+              </div>
             </>
           )}
 
@@ -656,6 +810,7 @@ export default function ReportsPage() {
               {data.length === 0 ? (
                 <p className="text-center py-10 text-green-600 font-medium">✅ لا توجد تأخرات — كل الأقسام تعمل في الوقت المحدد</p>
               ) : (
+                <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead className="bg-gray-50 text-gray-600 text-right">
                     <tr>
@@ -703,6 +858,7 @@ export default function ReportsPage() {
                     ))}
                   </tbody>
                 </table>
+                </div>
               )}
             </>
           )}
@@ -727,6 +883,7 @@ export default function ReportsPage() {
                 const users = data as UserReport[];
                 const total = users.reduce((s, u) => s + u.total, 0);
                 return (
+                  <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead className="bg-gray-50 text-gray-600 text-right">
                       <tr>
@@ -786,6 +943,7 @@ export default function ReportsPage() {
                       )}
                     </tbody>
                   </table>
+                  </div>
                 );
               })()}
             </>
