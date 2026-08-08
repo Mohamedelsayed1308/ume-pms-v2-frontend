@@ -58,3 +58,18 @@ D (not available): tax, discount (no fields); cross-currency single total.
 ## Implementation scope (safety-first)
 Modernize the **workspace/read layer** (header, financial summary per-currency, needs-attention, search, filters + preset views, sort, desktop table + mobile cards, detail drawer with distinct approval/payment/transaction sections, attachments view) using the Phase-1 design system + i18n.
 **Preserve verbatim** (no logic/payload change): create/edit form incl. AI extraction, bulk upload, multi-item line editor + sum validation, manual-PO creation, charge-type/depreciation, quick-pay (`approval_status='paid'`), attachments upload, and the AI assistant.
+
+## Post-implementation verification (DOM vs live API — recomputed, not copied)
+| Metric | Rendered (DOM, modernized workspace) | Live source | Verdict |
+|--------|--------------------------------------|-------------|---------|
+| Total / unpaid / paid | 218 / 74 / 144 | identical | PASS |
+| Outstanding (per ccy) | USD 1,283,727.57 · EUR 110,873.03 · SAR 890.00 | identical | PASS |
+| Overdue | 25 · USD 1,097,732.67 · EUR 45,287.84 | identical | PASS |
+| Case A — paid via approval, no payment row (inv `10567-1-2026`) | drawer: "مدفوعة عبر حالة الفاتورة / لا توجد معاملة دفع مسجّلة"; **no fabricated transaction** | 0 payment rows | PASS |
+| Case B — real payment (inv `105302447`) | drawer: actual txn "2026-08-04 · bank_transfer · 25K USD" | 1 payment row | PASS |
+| Case C — partial | none exist in system (partial=0) | — | N/A |
+| Case D — quick-pay on QA invoice | unpaid→paid, paid_amount=total | matches | PASS |
+| Case E — payment side-effects | **payments 17→17 (no row created), no orphan, QA invoice deleted, totals back to 218** | matches | PASS |
+
+**Financial Workflow Technical Debt (documented, NOT fixed):**
+`approval_status='paid' → status=PAID + paid_amount=total WITHOUT a Payment transaction.` To be redesigned later as a proper cycle: Invoice Approval → Payment Authorization → Actual Payment → Reconciliation. Out of scope for Phase 3.
