@@ -134,6 +134,11 @@ function Shell({ children }: { children: React.ReactNode }) {
             <button onClick={toggle} title={t('topbar.language')} className="flex items-center gap-1 text-gray-500 hover:text-gray-800 hover:bg-gray-100 rounded-lg px-2 py-1.5 text-xs font-medium">
               <Icon name="globe" size={18} />{locale === 'ar' ? 'EN' : 'ع'}
             </button>
+            <Link href="/dashboard/ask-ume" title="Ask UME" aria-label="Ask UME"
+              className={cx('flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs font-medium transition-colors',
+                isActive('/dashboard/ask-ume') ? 'bg-brand-50 text-brand-700' : 'text-gray-500 hover:text-gray-800 hover:bg-gray-100')}>
+              <Icon name="sparkle" size={18} /><span className="hidden sm:inline">Ask UME</span>
+            </Link>
             <NotificationBell />
             <div className="flex items-center gap-2 pr-2 mr-1 border-r border-gray-100">
               <div className="w-8 h-8 rounded-full bg-brand-600 text-white text-xs font-bold flex items-center justify-center uppercase">{initials}</div>
