@@ -25,6 +25,7 @@ export const GROUPS: { key: GroupKey; i18nKey: string }[] = [
 export const SCREENS: Screen[] = [
   { href: '/dashboard', label: 'الرئيسية', icon: '🏠', iconName: 'home', group: 'overview', always: true },
   { href: '/dashboard/reports', label: 'التقارير', icon: '📊', iconName: 'chart', group: 'overview' },
+  { href: '/dashboard/ask-ume', label: 'اسأل UME', icon: '🤖', iconName: 'sparkle', group: 'overview', always: true },
 
   { href: '/dashboard/suppliers', label: 'الموردين', icon: '🏭', iconName: 'factory', group: 'procurement' },
   { href: '/dashboard/purchase-orders', label: 'أوامر الشراء', icon: '📋', iconName: 'clipboard', group: 'procurement' },

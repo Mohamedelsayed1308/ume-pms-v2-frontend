@@ -26,6 +26,7 @@ const PATHS: Record<string, string> = {
   chevronDown: 'M6 9l6 6 6-6',
   chevronRight: 'M9 6l6 6-6 6',
   chevronLeft: 'M15 6l-6 6 6 6',
+  sparkle: 'M12 3l1.8 4.9L18.7 9l-4.9 1.1L12 15l-1.8-4.9L5.3 9l4.9-1.1L12 3ZM19 14l.9 2.3 2.3.7-2.3.9L19 20l-.9-2.1-2.3-.9 2.3-.7L19 14Z',
 };
 
 export interface IconProps extends Omit<SVGProps<SVGSVGElement>, 'name'> {
