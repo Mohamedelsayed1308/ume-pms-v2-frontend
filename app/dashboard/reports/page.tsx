@@ -9,6 +9,19 @@ import FleetDashboard from './FleetDashboard';
 import { useI18n } from '@/lib/i18n';
 import { Icon } from '@/components/ui/Icon';
 import { fmtCcyMap, sumByCurrency } from '@/lib/format';
+import { getUser } from '@/lib/auth';
+import { canHref } from '@/lib/profile';
+
+// كل تقرير → الشاشة/البيانات المطلوبة للوصول (تصفية حسب الصلاحية داخل مركز التحليلات)
+const REPORT_REQUIRES: Record<string, string> = {
+  'fleet-dashboard': '/dashboard/vessels', 'vessel-profit': '/dashboard/vessels',
+  'alcudia-profit': '/dashboard/vessels', 'gubal-profit': '/dashboard/vessels',
+  'vessel-suppliers': '/dashboard/vessels',
+  'supplier-statement': '/dashboard/suppliers', 'unpaid-supplier': '/dashboard/suppliers',
+  'due-alerts': '/dashboard/invoices', 'unpaid-vessel': '/dashboard/invoices',
+  'dept-delays': '/dashboard/invoices', 'user-activity': '/dashboard/invoices',
+  'exchange-rates': '/dashboard/reports',
+};
 
 const statusLabel: Record<string, string> = { unpaid: 'غير مدفوعة', partial: 'جزئي', paid: 'مدفوعة', cancelled: 'ملغاة' };
 const statusColor: Record<string, string> = { unpaid: 'bg-red-100 text-red-700', partial: 'bg-yellow-100 text-yellow-700', paid: 'bg-green-100 text-green-700', cancelled: 'bg-gray-100 text-gray-500' };
@@ -98,6 +111,9 @@ const num = (n: any) => Number(n || 0).toLocaleString();
 export default function ReportsPage() {
   const { locale, t } = useI18n();
   const L = (b: Bi) => (locale === 'en' ? b.en : b.ar);
+  const [user, setUser] = useState<any>(null);
+  useEffect(() => { setUser(getUser()); }, []);
+  const canReport = (id: string) => canHref(user, REPORT_REQUIRES[id] || '/dashboard/reports');
 
   const [selected, setSelected] = useState<ReportType | ''>('');
   const [search, setSearch] = useState('');
@@ -126,6 +142,7 @@ export default function ReportsPage() {
   }, []);
 
   function openReport(id: ReportType) {
+    if (!canReport(id)) return;
     setSelected(id);
     setData(null);
     setAttachments({});
@@ -222,9 +239,9 @@ export default function ReportsPage() {
   const q = search.trim().toLowerCase();
   const catalog = useMemo(() => CATEGORIES.map((c) => ({
     cat: c,
-    items: REPORTS.filter((r) => r.cat === c.key).filter((r) =>
+    items: REPORTS.filter((r) => r.cat === c.key).filter((r) => canReport(r.id)).filter((r) =>
       !q || L(r.title).toLowerCase().includes(q) || L(r.desc).toLowerCase().includes(q) || L(c.label).toLowerCase().includes(q)),
-  })).filter((g) => g.items.length > 0), [q, locale]);
+  })).filter((g) => g.items.length > 0), [q, locale, user]);
 
   function AttachmentCell({ invoiceId }: { invoiceId: string }) {
     const files = attachments[invoiceId];

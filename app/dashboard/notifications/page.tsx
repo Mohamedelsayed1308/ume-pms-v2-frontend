@@ -39,12 +39,12 @@ export default function NotificationsPage() {
     });
   }, [active, cat, sev, search, loc]);
 
-  const catTabs: { key: Category | 'all'; label: string; n: number }[] = [
+  const catTabs = ([
     { key: 'all', label: t('الكل', 'All'), n: counts.total },
     { key: 'financial', label: t(CATEGORY_LABEL.financial.ar, CATEGORY_LABEL.financial.en), n: counts.financial },
     { key: 'tasks', label: t(CATEGORY_LABEL.tasks.ar, CATEGORY_LABEL.tasks.en), n: counts.tasks },
     { key: 'fleet', label: t(CATEGORY_LABEL.fleet.ar, CATEGORY_LABEL.fleet.en), n: counts.fleet },
-  ];
+  ] as { key: Category | 'all'; label: string; n: number }[]).filter((tb) => tb.key === 'all' || tb.n > 0); // إخفاء الفئات الفارغة
   const sevTabs: { key: Severity | 'all'; label: string; n?: number }[] = [
     { key: 'all', label: t('كل الدرجات', 'All severities') },
     { key: 'critical', label: t(SEVERITY_LABEL.critical.ar, SEVERITY_LABEL.critical.en), n: counts.critical },

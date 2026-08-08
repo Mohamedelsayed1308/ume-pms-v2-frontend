@@ -4,6 +4,17 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import api from '@/lib/api';
 import { fmtMoney, fmtCcyMap, sumByCurrency, n0 } from '@/lib/format';
+import { getUser } from '@/lib/auth';
+import { canHref } from '@/lib/profile';
+
+// خريطة نوع التنبيه → الشاشة المطلوبة للوصول (لتصفية حسب الصلاحية)
+const TYPE_SCREEN: Record<string, string> = {
+  invoice_overdue: '/dashboard/invoices', invoice_due_soon: '/dashboard/invoices',
+  invoice_awaiting: '/dashboard/invoices', invoice_partial: '/dashboard/invoices',
+  task_overdue: '/dashboard/tasks', task_due_today: '/dashboard/tasks',
+  payment_mismatch: '/dashboard/payments', payment_large: '/dashboard/payments',
+  supplier_outstanding: '/dashboard/suppliers', vessel_outstanding: '/dashboard/vessels',
+};
 
 export type Severity = 'critical' | 'warning' | 'info';
 export type Category = 'financial' | 'tasks' | 'fleet';
@@ -225,10 +236,15 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
 
   const fetchAll = useCallback(() => {
     setLoading(true); setError(false);
+    // فحص الصلاحية ثم الجلب — لا نطلب بيانات وحدة لا يصلها المستخدم
+    const u = getUser();
+    const wantInv = canHref(u, '/dashboard/invoices');
+    const wantTasks = canHref(u, '/dashboard/tasks');
+    const wantPay = canHref(u, '/dashboard/payments');
     Promise.all([
-      api.get('/api/invoices').then((r) => r.data).catch(() => null),
-      api.get('/api/tasks').then((r) => r.data).catch(() => null),
-      api.get('/api/payments').then((r) => r.data).catch(() => null),
+      wantInv ? api.get('/api/invoices').then((r) => r.data).catch(() => null) : Promise.resolve([]),
+      wantTasks ? api.get('/api/tasks').then((r) => r.data).catch(() => null) : Promise.resolve([]),
+      wantPay ? api.get('/api/payments').then((r) => r.data).catch(() => null) : Promise.resolve([]),
     ]).then(([inv, tsk, pay]) => {
       if (inv == null && tsk == null && pay == null) { setError(true); }
       setInvoices(Array.isArray(inv) ? inv : []);
@@ -239,7 +255,11 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
 
   useEffect(() => { setDismissed(readSet(DISMISS_KEY)); setRead(readSet(READ_KEY)); fetchAll(); }, [fetchAll]);
 
-  const all = useMemo(() => computeNotifications(invoices, tasks, payments), [invoices, tasks, payments]);
+  const all = useMemo(() => {
+    const u = getUser();
+    // تصفية بالصلاحية: أي تنبيه لوحدة لا يصلها المستخدم يُستبعد (مثل مستحقات مورد بلا صلاحية موردين)
+    return computeNotifications(invoices, tasks, payments).filter((n) => canHref(u, TYPE_SCREEN[n.type] || '/dashboard'));
+  }, [invoices, tasks, payments]);
   const active = useMemo(() => all.filter((n) => !dismissed.has(n.id)), [all, dismissed]);
   const unreadCount = useMemo(() => active.filter((n) => !read.has(n.id)).length, [active, read]);
 
