@@ -6,12 +6,16 @@ import { getUser, logout } from '@/lib/auth';
 import { SCREENS, GROUPS, canAccess } from '@/lib/screens';
 import { I18nProvider, useI18n } from '@/lib/i18n';
 import { ToastProvider, Icon, cx } from '@/components/ui';
+import { NotificationsProvider } from '@/lib/notifications';
+import NotificationBell from '@/components/NotificationBell';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
     <I18nProvider>
       <ToastProvider>
-        <Shell>{children}</Shell>
+        <NotificationsProvider>
+          <Shell>{children}</Shell>
+        </NotificationsProvider>
       </ToastProvider>
     </I18nProvider>
   );
@@ -120,9 +124,7 @@ function Shell({ children }: { children: React.ReactNode }) {
             <button onClick={toggle} title={t('topbar.language')} className="flex items-center gap-1 text-gray-500 hover:text-gray-800 hover:bg-gray-100 rounded-lg px-2 py-1.5 text-xs font-medium">
               <Icon name="globe" size={18} />{locale === 'ar' ? 'EN' : 'ع'}
             </button>
-            <button title={t('topbar.notifications')} className="relative text-gray-500 hover:text-gray-800 hover:bg-gray-100 rounded-lg p-2">
-              <Icon name="bell" size={19} />
-            </button>
+            <NotificationBell />
             <div className="flex items-center gap-2 pr-2 mr-1 border-r border-gray-100">
               <div className="w-8 h-8 rounded-full bg-brand-600 text-white text-xs font-bold flex items-center justify-center uppercase">{initials}</div>
               <div className="hidden sm:block leading-tight">
