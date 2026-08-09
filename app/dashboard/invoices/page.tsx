@@ -145,18 +145,24 @@ function InvoicesContent() {
   const [detail, setDetail] = useState<Invoice | null>(null);
 
   async function load() {
-    const [invRes, supRes, vesRes, poRes, itemRes] = await Promise.all([
-      api.get('/api/invoices'),
-      api.get('/api/suppliers'),
-      api.get('/api/vessels'),
-      api.get('/api/purchase-orders'),
-      api.get('/api/items'),
-    ]);
-    setInvoices(invRes.data);
-    setSuppliers(supRes.data);
-    setVessels(vesRes.data);
-    setPos(poRes.data);
-    setItems(itemRes.data);
+    // كل قائمة تُحمّل باستقلال — فشل نداء واحد (مثلاً 500 عابر) لا يُفرّغ باقي القوائم
+    const endpoints: [string, (d: any) => void][] = [
+      ['/api/invoices', setInvoices],
+      ['/api/suppliers', setSuppliers],
+      ['/api/vessels', setVessels],
+      ['/api/purchase-orders', setPos],
+      ['/api/items', setItems],
+    ];
+    const results = await Promise.allSettled(endpoints.map(([url]) => api.get(url)));
+    const failed: string[] = [];
+    results.forEach((r, i) => {
+      if (r.status === 'fulfilled' && Array.isArray(r.value.data)) endpoints[i][1](r.value.data);
+      else failed.push(endpoints[i][0]);
+    });
+    if (failed.length) {
+      console.error('load() فشل تحميل:', failed);
+      setError('تعذّر تحميل بعض القوائم: ' + failed.join('، ') + ' — حدّث الصفحة أو أعد المحاولة.');
+    }
   }
 
   useEffect(() => { load(); }, []);
