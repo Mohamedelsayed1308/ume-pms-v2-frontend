@@ -34,6 +34,7 @@ export const SCREENS: Screen[] = [
   { href: '/dashboard/payments', label: 'المدفوعات', icon: '💳', iconName: 'card', group: 'procurement' },
 
   { href: '/dashboard/vessels', label: 'السفن', icon: '🚢', iconName: 'ship', group: 'fleet' },
+  { href: '/dashboard/market', label: 'تحليل السوق الملاحي', icon: '📈', iconName: 'chart', group: 'fleet' },
 
   { href: '/dashboard/customers', label: 'العملاء', icon: '🤝', iconName: 'users', group: 'revenue' },
   { href: '/dashboard/hire-invoices', label: 'فواتير الإيجار', icon: '🚢💰', iconName: 'file', group: 'revenue' },
