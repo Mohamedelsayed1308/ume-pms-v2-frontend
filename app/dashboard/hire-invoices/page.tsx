@@ -187,12 +187,16 @@ export default function HireInvoicesPage() {
     const isNote = form.doc_type === 'credit_note' || form.doc_type === 'debit_note';
     const docLabel = DOC_TYPES[form.doc_type]?.ar || 'المستند';
     if (!form.invoice_number.trim()) { setError(`رقم ${docLabel} مطلوب`); return; }
+    if (!form.invoice_date) { setError('التاريخ مطلوب'); return; }
     if (!form.customer_id) { setError('العميل مطلوب'); return; }
     if (!form.vessel_id) { setError('السفينة مطلوبة'); return; }
     setLoading(true);
     try {
+      // نحذف الحقول المؤقتة ونحوّل التواريخ الفارغة إلى null (عمود date لا يقبل نصاً فارغاً)
+      const { hire_from_date, hire_from_time, hire_to_date, hire_to_time, ...base } = form;
       const payload = {
-        ...form,
+        ...base,
+        cp_date: form.cp_date || null,
         related_invoice_id: isNote ? (form.related_invoice_id || null) : null,
         hire_from: form.hire_from_date ? `${form.hire_from_date}T${form.hire_from_time || '00:00'}` : null,
         hire_to: form.hire_to_date ? `${form.hire_to_date}T${form.hire_to_time || '23:59'}` : null,
