@@ -25,11 +25,12 @@ function fmtC(n: number): string {
 const VESSEL_COLORS = ['#4f46e5', '#059669', '#d97706', '#7c3aed', '#dc2626', '#0891b2', '#db2777', '#65a30d'];
 
 // أنواع المخططات المتاحة للاتجاه الشهري (تسهيل العرض للإدارة)
-type ChartType = 'line' | 'bars' | 'area';
+type ChartType = 'line' | 'bars' | 'area' | 'donut';
 const CHART_TYPES: { key: ChartType; label: string; icon: string }[] = [
   { key: 'line', label: 'خطّي', icon: '📈' },
   { key: 'bars', label: 'أعمدة', icon: '📊' },
   { key: 'area', label: 'مساحة', icon: '🗻' },
+  { key: 'donut', label: 'حلقي', icon: '🍩' },
 ];
 
 type MetricKey = 'voyages' | 'trucks' | 'vehicles' | 'passengers' | 'net' | 'revenue' | 'expenses' | 'liquidity';
@@ -389,6 +390,7 @@ function TrendChart({ months, series, money, type }: { months: string[]; series:
   const baseY = y(0); // خط الصفر (يدعم القيم السالبة)
   const ticks = 4;
   if (!n) return <p className="text-gray-400 text-sm text-center py-12">لا توجد بيانات في الفترة</p>;
+  if (type === 'donut') return <DonutView series={series} money={money} />;
 
   // هندسة الأعمدة المجمّعة
   const spacing = n > 1 ? iw / (n - 1) : iw;
@@ -460,6 +462,63 @@ function TrendChart({ months, series, money, type }: { months: string[]; series:
             <span className="inline-block w-3 h-1.5 rounded-full" style={{ background: s.color }} />{s.name}
           </span>
         ))}
+      </div>
+    </div>
+  );
+}
+
+// ── مخطط حلقي: حصة كل مركب من إجمالي المؤشر خلال الفترة ──
+function DonutView({ series, money }: { series: { name: string; color: string; values: number[] }[]; money: boolean }) {
+  const items = series.map((s) => ({ name: s.name, color: s.color, total: s.values.reduce((a, b) => a + (Number(b) || 0), 0) }));
+  const hasNeg = items.some((i) => i.total < 0);
+  const mag = items.map((i) => Math.abs(i.total));
+  const sumMag = mag.reduce((a, b) => a + b, 0);
+  if (!sumMag) return <p className="text-gray-400 text-sm text-center py-12">لا توجد بيانات في الفترة</p>;
+
+  const cx = 110, cy = 110, R = 92, r = 54;
+  const P = (rad: number, ang: number) => [cx + rad * Math.cos(ang), cy + rad * Math.sin(ang)];
+  const nonZero = items.filter((_, i) => mag[i] > 0);
+  let a = -Math.PI / 2;
+  const slices = items.map((it, i) => {
+    const frac = mag[i] / sumMag;
+    const a0 = a, a1 = a + frac * Math.PI * 2;
+    a = a1;
+    return { ...it, i, frac, a0, a1, pct: Math.round(frac * 100) };
+  });
+
+  return (
+    <div className="flex flex-col sm:flex-row items-center gap-5">
+      <svg viewBox="0 0 220 220" className="shrink-0" style={{ width: 200, height: 200 }}>
+        {nonZero.length === 1 ? (
+          <>
+            <circle cx={cx} cy={cy} r={R} fill={nonZero[0].color} />
+            <circle cx={cx} cy={cy} r={r} fill="#fff" />
+            <text x={cx} y={cy + 4} textAnchor="middle" fontSize="16" fontWeight="700" fill="#fff">100%</text>
+          </>
+        ) : slices.map((s) => {
+          if (s.frac <= 0) return null;
+          const large = s.a1 - s.a0 > Math.PI ? 1 : 0;
+          const [ox0, oy0] = P(R, s.a0), [ox1, oy1] = P(R, s.a1), [ix1, iy1] = P(r, s.a1), [ix0, iy0] = P(r, s.a0);
+          const d = `M${ox0},${oy0} A${R},${R} 0 ${large} 1 ${ox1},${oy1} L${ix1},${iy1} A${r},${r} 0 ${large} 0 ${ix0},${iy0} Z`;
+          const mid = (s.a0 + s.a1) / 2, [lx, ly] = P((R + r) / 2, mid);
+          return (
+            <g key={s.name}>
+              <path d={d} fill={s.color} />
+              {s.pct >= 6 && <text x={lx} y={ly + 4} textAnchor="middle" fontSize="13" fontWeight="700" fill="#fff">{s.pct}%</text>}
+            </g>
+          );
+        })}
+      </svg>
+      <div className="flex-1 w-full space-y-1.5">
+        {slices.slice().sort((x, y2) => y2.frac - x.frac).map((s) => (
+          <div key={s.name} className="flex items-center gap-2 text-sm">
+            <span className="inline-block w-3 h-3 rounded-sm shrink-0" style={{ background: s.color }} />
+            <span className="text-gray-700 font-medium flex-1 truncate">{s.name}</span>
+            <span className="text-gray-500 tabular-nums">{money ? fmtC(s.total) : fmt(s.total)}</span>
+            <span className="text-gray-800 font-bold tabular-nums w-10 text-left">{s.pct}%</span>
+          </div>
+        ))}
+        {hasNeg && <p className="text-[11px] text-amber-600 mt-1">النسب محسوبة حسب القيمة المطلقة (المؤشر يحتمل قيماً سالبة).</p>}
       </div>
     </div>
   );
