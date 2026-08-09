@@ -187,7 +187,6 @@ export default function HireInvoicesPage() {
     const isNote = form.doc_type === 'credit_note' || form.doc_type === 'debit_note';
     const docLabel = DOC_TYPES[form.doc_type]?.ar || 'المستند';
     if (!form.invoice_number.trim()) { setError(`رقم ${docLabel} مطلوب`); return; }
-    if (isNote && !form.related_invoice_id) { setError('اختر الفاتورة الأصلية التي يعدّلها الإشعار'); return; }
     if (!form.customer_id) { setError('العميل مطلوب'); return; }
     if (!form.vessel_id) { setError('السفينة مطلوبة'); return; }
     setLoading(true);
@@ -528,16 +527,16 @@ export default function HireInvoicesPage() {
               {/* الفاتورة الأصلية (للإشعارات فقط) */}
               {(form.doc_type === 'credit_note' || form.doc_type === 'debit_note') && (
                 <div className={`rounded-lg p-3 border ${form.doc_type === 'credit_note' ? 'bg-emerald-50 border-emerald-200' : 'bg-orange-50 border-orange-200'}`}>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">الفاتورة الأصلية *</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">الفاتورة الأصلية <span className="text-gray-400 font-normal">(اختياري)</span></label>
                   <select value={form.related_invoice_id} onChange={(e) => onRelatedInvoiceChange(e.target.value)}
                     className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
-                    <option value="">— اختر الفاتورة —</option>
+                    <option value="">— بدون ربط بفاتورة (إشعار مستقل) —</option>
                     {invoices.filter((i) => (i.doc_type || 'invoice') === 'invoice').map((i) => (
                       <option key={i.id} value={i.id}>{i.invoice_number} — {i.customer?.name} — {fmt(+i.total_amount)} {i.currency}</option>
                     ))}
                   </select>
                   <p className="text-xs text-gray-500 mt-1">
-                    {form.doc_type === 'credit_note' ? 'الإشعار الدائن يخصم من المتبقّي على العميل.' : 'الإشعار المدين يضيف على المتبقّي على العميل.'} العملة وبيانات البنك تُؤخذ من العملة أدناه.
+                    لو ربطته بفاتورة: {form.doc_type === 'credit_note' ? 'الإشعار الدائن يخصم من صافي المتبقّي عليها.' : 'الإشعار المدين يضيف على صافي المتبقّي عليها.'} ولو تركته مستقلاً: يُسجَّل كمستند قائم بذاته للعميل بدون ربط. اختر العميل والسفينة يدوياً في الحالة المستقلة.
                   </p>
                 </div>
               )}
