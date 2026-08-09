@@ -67,6 +67,7 @@ export default function HireInvoicesPage() {
   const [payLoading, setPayLoading] = useState(false);
   const [filterStatus, setFilterStatus] = useState('');
   const [docFilter, setDocFilter] = useState('');
+  const [search, setSearch] = useState('');
 
   async function load() {
     const [invRes, custRes, vesRes, compRes] = await Promise.all([
@@ -411,9 +412,14 @@ export default function HireInvoicesPage() {
     doc.save(`${inv.invoice_number}.pdf`);
   }
 
+  const q = search.trim().toLowerCase();
   const displayed = invoices.filter((i) =>
     (!filterStatus || i.status === filterStatus) &&
-    (!docFilter || (i.doc_type || 'invoice') === docFilter)
+    (!docFilter || (i.doc_type || 'invoice') === docFilter) &&
+    (!q ||
+      (i.customer?.name || '').toLowerCase().includes(q) ||
+      (i.vessel?.name || '').toLowerCase().includes(q) ||
+      (i.invoice_number || '').toLowerCase().includes(q))
   );
 
   return (
@@ -425,6 +431,16 @@ export default function HireInvoicesPage() {
           <button onClick={() => openAdd('credit_note')} className="bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700">+ إشعار دائن</button>
           <button onClick={() => openAdd('debit_note')} className="bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700">+ إشعار مدين</button>
         </div>
+      </div>
+
+      {/* Search by customer / vessel / number */}
+      <div className="mb-3 relative max-w-md">
+        <input value={search} onChange={(e) => setSearch(e.target.value)}
+          placeholder="🔍 بحث بالعميل أو السفينة أو رقم المستند…"
+          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        {search && (
+          <button onClick={() => setSearch('')} className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-sm">✕</button>
+        )}
       </div>
 
       {/* Doc-type filter */}
