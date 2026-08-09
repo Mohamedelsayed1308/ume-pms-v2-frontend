@@ -156,11 +156,17 @@ export default function HireInvoicesPage() {
     }
   }
 
+  // المبلغ الفعلي للبند: المبلغ المُدخل يدوياً، وإلا الأيام × السعر اليومي
+  function effAmount(it: { amount?: string; days?: string; daily_hire?: string }) {
+    const a = parseFloat(it.amount || '') || 0;
+    if (a > 0) return a;
+    const d = parseFloat(it.days || '') || 0;
+    const dh = parseFloat(it.daily_hire || '') || 0;
+    return d && dh ? d * dh : 0;
+  }
+
   function calcTotal() {
-    return items.reduce((s, it) => {
-      const amt = parseFloat(it.amount) || 0;
-      return s + amt;
-    }, 0);
+    return items.reduce((s, it) => s + effAmount(it), 0);
   }
 
   function updateItem(idx: number, field: string, val: string) {
@@ -205,7 +211,7 @@ export default function HireInvoicesPage() {
           days: it.days ? parseInt(it.days) : null,
           description: it.description,
           daily_hire: it.daily_hire ? parseFloat(it.daily_hire) : null,
-          amount: parseFloat(it.amount) || 0,
+          amount: effAmount(it),
           sort_order: i,
         })),
       };
@@ -324,23 +330,21 @@ export default function HireInvoicesPage() {
     const vatY = billY + 17 + custAddr.length * 4.5;
     doc.text(inv.customer?.vat_no ? `VAT NO  ${inv.customer.vat_no}` : 'VAT NO', M + 3, vatY);
 
-    // ── Charter party header table ────────────────────────────────────────────
+    // ── Charter party header table (only columns that have data; Vessel always) ─
     const fmtDate = (d: string | undefined) => d ? new Date(d).toLocaleDateString('en-GB').replace(/\//g, '-') : '—';
-    const hireFrom = inv.hire_from ? fmtDate(inv.hire_from) + '\nUTC 00:00' : '—';
-    const hireTo   = inv.hire_to   ? fmtDate(inv.hire_to)   + '\nUTC 23:59' : '—';
+    const chCols: { h: string; v: string }[] = [];
+    if (inv.place_of_business) chCols.push({ h: 'Place of Business', v: inv.place_of_business });
+    if (inv.cp_date)          chCols.push({ h: 'CP Date', v: inv.cp_date.slice(0, 10) });
+    if (inv.hire_from)        chCols.push({ h: 'Hire From', v: fmtDate(inv.hire_from) + '\nUTC 00:00' });
+    if (inv.hire_to)          chCols.push({ h: 'Hire To', v: fmtDate(inv.hire_to) + '\nUTC 23:59' });
+    chCols.push({ h: 'Vessel', v: `${inv.vessel?.name || ''}\nIMO:${inv.vessel?.imo_number || ''}` });
 
     autoTable(doc, {
       startY: billY + 42,
       margin: { left: M, right: M },
       theme: 'grid',
-      head: [['Place of Business', 'CP Date', 'Hire From', 'Hire To', 'Vessel']],
-      body: [[
-        inv.place_of_business || '—',
-        inv.cp_date?.slice(0, 10) || '—',
-        hireFrom,
-        hireTo,
-        `${inv.vessel?.name || ''}\nIMO:${inv.vessel?.imo_number || ''}`,
-      ]],
+      head: [chCols.map((c) => c.h)],
+      body: [chCols.map((c) => c.v)],
       styles: { fontSize: 8.5, halign: 'center', cellPadding: 3, textColor: DARK, lineColor: BORDER, lineWidth: 0.3 },
       headStyles: { fillColor: LIGHT_BG, textColor: DARK, fontStyle: 'bold', lineColor: BORDER, lineWidth: 0.3 },
     });
@@ -670,9 +674,10 @@ export default function HireInvoicesPage() {
                       <input value={it.amount} onChange={(e) => {
                         const updated = items.map((it2, i) => i === idx ? { ...it2, amount: e.target.value } : it2);
                         setItems(updated);
-                        setForm((prev) => ({ ...prev, total_amount: String(updated.reduce((s, it2) => s + (parseFloat(it2.amount) || 0), 0)) }));
+                        setForm((prev) => ({ ...prev, total_amount: String(updated.reduce((s, it2) => s + effAmount(it2), 0)) }));
                       }}
-                        placeholder="0.00" type="number"
+                        placeholder={effAmount(it) ? fmt(effAmount(it)) : '0.00'} type="number"
+                        title={effAmount(it) && !it.amount ? `محسوب تلقائياً: ${fmt(effAmount(it))}` : ''}
                         className="col-span-2 border rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400" />
                       <button type="button" onClick={() => setItems(items.filter((_, i) => i !== idx))}
                         className="col-span-1 text-red-400 hover:text-red-600 text-xs">✕</button>
@@ -762,33 +767,28 @@ export default function HireInvoicesPage() {
                 </div>
 
                 {/* Charter party table */}
-                <table className="w-full border-collapse text-xs mb-0">
-                  <thead>
-                    <tr className="bg-gray-50">
-                      {['Place of Business','CP Date','Hire From','Hire To','Vessel'].map(h => (
-                        <th key={h} className="border border-gray-200 px-3 py-2 font-semibold text-gray-600 text-center">{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr className="text-center text-gray-800">
-                      <td className="border border-gray-200 px-3 py-3">{previewInv.place_of_business || '—'}</td>
-                      <td className="border border-gray-200 px-3 py-3">{previewInv.cp_date?.slice(0,10) || '—'}</td>
-                      <td className="border border-gray-200 px-3 py-3">
-                        {previewInv.hire_from ? new Date(previewInv.hire_from).toLocaleDateString('en-GB').replace(/\//g,'-') : '—'}
-                        <br/><span className="text-gray-400 text-[10px]">UTC 00:00</span>
-                      </td>
-                      <td className="border border-gray-200 px-3 py-3">
-                        {previewInv.hire_to ? new Date(previewInv.hire_to).toLocaleDateString('en-GB').replace(/\//g,'-') : '—'}
-                        <br/><span className="text-gray-400 text-[10px]">UTC 23:59</span>
-                      </td>
-                      <td className="border border-gray-200 px-3 py-3 font-semibold">
-                        {previewInv.vessel?.name}
-                        <br/><span className="font-normal text-gray-400 text-[10px]">IMO:{previewInv.vessel?.imo_number}</span>
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
+                {(() => {
+                  const cells: { h: string; body: any }[] = [];
+                  if (previewInv.place_of_business) cells.push({ h: 'Place of Business', body: previewInv.place_of_business });
+                  if (previewInv.cp_date) cells.push({ h: 'CP Date', body: previewInv.cp_date.slice(0,10) });
+                  if (previewInv.hire_from) cells.push({ h: 'Hire From', body: <>{new Date(previewInv.hire_from).toLocaleDateString('en-GB').replace(/\//g,'-')}<br/><span className="text-gray-400 text-[10px]">UTC 00:00</span></> });
+                  if (previewInv.hire_to) cells.push({ h: 'Hire To', body: <>{new Date(previewInv.hire_to).toLocaleDateString('en-GB').replace(/\//g,'-')}<br/><span className="text-gray-400 text-[10px]">UTC 23:59</span></> });
+                  cells.push({ h: 'Vessel', body: <><span className="font-semibold">{previewInv.vessel?.name}</span><br/><span className="text-gray-400 text-[10px]">IMO:{previewInv.vessel?.imo_number}</span></> });
+                  return (
+                    <table className="w-full border-collapse text-xs mb-0">
+                      <thead>
+                        <tr className="bg-gray-50">
+                          {cells.map((c) => <th key={c.h} className="border border-gray-200 px-3 py-2 font-semibold text-gray-600 text-center">{c.h}</th>)}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr className="text-center text-gray-800">
+                          {cells.map((c) => <td key={c.h} className="border border-gray-200 px-3 py-3">{c.body}</td>)}
+                        </tr>
+                      </tbody>
+                    </table>
+                  );
+                })()}
 
                 {/* Items table */}
                 <table className="w-full border-collapse text-xs">
