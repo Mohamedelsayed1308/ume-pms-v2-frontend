@@ -5,6 +5,7 @@ import api from '@/lib/api';
 import { getUser } from '@/lib/auth';
 import { Card, Icon, Spinner, EmptyState, Button, cx } from '@/components/ui';
 import MarketReport from './MarketReport';
+import YearComparison from './YearComparison';
 
 // ── ثوابت ──
 const METRICS = [
@@ -41,6 +42,7 @@ export default function MarketPage() {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
+  const [mode, setMode] = useState<'analysis' | 'comparison'>('analysis');
 
   const load = () => {
     setLoading(true); setError('');
@@ -77,11 +79,18 @@ export default function MarketPage() {
           <p className="text-sm text-gray-500 mt-0.5">حصص الوكلاء والحركة الشهرية · التركيز: وكالة بدوي · المقام دائماً إجمالي السوق</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <MarketReport from={from} to={to} agencies={selAgencies} ship={ship} />
+          <MarketReport from={from} to={to} agencies={selAgencies} ship={ship} defaultComparison={mode === 'comparison'} />
           {getUser()?.role === 'admin' && (
             <Link href="/dashboard/market/import"><Button variant="outline" size="sm"><Icon name="factory" size={15} /> استيراد وإدارة الوكالات</Button></Link>
           )}
         </div>
+      </div>
+
+      {/* مفتاح الوضع */}
+      <div className="flex rounded-xl border border-gray-200 overflow-hidden w-fit">
+        {([['analysis', '📊 التحليل'], ['comparison', '📈 المقارنة السنوية']] as const).map(([v, lbl]) => (
+          <button key={v} onClick={() => setMode(v)} className={cx('px-4 py-2 text-sm font-medium', mode === v ? 'bg-navy-900 text-white' : 'bg-white text-gray-600 hover:bg-gray-50')}>{lbl}</button>
+        ))}
       </div>
 
       {/* Filters */}
@@ -133,19 +142,24 @@ export default function MarketPage() {
         )}
       </Card>
 
-      {loading && <div className="flex justify-center py-20"><Spinner /></div>}
+      {/* ── وضع المقارنة السنوية ── */}
+      {mode === 'comparison' && (
+        <YearComparison from={from} to={to} selAgencies={selAgencies} ship={ship} shownAgencyKeys={shownAgencyKeys} />
+      )}
 
-      {!loading && error === 'no-access' && (
+      {loading && mode === 'analysis' && <div className="flex justify-center py-20"><Spinner /></div>}
+
+      {mode === 'analysis' && !loading && error === 'no-access' && (
         <Card className="p-10"><EmptyState icon="shield" title="لا تملك صلاحية الوصول لتحليل السوق" description="اطلب من المسؤول منحك شاشة «تحليل السوق الملاحي»." /></Card>
       )}
-      {!loading && error === 'error' && (
+      {mode === 'analysis' && !loading && error === 'error' && (
         <Card className="p-10 text-center"><p className="text-red-500 text-sm mb-3">تعذّر تحميل بيانات السوق</p><Button variant="outline" size="sm" onClick={load}>إعادة المحاولة</Button></Card>
       )}
-      {!loading && !error && data && data.recordCount === 0 && (
+      {mode === 'analysis' && !loading && !error && data && data.recordCount === 0 && (
         <Card className="p-10"><EmptyState icon="chart" title="لا توجد بيانات سوق للفترة المختارة" description="لم يتم استيراد بيانات لهذه الفترة بعد (يتم الاستيراد من شاشة الرفع)." /></Card>
       )}
 
-      {!loading && !error && data && data.recordCount > 0 && (
+      {mode === 'analysis' && !loading && !error && data && data.recordCount > 0 && (
         <>
           {/* notices */}
           <div className="flex flex-wrap gap-2 text-xs">

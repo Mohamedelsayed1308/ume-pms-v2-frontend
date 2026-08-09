@@ -8,12 +8,13 @@ const fmt = (n: any) => Math.round(Number(n) || 0).toLocaleString('en-US');
 const PRIO: Record<string, string> = { 'عاجلة': 'bg-red-100 text-red-700', 'متوسطة': 'bg-amber-100 text-amber-700', 'تطويرية': 'bg-blue-100 text-blue-700' };
 const IMP: Record<string, string> = { 'مرتفع': 'text-emerald-700', 'متوسط': 'text-amber-700', 'منخفض': 'text-gray-500' };
 
-export default function MarketReport({ from, to, agencies, ship }: { from: string; to: string; agencies: string[]; ship: string }) {
+export default function MarketReport({ from, to, agencies, ship, defaultComparison }: { from: string; to: string; agencies: string[]; ship: string; defaultComparison?: boolean }) {
   const isAdmin = typeof window !== 'undefined' && getUser()?.role === 'admin';
   const [open, setOpen] = useState(false);
   const [aiOn, setAiOn] = useState<boolean | null>(null);
   const [level, setLevel] = useState<'executive' | 'detailed'>('detailed');
   const [scenarios, setScenarios] = useState(true);
+  const [comparison, setComparison] = useState(!!defaultComparison);
   const [uplift, setUplift] = useState(10);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
@@ -28,7 +29,7 @@ export default function MarketReport({ from, to, agencies, ship }: { from: strin
   async function generate() {
     setBusy(true); setErr(''); setReport(null);
     try {
-      const r = await api.post('/api/market/report', { from, to, agencies: agencies.length ? agencies : undefined, ship: ship || undefined, level, includeScenarios: scenarios, truckUpliftPct: uplift / 100 });
+      const r = await api.post('/api/market/report', { from, to, agencies: agencies.length ? agencies : undefined, ship: ship || undefined, level, includeScenarios: scenarios, truckUpliftPct: uplift / 100, includeComparison: comparison });
       setReport(r.data.report); setMeta({ id: r.data.id, model: r.data.model, tokens: r.data.tokens, created_at: r.data.created_at, snapshot: r.data.snapshot }); loadSaved();
     } catch (e: any) { setErr(e?.response?.data?.message || 'تعذّر إنشاء التقرير'); } finally { setBusy(false); }
   }
@@ -75,6 +76,7 @@ export default function MarketReport({ from, to, agencies, ship }: { from: strin
                     </select>
                   </div>
                   <label className="flex items-center gap-1.5 text-xs text-gray-600"><input type="checkbox" checked={scenarios} onChange={(e) => setScenarios(e.target.checked)} /> تضمين السيناريوهات الحسابية</label>
+                  <label className="flex items-center gap-1.5 text-xs text-gray-600"><input type="checkbox" checked={comparison} onChange={(e) => setComparison(e.target.checked)} /> تضمين المقارنة مع العام السابق</label>
                   {scenarios && <div><label className="block text-xs text-gray-500 mb-1">رفع الشاحنات/رحلة %</label><input type="number" min={0} max={100} value={uplift} onChange={(e) => setUplift(+e.target.value)} className="border rounded-lg px-2 py-1.5 text-sm w-20" /></div>}
                   <Button size="sm" onClick={generate} disabled={busy || aiOn === false}>{busy ? 'جارٍ الإنشاء…' : (report ? 'إعادة الإنشاء' : 'إنشاء التقرير')}</Button>
                   {report && <>
@@ -193,6 +195,33 @@ function ReportView({ report: r, meta }: { report: any; meta: any }) {
         ))}</div>
       </Sec>
 
+      {r.year_comparison && (
+        <Sec title="المقارنة مع العام السابق">
+          {(() => { const yc = r.year_comparison; const mg = yc.market_growth_pct || {};
+            return (<>
+              <p className="text-gray-700 mb-2">{yc.summary}</p>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-2">
+                {[['رحلات', mg.trips], ['شاحنات', mg.trucks], ['سيارات', mg.cars], ['ركاب', mg.passengers]].map(([l, v]) => (
+                  <div key={l as string} className="rounded-lg border border-gray-100 p-2 text-center"><div className={cx('font-bold tabular-nums', (Number(v) || 0) >= 0 ? 'text-emerald-600' : 'text-red-500')}>{v == null ? '—' : `${v > 0 ? '+' : ''}${v}%`}</div><div className="text-xs text-gray-500">نمو {l}</div></div>
+                ))}
+              </div>
+              <div className="text-xs text-gray-600 space-y-0.5">
+                {yc.fastest_growing_metric && <p>الأسرع نمواً: <b>{yc.fastest_growing_metric}</b></p>}
+                {yc.badawy_vs_market && <p>{yc.badawy_vs_market}</p>}
+                {yc.share_shift_note && <p>{yc.share_shift_note}</p>}
+                {yc.top_growth_agency && <p>أكبر نمو وكيل: <b>{yc.top_growth_agency}</b></p>}
+                {yc.contributing_ships_note && <p>{yc.contributing_ships_note}</p>}
+                {yc.new_or_exited_ships_note && <p>{yc.new_or_exited_ships_note}</p>}
+              </div>
+              <div className="grid sm:grid-cols-3 gap-2 text-xs mt-2">
+                <div className="rounded-lg bg-red-50 p-2"><b className="text-red-700">مخاطر</b><List items={yc.risks} /></div>
+                <div className="rounded-lg bg-emerald-50 p-2"><b className="text-emerald-700">فرص</b><List items={yc.opportunities} /></div>
+                <div className="rounded-lg bg-blue-50 p-2"><b className="text-blue-700">توصيات</b><List items={yc.recommendations} /></div>
+              </div>
+            </>); })()}
+        </Sec>
+      )}
+
       {r.scenarios?.length > 0 && (
         <Sec title="ح. السيناريوهات الحسابية">
           <p className="text-[11px] text-amber-600 mb-1">تقديرات حسابية وليست توقعات مؤكدة.</p>
@@ -217,6 +246,11 @@ function reportToHTML(r: any, meta: any): string {
   const rows = (r.competitive_position || []).map((c: any) => `<tr><td>${c.agency}</td><td>${fmt(c.trips)}</td><td>${c.trip_share_pct}%</td><td>${c.rank}</td><td>${c.note || ''}</td></tr>`).join('');
   const recs = (r.recommendations || []).map((x: any) => `<div class="rec"><b>${x.title}</b> — ${x.priority} · أثر ${x.impact}<br>${x.action}<br><small>مبني على: ${x.based_on} · المدة: ${x.timeframe} · KPI: ${x.success_kpi}</small></div>`).join('');
   const scen = (r.scenarios || []).map((s: any) => `<li><b>${s.title}:</b> ${s.interpretation}</li>`).join('');
+  const yc = r.year_comparison;
+  const ycHtml = yc ? `<h2>المقارنة مع العام السابق</h2><p>${yc.summary || ''}</p>
+    <p>نمو السوق — رحلات ${yc.market_growth_pct?.trips ?? '—'}% · شاحنات ${yc.market_growth_pct?.trucks ?? '—'}% · سيارات ${yc.market_growth_pct?.cars ?? '—'}% · ركاب ${yc.market_growth_pct?.passengers ?? '—'}%</p>
+    <p>${yc.badawy_vs_market || ''}</p><p>${yc.share_shift_note || ''}</p><p>${yc.contributing_ships_note || ''}</p><p>${yc.new_or_exited_ships_note || ''}</p>
+    <b>مخاطر</b>${ul(yc.risks)}<b>فرص</b>${ul(yc.opportunities)}<b>توصيات</b>${ul(yc.recommendations)}` : '';
   return `<h1>${r.metadata?.title || 'تقرير الإدارة'}</h1><div class="muted">${r.metadata?.period_label || ''} · النموذج: ${meta?.model || ''} · ${new Date().toLocaleString('ar-EG')}</div>
     <h2>الملخص التنفيذي</h2><p><b>السوق:</b> ${es.market_assessment || ''}</p><p><b>بدوي:</b> ${es.badawy_assessment || ''}</p>
     <b>القوة</b>${ul(es.strengths)}<b>المخاطر</b>${ul(es.risks)}<b>الإجراءات</b>${ul(es.actions)}
@@ -225,6 +259,7 @@ function reportToHTML(r: any, meta: any): string {
     <h2>اتجاه بدوي شهرياً</h2><p>${r.badawy_monthly_trend?.summary || ''}</p>
     <h2>الفرص</h2>${ul(r.opportunities)}<h2>المخاطر</h2>${ul(r.risks)}
     <h2>التوصيات</h2>${recs}
+    ${ycHtml}
     ${scen ? `<h2>السيناريوهات الحسابية <small>(تقديرات وليست توقعات)</small></h2><ul>${scen}</ul>` : ''}
     <h2>القيود</h2>${ul(r.data_limitations)}`;
 }
