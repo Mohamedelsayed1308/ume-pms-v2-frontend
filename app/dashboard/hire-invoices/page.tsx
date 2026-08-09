@@ -13,6 +13,12 @@ interface HireInvoice {
   shipping_company: { id: string; name: string; address: string; bank_name: string; acc_name: string; iban_eur: string; iban_usd: string; swift_code: string };
   items: { id: string; days: number; description: string; daily_hire: number; amount: number; sort_order: number }[];
   payments: { id: string; payment_date: string; amount: number; currency: string; reference: string }[];
+  doc_type?: string;
+  related_invoice_id?: string | null;
+  related_invoice?: { id: string; invoice_number: string } | null;
+  credit_total?: number;
+  debit_total?: number;
+  net_outstanding?: number | null;
 }
 
 const emptyForm = {
@@ -21,11 +27,26 @@ const emptyForm = {
   hire_from_date: '', hire_from_time: '00:00',
   hire_to_date: '', hire_to_time: '23:59',
   currency: 'EUR', total_amount: '0', status: 'unpaid', notes: '',
+  doc_type: 'invoice', related_invoice_id: '',
 };
 const emptyItem = { days: '', description: '', daily_hire: '', amount: '' };
 
-const statusLabel: Record<string, string> = { unpaid: 'غير مسددة', partial: 'مسددة جزئياً', paid: 'مسددة' };
-const statusColor: Record<string, string> = { unpaid: 'bg-red-100 text-red-700', partial: 'bg-yellow-100 text-yellow-700', paid: 'bg-green-100 text-green-700' };
+const statusLabel: Record<string, string> = { unpaid: 'غير مسددة', partial: 'مسددة جزئياً', paid: 'مسددة', issued: 'صادر' };
+const statusColor: Record<string, string> = { unpaid: 'bg-red-100 text-red-700', partial: 'bg-yellow-100 text-yellow-700', paid: 'bg-green-100 text-green-700', issued: 'bg-blue-100 text-blue-700' };
+
+// أنواع المستند: فاتورة إيجار / إشعار دائن / إشعار مدين
+const DOC_TYPES: Record<string, { ar: string; pdf: string; prefix: string; badge: string }> = {
+  invoice:     { ar: 'فاتورة إيجار', pdf: 'Invoice',     prefix: '',    badge: 'bg-slate-100 text-slate-700' },
+  credit_note: { ar: 'إشعار دائن',   pdf: 'Credit Note', prefix: 'CN-', badge: 'bg-emerald-100 text-emerald-700' },
+  debit_note:  { ar: 'إشعار مدين',   pdf: 'Debit Note',  prefix: 'DN-', badge: 'bg-orange-100 text-orange-700' },
+};
+
+// بيانات البنك حسب العملة: دولار → حساب الدولار، غير ذلك → حساب اليورو
+function bankInfo(company: any, currency: string): { iban: string; label: string } {
+  if (!company) return { iban: '', label: '' };
+  if ((currency || '').toUpperCase() === 'USD') return { iban: company.iban_usd || '', label: 'USD' };
+  return { iban: company.iban_eur || '', label: 'EURO' };
+}
 
 function fmt(n: number) { return Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 
@@ -45,6 +66,7 @@ export default function HireInvoicesPage() {
   const [payForm, setPayForm] = useState({ payment_date: '', amount: '', currency: 'EUR', reference: '', notes: '' });
   const [payLoading, setPayLoading] = useState(false);
   const [filterStatus, setFilterStatus] = useState('');
+  const [docFilter, setDocFilter] = useState('');
 
   async function load() {
     const [invRes, custRes, vesRes, compRes] = await Promise.all([
@@ -60,17 +82,32 @@ export default function HireInvoicesPage() {
   }
   useEffect(() => { load(); }, []);
 
-  function openAdd() {
+  function openAdd(docType: string = 'invoice') {
     setEditing(null);
-    setForm(emptyForm);
+    setForm({ ...emptyForm, doc_type: docType, invoice_number: DOC_TYPES[docType]?.prefix || '' });
     setItems([{ ...emptyItem }]);
     setError('');
     setShowModal(true);
   }
 
+  // عند اختيار الفاتورة الأصلية لإشعار: يملأ العميل/السفينة/شركة الشحن/العملة منها
+  function onRelatedInvoiceChange(relId: string) {
+    const src = invoices.find((i) => i.id === relId);
+    setForm((prev) => ({
+      ...prev,
+      related_invoice_id: relId,
+      customer_id: src?.customer?.id || prev.customer_id,
+      vessel_id: src?.vessel?.id || prev.vessel_id,
+      shipping_company_id: src?.shipping_company?.id || prev.shipping_company_id,
+      currency: src?.currency || prev.currency,
+    }));
+  }
+
   function openEdit(inv: HireInvoice) {
     setEditing(inv);
     setForm({
+      doc_type: inv.doc_type || 'invoice',
+      related_invoice_id: inv.related_invoice_id || inv.related_invoice?.id || '',
       invoice_number: inv.invoice_number,
       invoice_date: inv.invoice_date?.slice(0, 10) || '',
       customer_id: inv.customer?.id || '',
@@ -147,13 +184,17 @@ export default function HireInvoicesPage() {
   }
 
   async function handleSave() {
-    if (!form.invoice_number.trim()) { setError('رقم الفاتورة مطلوب'); return; }
+    const isNote = form.doc_type === 'credit_note' || form.doc_type === 'debit_note';
+    const docLabel = DOC_TYPES[form.doc_type]?.ar || 'المستند';
+    if (!form.invoice_number.trim()) { setError(`رقم ${docLabel} مطلوب`); return; }
+    if (isNote && !form.related_invoice_id) { setError('اختر الفاتورة الأصلية التي يعدّلها الإشعار'); return; }
     if (!form.customer_id) { setError('العميل مطلوب'); return; }
     if (!form.vessel_id) { setError('السفينة مطلوبة'); return; }
     setLoading(true);
     try {
       const payload = {
         ...form,
+        related_invoice_id: isNote ? (form.related_invoice_id || null) : null,
         hire_from: form.hire_from_date ? `${form.hire_from_date}T${form.hire_from_time || '00:00'}` : null,
         hire_to: form.hire_to_date ? `${form.hire_to_date}T${form.hire_to_time || '23:59'}` : null,
         total_amount: calcTotal(),
@@ -224,23 +265,34 @@ export default function HireInvoicesPage() {
     const addrLines = (inv.shipping_company?.address || '').split('\n');
     addrLines.forEach((line, i) => doc.text(line, M, 22 + i * 4.5));
 
-    // ── "Invoice" heading (right) ─────────────────────────────────────────────
-    doc.setFontSize(24);
+    // ── Document heading (right) ──────────────────────────────────────────────
+    const dt = inv.doc_type || 'invoice';
+    const docTitle = DOC_TYPES[dt]?.pdf || 'Invoice';
+    const isNote = dt !== 'invoice';
+    doc.setFontSize(isNote ? 20 : 24);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(25, 50, 90);
-    doc.text('Invoice', W - M, 18, { align: 'right' });
+    doc.text(docTitle, W - M, 18, { align: 'right' });
 
-    // ── Date / Invoice# mini-table (right) ────────────────────────────────────
+    // ── Date / Number mini-table (right) ──────────────────────────────────────
     autoTable(doc, {
       startY: 22,
       margin: { left: W - 72, right: M },
       theme: 'grid',
-      head: [['Date', 'Invoice #']],
+      head: [['Date', `${docTitle} #`]],
       body: [[inv.invoice_date?.slice(0, 10) || '', inv.invoice_number]],
       styles: { fontSize: 8.5, cellPadding: 2.5, textColor: DARK },
       headStyles: { fillColor: LIGHT_BG, textColor: DARK, fontStyle: 'bold', lineColor: BORDER, lineWidth: 0.3 },
       bodyStyles: { lineColor: BORDER, lineWidth: 0.3 },
     });
+
+    // ── Against-invoice reference (notes only) ────────────────────────────────
+    if (isNote && inv.related_invoice?.invoice_number) {
+      doc.setFontSize(8.5);
+      doc.setFont('helvetica', 'italic');
+      doc.setTextColor(...GRAY);
+      doc.text(`Against Invoice: ${inv.related_invoice.invoice_number}`, W - M, 40, { align: 'right' });
+    }
 
     // ── Divider ───────────────────────────────────────────────────────────────
     const divY = 42;
@@ -321,7 +373,8 @@ export default function HireInvoicesPage() {
     doc.setFontSize(10);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(255, 255, 255);
-    doc.text(`Total  ${inv.currency}  ${fmt(+inv.total_amount)}`, W - M - 4, finalY + 6, { align: 'right' });
+    const totalLabel = dt === 'credit_note' ? 'Credit Total' : dt === 'debit_note' ? 'Debit Total' : 'Total';
+    doc.text(`${totalLabel}  ${inv.currency}  ${fmt(+inv.total_amount)}`, W - M - 4, finalY + 6, { align: 'right' });
     doc.setTextColor(...DARK);
 
     // ── Bank details ──────────────────────────────────────────────────────────
@@ -335,10 +388,11 @@ export default function HireInvoicesPage() {
     doc.text('Our Bank Details', M, bankY + 4);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(...GRAY);
+    const bk = bankInfo(inv.shipping_company, inv.currency);
     const bankLines = [
       `Bank Name: ${inv.shipping_company?.bank_name || ''}`,
       `Acc. Name: ${inv.shipping_company?.acc_name || ''}`,
-      `IBAN: ${inv.shipping_company?.iban_eur || ''}  EURO`,
+      `IBAN: ${bk.iban}  ${bk.label}`,
       `Swift Code : ${inv.shipping_company?.swift_code || ''}`,
     ];
     bankLines.forEach((line, i) => doc.text(line, M, bankY + 10 + i * 5));
@@ -350,13 +404,30 @@ export default function HireInvoicesPage() {
     doc.save(`${inv.invoice_number}.pdf`);
   }
 
-  const displayed = filterStatus ? invoices.filter(i => i.status === filterStatus) : invoices;
+  const displayed = invoices.filter((i) =>
+    (!filterStatus || i.status === filterStatus) &&
+    (!docFilter || (i.doc_type || 'invoice') === docFilter)
+  );
 
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-2xl font-bold text-gray-800">فواتير الإيجار</h2>
-        <button onClick={openAdd} className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">+ فاتورة إيجار جديدة</button>
+        <div className="flex gap-2">
+          <button onClick={() => openAdd('invoice')} className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">+ فاتورة إيجار جديدة</button>
+          <button onClick={() => openAdd('credit_note')} className="bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700">+ إشعار دائن</button>
+          <button onClick={() => openAdd('debit_note')} className="bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700">+ إشعار مدين</button>
+        </div>
+      </div>
+
+      {/* Doc-type filter */}
+      <div className="flex gap-2 mb-3">
+        {[['', 'كل الأنواع'], ['invoice', 'فواتير'], ['credit_note', 'إشعارات دائنة'], ['debit_note', 'إشعارات مدينة']].map(([v, lbl]) => (
+          <button key={v} onClick={() => setDocFilter(v)}
+            className={`px-3 py-1 rounded-full text-sm border transition-colors ${docFilter === v ? 'bg-gray-800 text-white border-gray-800' : 'bg-white text-gray-600 border-gray-300 hover:border-gray-500'}`}>
+            {lbl}
+          </button>
+        ))}
       </div>
 
       {/* Status filter */}
@@ -373,21 +444,34 @@ export default function HireInvoicesPage() {
         <table className="w-full text-sm">
           <thead className="bg-gray-50 text-gray-600 text-right">
             <tr>
-              <th className="px-4 py-3">رقم الفاتورة</th>
+              <th className="px-4 py-3">رقم المستند</th>
+              <th className="px-4 py-3">النوع</th>
               <th className="px-4 py-3">التاريخ</th>
               <th className="px-4 py-3">العميل</th>
               <th className="px-4 py-3">السفينة</th>
               <th className="px-4 py-3">فترة التأجير</th>
               <th className="px-4 py-3">المبلغ</th>
-              <th className="px-4 py-3">المسدد</th>
+              <th className="px-4 py-3">المسدد / المتبقّي</th>
               <th className="px-4 py-3">الحالة</th>
               <th className="px-4 py-3">إجراءات</th>
             </tr>
           </thead>
           <tbody>
-            {displayed.map((inv) => (
+            {displayed.map((inv) => {
+              const dt = inv.doc_type || 'invoice';
+              const isNote = dt !== 'invoice';
+              const hasAdj = !isNote && ((inv.credit_total || 0) > 0 || (inv.debit_total || 0) > 0);
+              return (
               <tr key={inv.id} className="border-t hover:bg-gray-50">
-                <td className="px-4 py-3 font-mono font-medium text-blue-700">{inv.invoice_number}</td>
+                <td className="px-4 py-3 font-mono font-medium text-blue-700">
+                  {inv.invoice_number}
+                  {isNote && inv.related_invoice?.invoice_number && (
+                    <div className="text-[10px] text-gray-400 font-sans">مقابل: {inv.related_invoice.invoice_number}</div>
+                  )}
+                </td>
+                <td className="px-4 py-3">
+                  <span className={`px-2 py-1 rounded-full text-[11px] font-medium ${DOC_TYPES[dt]?.badge || ''}`}>{DOC_TYPES[dt]?.ar || dt}</span>
+                </td>
                 <td className="px-4 py-3 text-gray-500">{inv.invoice_date?.slice(0, 10)}</td>
                 <td className="px-4 py-3">{inv.customer?.name}</td>
                 <td className="px-4 py-3">{inv.vessel?.name}</td>
@@ -396,8 +480,21 @@ export default function HireInvoicesPage() {
                   <span className="mx-1 text-gray-300">→</span>
                   {inv.hire_to ? new Date(inv.hire_to).toLocaleDateString('en-GB').replace(/\//g,'-') : '—'}
                 </td>
-                <td className="px-4 py-3 font-medium">{fmt(+inv.total_amount)} {inv.currency}</td>
-                <td className="px-4 py-3 text-green-700">{fmt(+inv.paid_amount)} {inv.currency}</td>
+                <td className="px-4 py-3 font-medium">
+                  {isNote && (dt === 'credit_note' ? '−' : '+')}{fmt(+inv.total_amount)} {inv.currency}
+                </td>
+                <td className="px-4 py-3">
+                  {isNote ? (
+                    <span className="text-gray-400 text-xs">—</span>
+                  ) : (
+                    <>
+                      <span className="text-green-700">{fmt(+inv.paid_amount)} {inv.currency}</span>
+                      {hasAdj && (
+                        <div className="text-[11px] text-gray-500">صافي المتبقّي: <span className="font-medium text-gray-700">{fmt(inv.net_outstanding ?? (+inv.total_amount - +inv.paid_amount))} {inv.currency}</span></div>
+                      )}
+                    </>
+                  )}
+                </td>
                 <td className="px-4 py-3">
                   <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusColor[inv.status] || 'bg-gray-100 text-gray-600'}`}>
                     {statusLabel[inv.status] || inv.status}
@@ -405,13 +502,13 @@ export default function HireInvoicesPage() {
                 </td>
                 <td className="px-4 py-3 flex gap-2">
                   <button onClick={() => setPreviewInv(inv)} className="text-green-600 hover:underline text-xs font-medium border border-green-400 rounded px-1">PDF</button>
-                  <button onClick={() => setViewInv(inv)} className="text-purple-600 hover:underline text-xs">دفع</button>
+                  {!isNote && <button onClick={() => setViewInv(inv)} className="text-purple-600 hover:underline text-xs">دفع</button>}
                   <button onClick={() => openEdit(inv)} className="text-blue-600 hover:underline text-xs">تعديل</button>
                   <button onClick={() => handleDelete(inv.id, inv.invoice_number)} className="text-red-500 hover:underline text-xs">حذف</button>
                 </td>
               </tr>
-            ))}
-            {displayed.length === 0 && <tr><td colSpan={9} className="text-center py-8 text-gray-400">لا توجد فواتير</td></tr>}
+            );})}
+            {displayed.length === 0 && <tr><td colSpan={10} className="text-center py-8 text-gray-400">لا توجد مستندات</td></tr>}
           </tbody>
         </table>
       </div>
@@ -421,14 +518,33 @@ export default function HireInvoicesPage() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-3xl max-h-[95vh] overflow-y-auto">
             <div className="sticky top-0 bg-white border-b px-6 py-4 flex items-center justify-between">
-              <h3 className="font-bold text-lg">{editing ? 'تعديل فاتورة إيجار' : 'فاتورة إيجار جديدة'}</h3>
+              <h3 className="font-bold text-lg">
+                {editing ? 'تعديل ' : 'إنشاء '}{DOC_TYPES[form.doc_type]?.ar || 'مستند'}
+                <span className={`ms-2 px-2 py-0.5 rounded-full text-xs font-medium align-middle ${DOC_TYPES[form.doc_type]?.badge || ''}`}>{DOC_TYPES[form.doc_type]?.ar}</span>
+              </h3>
               <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-gray-600">✕</button>
             </div>
             <div className="p-6 space-y-4">
+              {/* الفاتورة الأصلية (للإشعارات فقط) */}
+              {(form.doc_type === 'credit_note' || form.doc_type === 'debit_note') && (
+                <div className={`rounded-lg p-3 border ${form.doc_type === 'credit_note' ? 'bg-emerald-50 border-emerald-200' : 'bg-orange-50 border-orange-200'}`}>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">الفاتورة الأصلية *</label>
+                  <select value={form.related_invoice_id} onChange={(e) => onRelatedInvoiceChange(e.target.value)}
+                    className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+                    <option value="">— اختر الفاتورة —</option>
+                    {invoices.filter((i) => (i.doc_type || 'invoice') === 'invoice').map((i) => (
+                      <option key={i.id} value={i.id}>{i.invoice_number} — {i.customer?.name} — {fmt(+i.total_amount)} {i.currency}</option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {form.doc_type === 'credit_note' ? 'الإشعار الدائن يخصم من المتبقّي على العميل.' : 'الإشعار المدين يضيف على المتبقّي على العميل.'} العملة وبيانات البنك تُؤخذ من العملة أدناه.
+                  </p>
+                </div>
+              )}
               {/* Basic info */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm text-gray-600 mb-1">رقم الفاتورة *</label>
+                  <label className="block text-sm text-gray-600 mb-1">رقم {DOC_TYPES[form.doc_type]?.ar || 'المستند'} *</label>
                   <input value={form.invoice_number} onChange={(e) => setForm({ ...form, invoice_number: e.target.value })}
                     placeholder="ZA-26-07-02"
                     className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono" />
@@ -576,7 +692,7 @@ export default function HireInvoicesPage() {
             <div className="sticky bottom-0 bg-white border-t px-6 py-4 flex gap-2">
               <button onClick={handleSave} disabled={loading}
                 className="flex-1 bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50">
-                {loading ? 'جاري الحفظ...' : 'حفظ الفاتورة'}
+                {loading ? 'جاري الحفظ...' : `حفظ ${DOC_TYPES[form.doc_type]?.ar || ''}`}
               </button>
               <button onClick={() => setShowModal(false)} className="flex-1 border border-gray-300 py-2 rounded-lg hover:bg-gray-50">إلغاء</button>
             </div>
@@ -589,7 +705,7 @@ export default function HireInvoicesPage() {
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[95vh] overflow-y-auto">
             <div className="sticky top-0 bg-white border-b px-6 py-3 flex items-center justify-between">
-              <h3 className="font-bold text-gray-800">معاينة الفاتورة — {previewInv.invoice_number}</h3>
+              <h3 className="font-bold text-gray-800">معاينة {DOC_TYPES[previewInv.doc_type || 'invoice']?.ar || 'المستند'} — {previewInv.invoice_number}</h3>
               <div className="flex gap-2">
                 <button onClick={() => { exportPDF(previewInv); setPreviewInv(null); }}
                   className="bg-green-600 text-white px-4 py-1.5 rounded-lg text-sm hover:bg-green-700">
@@ -610,12 +726,12 @@ export default function HireInvoicesPage() {
                     <p className="text-gray-500 text-xs whitespace-pre-line mt-1">{previewInv.shipping_company?.address}</p>
                   </div>
                   <div className="text-right">
-                    <p className="text-3xl font-bold text-[#19325a] mb-2">Invoice</p>
+                    <p className="text-3xl font-bold text-[#19325a] mb-2">{DOC_TYPES[previewInv.doc_type || 'invoice']?.pdf || 'Invoice'}</p>
                     <table className="border-collapse text-xs ml-auto">
                       <thead>
                         <tr className="bg-gray-50">
                           <th className="border border-gray-200 px-3 py-1.5 font-semibold text-gray-600">Date</th>
-                          <th className="border border-gray-200 px-3 py-1.5 font-semibold text-gray-600">Invoice #</th>
+                          <th className="border border-gray-200 px-3 py-1.5 font-semibold text-gray-600">{DOC_TYPES[previewInv.doc_type || 'invoice']?.pdf || 'Invoice'} #</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -625,6 +741,9 @@ export default function HireInvoicesPage() {
                         </tr>
                       </tbody>
                     </table>
+                    {(previewInv.doc_type === 'credit_note' || previewInv.doc_type === 'debit_note') && previewInv.related_invoice?.invoice_number && (
+                      <p className="text-[11px] text-gray-500 italic mt-2">Against Invoice: {previewInv.related_invoice.invoice_number}</p>
+                    )}
                   </div>
                 </div>
 
@@ -700,7 +819,7 @@ export default function HireInvoicesPage() {
                 <div className="flex justify-end mt-3">
                   <div className="bg-[#19325a] text-white px-6 py-3 rounded-lg">
                     <span className="text-sm font-bold tracking-wide">
-                      Total&nbsp;&nbsp;{previewInv.currency}&nbsp;&nbsp;{fmt(+previewInv.total_amount)}
+                      {previewInv.doc_type === 'credit_note' ? 'Credit Total' : previewInv.doc_type === 'debit_note' ? 'Debit Total' : 'Total'}&nbsp;&nbsp;{previewInv.currency}&nbsp;&nbsp;{fmt(+previewInv.total_amount)}
                     </span>
                   </div>
                 </div>
@@ -711,7 +830,7 @@ export default function HireInvoicesPage() {
                   <div className="text-xs text-gray-600 space-y-1">
                     <p>Bank Name: <span className="text-gray-800 font-medium">{previewInv.shipping_company?.bank_name}</span></p>
                     <p>Acc. Name: <span className="text-gray-800 font-medium">{previewInv.shipping_company?.acc_name}</span></p>
-                    <p>IBAN: <span className="text-gray-800 font-mono">{previewInv.shipping_company?.iban_eur}</span>&nbsp;&nbsp;EURO</p>
+                    <p>IBAN: <span className="text-gray-800 font-mono">{bankInfo(previewInv.shipping_company, previewInv.currency).iban}</span>&nbsp;&nbsp;{bankInfo(previewInv.shipping_company, previewInv.currency).label}</p>
                     <p>Swift Code: <span className="text-gray-800 font-mono">{previewInv.shipping_company?.swift_code}</span></p>
                   </div>
                 </div>
