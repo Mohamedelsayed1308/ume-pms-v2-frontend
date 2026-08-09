@@ -4,6 +4,7 @@ import Link from 'next/link';
 import api from '@/lib/api';
 import { getUser } from '@/lib/auth';
 import { Card, Icon, Spinner, EmptyState, Button, cx } from '@/components/ui';
+import MarketReport from './MarketReport';
 
 // ── ثوابت ──
 const METRICS = [
@@ -75,9 +76,12 @@ export default function MarketPage() {
           <h1 className="text-2xl font-extrabold text-navy-900">تحليل السوق الملاحي — ضبا / سفاجا</h1>
           <p className="text-sm text-gray-500 mt-0.5">حصص الوكلاء والحركة الشهرية · التركيز: وكالة بدوي · المقام دائماً إجمالي السوق</p>
         </div>
-        {getUser()?.role === 'admin' && (
-          <Link href="/dashboard/market/import"><Button variant="outline" size="sm"><Icon name="factory" size={15} /> استيراد وإدارة الوكالات</Button></Link>
-        )}
+        <div className="flex items-center gap-2 flex-wrap">
+          <MarketReport from={from} to={to} agencies={selAgencies} ship={ship} />
+          {getUser()?.role === 'admin' && (
+            <Link href="/dashboard/market/import"><Button variant="outline" size="sm"><Icon name="factory" size={15} /> استيراد وإدارة الوكالات</Button></Link>
+          )}
+        </div>
       </div>
 
       {/* Filters */}
