@@ -24,6 +24,14 @@ function fmtC(n: number): string {
 
 const VESSEL_COLORS = ['#4f46e5', '#059669', '#d97706', '#7c3aed', '#dc2626', '#0891b2', '#db2777', '#65a30d'];
 
+// أنواع المخططات المتاحة للاتجاه الشهري (تسهيل العرض للإدارة)
+type ChartType = 'line' | 'bars' | 'area';
+const CHART_TYPES: { key: ChartType; label: string; icon: string }[] = [
+  { key: 'line', label: 'خطّي', icon: '📈' },
+  { key: 'bars', label: 'أعمدة', icon: '📊' },
+  { key: 'area', label: 'مساحة', icon: '🗻' },
+];
+
 type MetricKey = 'voyages' | 'trucks' | 'vehicles' | 'passengers' | 'net' | 'revenue' | 'expenses' | 'liquidity';
 const METRICS: { key: MetricKey; label: string; money: boolean; goodUp: boolean; icon: string; color: string; grad: [string, string] }[] = [
   { key: 'voyages', label: 'الرحلات', money: false, goodUp: true, icon: '🧭', color: '#4f46e5', grad: ['#6366f1', '#4f46e5'] },
@@ -49,6 +57,7 @@ export default function FleetDashboard() {
   const [selVessels, setSelVessels] = useState<string[]>([]);
   const [metric, setMetric] = useState<MetricKey>('net');
   const [sortKey, setSortKey] = useState<MetricKey>('net');
+  const [chartType, setChartType] = useState<ChartType>('line');
 
   async function load(refresh = false) {
     if (refresh) setRefreshing(true); else setLoading(true);
@@ -269,11 +278,22 @@ export default function FleetDashboard() {
 
         {/* ── الاتجاه الشهري ── */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
             <h3 className="font-bold text-gray-800">الاتجاه الشهري</h3>
-            <span className="text-xs px-2.5 py-1 rounded-full" style={{ background: `${activeMetric.color}15`, color: activeMetric.color }}>{activeMetric.icon} {activeMetric.label}</span>
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* مبدّل نوع المخطط */}
+              <div className="flex items-center bg-gray-100 rounded-lg p-0.5">
+                {CHART_TYPES.map((c) => (
+                  <button key={c.key} onClick={() => setChartType(c.key)} title={c.label}
+                    className={`text-xs px-2.5 py-1 rounded-md transition-all flex items-center gap-1 ${chartType === c.key ? 'bg-white shadow-sm text-indigo-700 font-semibold' : 'text-gray-500 hover:text-gray-700'}`}>
+                    <span>{c.icon}</span><span className="hidden sm:inline">{c.label}</span>
+                  </button>
+                ))}
+              </div>
+              <span className="text-xs px-2.5 py-1 rounded-full" style={{ background: `${activeMetric.color}15`, color: activeMetric.color }}>{activeMetric.icon} {activeMetric.label}</span>
+            </div>
           </div>
-          <LineChart months={monthsInRange} series={series} money={activeMetric.money} />
+          <TrendChart months={monthsInRange} series={series} money={activeMetric.money} type={chartType} />
         </div>
       </div>
 
@@ -356,8 +376,8 @@ function Sparkline({ values, color }: { values: number[]; color: string }) {
   );
 }
 
-// ── رسم الاتجاه متعدد المراكب ──
-function LineChart({ months, series, money }: { months: string[]; series: { name: string; color: string; values: number[] }[]; money: boolean }) {
+// ── رسم الاتجاه متعدد المراكب (خطّي / أعمدة / مساحة) ──
+function TrendChart({ months, series, money, type }: { months: string[]; series: { name: string; color: string; values: number[] }[]; money: boolean; type: ChartType }) {
   const W = 560, H = 250, PL = 46, PR = 14, PT = 12, PB = 30;
   const iw = W - PL - PR, ih = H - PT - PB;
   const allVals = series.flatMap((s) => s.values);
@@ -366,21 +386,29 @@ function LineChart({ months, series, money }: { months: string[]; series: { name
   const n = months.length;
   const x = (i: number) => PL + (n <= 1 ? iw / 2 : (i / (n - 1)) * iw);
   const y = (v: number) => PT + ih - ((v - min) / (max - min || 1)) * ih;
+  const baseY = y(0); // خط الصفر (يدعم القيم السالبة)
   const ticks = 4;
-  const single = series.length === 1;
   if (!n) return <p className="text-gray-400 text-sm text-center py-12">لا توجد بيانات في الفترة</p>;
+
+  // هندسة الأعمدة المجمّعة
+  const spacing = n > 1 ? iw / (n - 1) : iw;
+  const groupW = Math.min(spacing * 0.62, 46);
+  const barW = groupW / Math.max(1, series.length);
+
   return (
     <div>
       <div className="w-full overflow-x-auto">
         <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ minWidth: 340 }}>
           <defs>
-            {single && (
-              <linearGradient id="lc-area" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor={series[0].color} stopOpacity="0.28" />
-                <stop offset="100%" stopColor={series[0].color} stopOpacity="0" />
+            {series.map((s, si) => (
+              <linearGradient key={si} id={`tc-area-${si}`} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={s.color} stopOpacity={series.length === 1 ? '0.28' : '0.20'} />
+                <stop offset="100%" stopColor={s.color} stopOpacity="0" />
               </linearGradient>
-            )}
+            ))}
           </defs>
+
+          {/* شبكة + محور القيم */}
           {Array.from({ length: ticks + 1 }).map((_, t) => {
             const val = min + ((max - min) * t) / ticks;
             const yy = y(val);
@@ -391,13 +419,33 @@ function LineChart({ months, series, money }: { months: string[]; series: { name
               </g>
             );
           })}
+          {/* خط الصفر أوضح لو فيه قيم سالبة */}
+          {min < 0 && <line x1={PL} y1={baseY} x2={W - PR} y2={baseY} stroke="#cbd5e1" strokeDasharray="3 3" />}
           {months.map((m, i) => (
             <text key={m} x={x(i)} y={H - 9} textAnchor="middle" fontSize="9" fill="#94a3b8">{monthLabel(m)}</text>
           ))}
-          {single && (
-            <polygon points={`${x(0)},${PT + ih} ${series[0].values.map((v, i) => `${x(i)},${y(v)}`).join(' ')} ${x(n - 1)},${PT + ih}`} fill="url(#lc-area)" />
-          )}
-          {series.map((s) => (
+
+          {/* أعمدة مجمّعة */}
+          {type === 'bars' && series.map((s, si) => (
+            <g key={s.name}>
+              {s.values.map((v, i) => {
+                const bx = x(i) - groupW / 2 + si * barW;
+                const yv = y(v);
+                const top = Math.min(yv, baseY), h = Math.max(1.5, Math.abs(yv - baseY));
+                return <rect key={i} x={bx} y={top} width={barW * 0.82} height={h} rx="1.5" fill={s.color} opacity="0.92" />;
+              })}
+            </g>
+          ))}
+
+          {/* مساحة (تعبئة تحت كل خط) */}
+          {type === 'area' && series.map((s, si) => (
+            <polygon key={s.name}
+              points={`${x(0)},${baseY} ${s.values.map((v, i) => `${x(i)},${y(v)}`).join(' ')} ${x(n - 1)},${baseY}`}
+              fill={`url(#tc-area-${si})`} />
+          ))}
+
+          {/* خطوط + نقاط (للخطّي والمساحة) */}
+          {(type === 'line' || type === 'area') && series.map((s) => (
             <g key={s.name}>
               <polyline fill="none" stroke={s.color} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round"
                 points={s.values.map((v, i) => `${x(i)},${y(v)}`).join(' ')} />
