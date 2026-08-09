@@ -6,6 +6,7 @@ import { getUser } from '@/lib/auth';
 import { Card, Icon, Spinner, EmptyState, Button, cx } from '@/components/ui';
 import MarketReport from './MarketReport';
 import YearComparison from './YearComparison';
+import ExecutiveView from './ExecutiveView';
 
 // ── ثوابت ──
 const METRICS = [
@@ -42,7 +43,7 @@ export default function MarketPage() {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
-  const [mode, setMode] = useState<'analysis' | 'comparison'>('analysis');
+  const [mode, setMode] = useState<'analysis' | 'comparison' | 'executive'>('analysis');
 
   const load = () => {
     setLoading(true); setError('');
@@ -88,7 +89,7 @@ export default function MarketPage() {
 
       {/* مفتاح الوضع */}
       <div className="flex rounded-xl border border-gray-200 overflow-hidden w-fit">
-        {([['analysis', '📊 التحليل'], ['comparison', '📈 المقارنة السنوية']] as const).map(([v, lbl]) => (
+        {([['analysis', '📊 التحليل'], ['comparison', '📈 المقارنة السنوية'], ['executive', '🎯 العرض التنفيذي']] as const).map(([v, lbl]) => (
           <button key={v} onClick={() => setMode(v)} className={cx('px-4 py-2 text-sm font-medium', mode === v ? 'bg-navy-900 text-white' : 'bg-white text-gray-600 hover:bg-gray-50')}>{lbl}</button>
         ))}
       </div>
@@ -145,6 +146,11 @@ export default function MarketPage() {
       {/* ── وضع المقارنة السنوية ── */}
       {mode === 'comparison' && (
         <YearComparison from={from} to={to} selAgencies={selAgencies} ship={ship} shownAgencyKeys={shownAgencyKeys} />
+      )}
+
+      {/* ── وضع العرض التنفيذي ── */}
+      {mode === 'executive' && (
+        <ExecutiveView from={from} to={to} selAgencies={selAgencies} ship={ship} />
       )}
 
       {loading && mode === 'analysis' && <div className="flex justify-center py-20"><Spinner /></div>}
