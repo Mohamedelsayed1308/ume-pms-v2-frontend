@@ -46,6 +46,7 @@ export const SCREENS: Screen[] = [
   { href: '/dashboard/tasks', label: 'مهام الفريق', icon: '✅', iconName: 'check', group: 'operations' },
 
   { href: '/dashboard/users', label: 'الصلاحيات', icon: '🔐', iconName: 'shield', group: 'admin', adminOnly: true },
+  { href: '/dashboard/audit', label: 'تدقيق السلامة المالية', icon: '🛡️', iconName: 'shield', group: 'admin', adminOnly: true },
 ];
 
 // الشاشات التي يمكن منحها/منعها في شاشة الصلاحيات (استبعاد الرئيسية والأدمن-فقط)
