@@ -831,7 +831,11 @@ function InvoicesContent() {
               const remaining = outOf(inv);
               return (
                 <tr key={inv.id} onClick={() => setDetail(inv)} className="border-b border-gray-50 last:border-0 hover:bg-brand-50/40 cursor-pointer">
-                  <td className="px-3 py-2.5 font-mono font-medium text-brand-700">{inv.invoice_number}{inv.line_items?.length ? <span className="text-[10px] text-indigo-500 ms-1">({inv.line_items.length})</span> : null}</td>
+                  <td className="px-3 py-2.5 font-mono font-medium text-brand-700">
+                    {inv.invoice_number}{inv.line_items?.length ? <span className="text-[10px] text-indigo-500 ms-1">({inv.line_items.length})</span> : null}
+                    {/* فاتورة بمبلغ سالب = إشعار دائن */}
+                    {Number(inv.total_amount) < 0 && <span className="inline-block bg-indigo-100 text-indigo-700 rounded px-1.5 py-0.5 text-[10px] font-semibold ms-1 font-sans">إشعار دائن</span>}
+                  </td>
                   <td className="px-3 py-2.5 text-gray-700">{inv.supplier?.name || '—'}</td>
                   <td className="px-3 py-2.5 text-gray-500">{inv.vessel?.name || '—'}</td>
                   <td className="px-3 py-2.5 font-medium tabular-nums">{fmtMoney(inv.total_amount)} <span className="text-[11px] text-gray-400">{inv.currency}</span></td>

@@ -125,18 +125,26 @@ function Statement({ d, name }: { d: any; name: string }) {
   const txns: any[] = d?.transactions || [];
 
   // إعادة حساب الرصيد المتراكم لكل عملة على حدة
-  const { rows, totals, currencies } = useMemo(() => {
+  // الفاتورة بمبلغ سالب = إشعار دائن → تُعرض في خانة «دائن» بقيمتها المطلقة (الرصيد لا يتغيّر)
+  const { rows, totals, currencies, creditNotes } = useMemo(() => {
     const run: Record<string, number> = {};
     const tot: Record<string, { debit: number; credit: number }> = {};
+    let notes = 0;
     const out = txns.map((t) => {
       const c = t.currency || '—';
-      run[c] = (run[c] || 0) + Number(t.debit || 0) - Number(t.credit || 0);
+      const rawDebit = Number(t.debit || 0);
+      const isNote = t.type === 'debit' && rawDebit < 0;
+      if (isNote) notes++;
+      const debit = isNote ? 0 : rawDebit;
+      const credit = isNote ? Math.abs(rawDebit) : Number(t.credit || 0);
+
+      run[c] = (run[c] || 0) + debit - credit;
       tot[c] = tot[c] || { debit: 0, credit: 0 };
-      tot[c].debit += Number(t.debit || 0);
-      tot[c].credit += Number(t.credit || 0);
-      return { ...t, ccy: c, balance: run[c] };
+      tot[c].debit += debit;
+      tot[c].credit += credit;
+      return { ...t, ccy: c, debit, credit, isNote, balance: run[c] };
     });
-    return { rows: out, totals: tot, currencies: Object.keys(tot) };
+    return { rows: out, totals: tot, currencies: Object.keys(tot), creditNotes: notes };
   }, [txns]);
 
   if (!txns.length) return <p className="text-center text-gray-400 text-sm py-10">لا توجد حركات لهذا المورد</p>;
@@ -146,10 +154,18 @@ function Statement({ d, name }: { d: any; name: string }) {
       <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
         <h4 className="font-bold text-gray-700">كشف حساب — {name} <span className="text-xs font-normal text-gray-400">({txns.length} حركة)</span></h4>
         <Button size="sm" variant="success" icon="file" onClick={() => toExcel(rows.map((t) => ({
-          'التاريخ': t.date?.slice(0, 10), 'البيان': t.description, 'السفينة': t.vessel || '—',
+          'التاريخ': t.date?.slice(0, 10),
+          'النوع': t.isNote ? 'إشعار دائن' : t.type === 'credit' ? 'سداد' : 'فاتورة',
+          'البيان': t.description, 'السفينة': t.vessel || '—',
           'العملة': t.ccy, 'مدين': t.debit || 0, 'دائن': t.credit || 0, 'الرصيد': t.balance,
         })), `كشف-حساب-${name}`)}>Excel</Button>
       </div>
+
+      {creditNotes > 0 && (
+        <p className="text-[11px] text-indigo-700 bg-indigo-50 rounded-lg px-2.5 py-1.5 mb-3">
+          يحتوي الكشف على {creditNotes} إشعار دائن (فواتير بمبلغ سالب) — تظهر في خانة «دائن» لأنها تخصم من رصيد المورد.
+        </p>
+      )}
 
       {/* إجماليات لكل عملة */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
@@ -179,9 +195,12 @@ function Statement({ d, name }: { d: any; name: string }) {
           </tr></thead>
           <tbody>
             {rows.map((t, i) => (
-              <tr key={i} className="border-t border-gray-50">
+              <tr key={i} className={cx('border-t border-gray-50', t.isNote && 'bg-indigo-50/50')}>
                 <td className="px-2 py-1.5 text-gray-500 whitespace-nowrap">{t.date?.slice(0, 10)}</td>
-                <td className="px-2 py-1.5 text-gray-700">{t.description}</td>
+                <td className="px-2 py-1.5 text-gray-700">
+                  {t.isNote && <span className="inline-block bg-indigo-100 text-indigo-700 rounded px-1.5 py-0.5 text-[10px] font-semibold ms-1.5">إشعار دائن</span>}
+                  {t.description}
+                </td>
                 <td className="px-2 py-1.5 text-gray-500">{t.vessel || '—'}</td>
                 <td className="px-2 py-1.5 text-center text-gray-500">{t.ccy}</td>
                 <td className="px-2 py-1.5 text-left tabular-nums text-red-600">{t.debit ? num(t.debit) : ''}</td>
