@@ -145,7 +145,7 @@ interface Side {
   truckC: number; truck: number; vehC: number; veh: number; passC: number; pass: number; houryaC: number; discharge: number;
   exp: Record<string, number>;
 }
-interface Voyage { ref: any; month: string | null; E: Side; I: Side; bunker: number; net: number; O: number; P: number; bassamLiq: number; }
+interface Voyage { ref: any; month: string | null; monthAlt: string | null; E: Side; I: Side; bunker: number; net: number; O: number; P: number; bassamLiq: number; }
 const emptySide = (): Side => ({ truckC: 0, truck: 0, vehC: 0, veh: 0, passC: 0, pass: 0, houryaC: 0, discharge: 0, exp: {} });
 
 function parseWorkbook(wb: XLSX.WorkBook, cfg: VesselConfig): Voyage[] {
@@ -170,10 +170,14 @@ function parseWorkbook(wb: XLSX.WorkBook, cfg: VesselConfig): Voyage[] {
     if (row[C.ref] != null && String(row[C.ref]).trim() !== '') cur = row[C.ref];
     if (cur == null) continue;
     const key = String(cur);
-    if (!voy[key]) voy[key] = { ref: cur, month: null, E: emptySide(), I: emptySide(), bunker: 0, net: 0, O: 0, P: 0, bassamLiq: 0 };
+    if (!voy[key]) voy[key] = { ref: cur, month: null, monthAlt: null, E: emptySide(), I: emptySide(), bunker: 0, net: 0, O: 0, P: 0, bassamLiq: 0 };
     const V = voy[key];
     const side = t === 'Exp.' ? V.E : V.I;
-    if (t === 'Exp.' && V.month == null && typeof row[C.date] === 'number') V.month = serialToMonth(row[C.date]);
+    // الشهر من صف المغادرة (Exp.)، ولو تاريخه فاضي نرجع لتاريخ صف الوصول (Imp.) بدل حذف الرحلة بالكامل
+    if (typeof row[C.date] === 'number') {
+      if (t === 'Exp.') { if (V.month == null) V.month = serialToMonth(row[C.date]); }
+      else if (V.monthAlt == null) V.monthAlt = serialToMonth(row[C.date]);
+    }
     side.truckC += num(row[C.truckC]); side.truck += num(row[C.truck]);
     side.vehC += num(row[C.vehC]); side.veh += num(row[C.veh]);
     side.passC += num(row[C.passC]); side.pass += num(row[C.pass]);
@@ -185,7 +189,9 @@ function parseWorkbook(wb: XLSX.WorkBook, cfg: VesselConfig): Voyage[] {
     const set = t === 'Exp.' ? cfg.exportExp : cfg.importExp;
     for (const e of set) side.exp[e.key] = (side.exp[e.key] || 0) + num(row[e.col]);
   }
-  return Object.values(voy).filter((v) => v.month != null);
+  return Object.values(voy)
+    .map((v) => (v.month == null && v.monthAlt != null ? { ...v, month: v.monthAlt } : v))
+    .filter((v) => v.month != null);
 }
 
 const REV_ROWS = [
