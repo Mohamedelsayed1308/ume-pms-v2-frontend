@@ -49,6 +49,8 @@ interface BassamAccountCardProps {
 
 export default function BassamAccountCard({ vesselKey = 'Alcudia', storageKey = 'BassamAccount', vesselLabel = 'الكوديا' }: BassamAccountCardProps = {}) {
   const [liqByMonth, setLiqByMonth] = useState<Record<string, number>>({});
+  // تشخيص مصدر السيولة: عدد الرحلات المحفوظة وكم منها فيه قيمة سيولة
+  const [voyMeta, setVoyMeta] = useState<{ count: number; withLiq: number } | null>(null);
   const [acc, setAcc] = useState<Account>({ opening0: '', add: {}, bunker: {}, transfers: [] });
   const [saving, setSaving] = useState(false);
   const [savedMsg, setSavedMsg] = useState('');
@@ -69,10 +71,20 @@ export default function BassamAccountCard({ vesselKey = 'Alcudia', storageKey = 
       const voyages = res.data?.voyages;
       if (Array.isArray(voyages)) {
         const m: Record<string, number> = {};
-        for (const v of voyages) { if (v.month) m[v.month] = (m[v.month] || 0) + (Number(v.bassamLiq) || 0); }
+        let withLiq = 0;
+        for (const v of voyages) {
+          if (!v.month) continue;
+          const liq = Number(v.bassamLiq) || 0;
+          if (liq !== 0) withLiq++;
+          m[v.month] = (m[v.month] || 0) + liq;
+        }
         setLiqByMonth(m);
+        // تشخيص: نفرّق بين «مفيش رحلات محفوظة» و«رحلات محفوظة بلا عمود سيولة»
+        setVoyMeta({ count: voyages.length, withLiq });
+      } else {
+        setVoyMeta({ count: 0, withLiq: 0 });
       }
-    }).catch(() => {}).finally(() => setLoaded(true));
+    }).catch(() => setVoyMeta(null)).finally(() => setLoaded(true));
     // بيانات حساب البسّام المحفوظة (مفتاح مستقل لكل مركب)
     api.get(`/api/vessel-profit/${storageKey}`).then((res) => {
       const man = res.data?.manual;
@@ -193,9 +205,18 @@ export default function BassamAccountCard({ vesselKey = 'Alcudia', storageKey = 
         </div>
       </div>
 
-      {loaded && months.length === 0 && (
+      {/* تشخيص مصدر السيولة — لا تُعرض أصفار بصمت */}
+      {loaded && voyMeta && voyMeta.count === 0 && (
         <div className="bg-amber-50 border border-amber-200 text-amber-800 text-sm rounded-lg px-4 py-3">
-          مفيش بيانات سيولة — احفظ بيانات مركب {vesselLabel} الأول (كارت ربح {vesselKey}) عشان السيولة الشهرية تظهر هنا، أو أضف القيم يدوياً كإضافات.
+          مفيش رحلات محفوظة لمركب {vesselLabel} — الصق بيانات الشيت واحفظها في كارت ربح {vesselKey} أولاً عشان السيولة الشهرية تظهر هنا، أو أضف القيم يدوياً كإضافات.
+        </div>
+      )}
+      {loaded && voyMeta && voyMeta.count > 0 && voyMeta.withLiq === 0 && (
+        <div className="bg-amber-50 border border-amber-200 text-amber-800 text-sm rounded-lg px-4 py-3">
+          <b>السيولة مش ظاهرة:</b> فيه {voyMeta.count} رحلة محفوظة لمركب {vesselLabel}، لكن مفيش ولا واحدة فيها قيمة في عمود سيولة البسّام.
+          <span className="block mt-1 text-xs">
+            السيولة بتتقرا من عمود مستقل في الشيت الملصوق. لو البيانات اتلصقت قبل إضافة العمود ده، افتح كارت ربح {vesselKey} والصق الشيت من جديد واحفظه — أو أدخل القيم يدوياً في عمود «إضافات يدوية» تحت.
+          </span>
         </div>
       )}
 
