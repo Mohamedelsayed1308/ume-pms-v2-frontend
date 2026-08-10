@@ -5,6 +5,7 @@ import api from '@/lib/api';
 import { CURRENCIES } from '@/lib/currencies';
 import { useI18n } from '@/lib/i18n';
 import { Card, Button, Badge, Select as UISelect, Drawer, Icon, cx } from '@/components/ui';
+import SupplierReports, { type SupplierReportKey } from './SupplierReports';
 import { fmtNum, fmtMoney, fmtMoneyC, ccyEntries, n0 } from '@/lib/format';
 import InvoiceAssistant from './InvoiceAssistant';
 
@@ -143,6 +144,17 @@ function InvoicesContent() {
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
   const [detail, setDetail] = useState<Invoice | null>(null);
+  // تقارير الموردين (تُفتح من الهيدر أو من تفاصيل فاتورة)
+  const [reportsOpen, setReportsOpen] = useState(false);
+  const [reportsInit, setReportsInit] = useState<{ report?: SupplierReportKey; supplierId?: string; vesselId?: string }>({});
+  function openReports(init?: { report?: SupplierReportKey; supplierId?: string; vesselId?: string }) {
+    // بدون سياق: يختار التقرير المناسب حسب الفلاتر النشطة
+    const fallback: typeof reportsInit = supFilter ? { report: 'statement', supplierId: supFilter }
+      : vesFilter ? { report: 'vessel', vesselId: vesFilter }
+      : { report: 'statement' };
+    setReportsInit(init || fallback);
+    setReportsOpen(true);
+  }
 
   async function load() {
     // كل قائمة تُحمّل باستقلال — فشل نداء واحد (مثلاً 500 عابر) لا يُفرّغ باقي القوائم
@@ -735,6 +747,7 @@ function InvoicesContent() {
       <div className="flex items-start justify-between flex-wrap gap-3 mb-4">
         <div><h1 className="text-2xl font-extrabold text-navy-900">{t('inv.title')}</h1><p className="text-sm text-gray-500 mt-0.5">{t('inv.subtitle')}</p></div>
         <div className="flex gap-2">
+          <Button variant="outline" icon="chart" onClick={() => openReports()}>تقارير الموردين</Button>
           <Button variant="secondary" icon="plus" onClick={() => { setBulkItems([]); setShowBulkModal(true); }}>{t('inv.bulk')}</Button>
           <Button icon="plus" onClick={openAdd}>{t('inv.add')}</Button>
         </div>
@@ -952,10 +965,24 @@ function InvoicesContent() {
                 <Button size="sm" variant="outline" icon="clipboard" onClick={() => { setDetail(null); openEdit(inv); }}>{t('inv.editShort')}</Button>
                 <Button size="sm" variant="outline" icon="file" onClick={() => { setDetail(null); openAttachments(inv); }}>{t('inv.attachments')}</Button>
               </div>
+
+              {/* تقارير سياقية لمورد/مركب هذه الفاتورة */}
+              <div className="pt-3 border-t border-gray-100">
+                <p className="text-xs text-gray-500 mb-1.5">تقارير سريعة</p>
+                <div className="flex flex-wrap gap-2">
+                  {inv.supplier?.id && <>
+                    <Button size="sm" variant="ghost" icon="receipt" onClick={() => { setDetail(null); openReports({ report: 'statement', supplierId: inv.supplier!.id }); }}>كشف حساب المورد</Button>
+                    <Button size="sm" variant="ghost" icon="factory" onClick={() => { setDetail(null); openReports({ report: 'unpaid', supplierId: inv.supplier!.id }); }}>مستحقات المورد</Button>
+                  </>}
+                  {inv.vessel?.id && <Button size="sm" variant="ghost" icon="clipboard" onClick={() => { setDetail(null); openReports({ report: 'vessel', vesselId: inv.vessel!.id }); }}>موردو المركب</Button>}
+                </div>
+              </div>
             </div>
           );
         })()}
       </Drawer>
+
+      <SupplierReports open={reportsOpen} onClose={() => setReportsOpen(false)} suppliers={suppliers} vessels={vessels} initial={reportsInit} />
 
       {payInv && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
