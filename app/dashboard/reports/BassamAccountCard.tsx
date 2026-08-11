@@ -6,6 +6,16 @@ const MONTH_AR = ['يناير', 'فبراير', 'مارس', 'أبريل', 'ما�
 const monthLabel = (m: string) => { const [y, mm] = m.split('-'); return `${MONTH_AR[+mm - 1]} ${y}`; };
 const fmt = (n: number) => Number(n || 0).toLocaleString('en-US', { maximumFractionDigits: 2 });
 
+// ── عملة الحساب ────────────────────────────────────────────────────────────
+// حساب وكيل البسّام حساب أحادي العملة مقوَّم بالدولار الأمريكي (USD) — بقرار الإدارة.
+// كل المبالغ هنا (الرصيد الافتتاحي · السيولة · الإضافات اليدوية · البنكر · التحويلات)
+// بالدولار، ولذلك لا يحمل Transfer حقل عملة ولا يجري أي تحويل عملات في هذا الكارت.
+// مصدر «السيولة» هو عمود السيولة في شيت المركب، وهو بالدولار أيضاً — فالمعادلة متجانسة:
+//   closing = opening + liq + additions − transfersOut − bunker      (كلها USD)
+// لو تقرّر مستقبلاً إمساك الحساب بأكثر من عملة، فذلك يتطلب إضافة حقل عملة لكل حركة
+// وترحيل البيانات القائمة — ولا يجوز الاكتفاء بتغيير التسميات.
+export const ACCOUNT_CURRENCY = 'USD';
+
 interface Transfer { month: string; date: string; amount: string; note: string }
 interface Account { opening0: string; add: Record<string, string>; bunker: Record<string, string>; transfers: Transfer[] }
 
@@ -189,15 +199,15 @@ export default function BassamAccountCard({ vesselKey = 'Alcudia', storageKey = 
     <div className="space-y-4">
       <div className="bg-white rounded-xl shadow p-4 flex items-end gap-4 flex-wrap">
         <div>
-          <label className="block text-sm text-gray-600 mb-1">رصيد افتتاحي (أول شهر)</label>
+          <label className="block text-sm text-gray-600 mb-1">رصيد افتتاحي (أول شهر) — USD</label>
           <input inputMode="decimal" value={acc.opening0} onChange={(e) => setAcc((a) => ({ ...a, opening0: e.target.value }))}
             placeholder="0" className="border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
         </div>
         <div className="mr-auto flex items-center gap-3">
           {savedMsg && <span className="text-sm text-emerald-600 font-medium">{savedMsg}</span>}
           <div className="text-right">
-            <p className="text-xs text-gray-500">الرصيد الحالي عند البسّام</p>
-            <p className="text-2xl font-bold text-indigo-700">{fmt(currentBalance)}</p>
+            <p className="text-xs text-gray-500">الرصيد الحالي عند البسّام (USD)</p>
+            <p className="text-2xl font-bold text-indigo-700">{fmt(currentBalance)} <span className="text-sm font-semibold text-indigo-400">USD</span></p>
           </div>
           <button onClick={save} disabled={saving} className="bg-blue-600 text-white text-sm px-5 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50">
             {saving ? '...' : '💾 حفظ'}
@@ -224,7 +234,10 @@ export default function BassamAccountCard({ vesselKey = 'Alcudia', storageKey = 
       <div className="bg-white rounded-xl shadow p-4 overflow-x-auto">
         <div className="flex items-center justify-between flex-wrap gap-3 mb-3">
           <div className="flex items-center gap-3">
-            <h3 className="font-bold text-gray-700">📒 كشف حساب وكيل البسّام (شهري)</h3>
+            <div>
+              <h3 className="font-bold text-gray-700">📒 كشف حساب وكيل البسّام (شهري) — <span className="text-indigo-700">{ACCOUNT_CURRENCY}</span></h3>
+              <p className="text-[11px] text-gray-400 mt-0.5">جميع المبالغ في هذا الكشف مقوَّمة بالدولار الأمريكي — حساب أحادي العملة بلا أي تحويل.</p>
+            </div>
             <button onClick={() => setShowPasteAdd((v) => !v)} className="text-xs px-3 py-1.5 rounded-lg border hover:bg-gray-50">📋 لصق إضافات</button>
             <button onClick={() => setShowPasteBunk((v) => !v)} className="text-xs px-3 py-1.5 rounded-lg border hover:bg-gray-50">⛽ لصق بنكر</button>
           </div>
@@ -273,12 +286,12 @@ export default function BassamAccountCard({ vesselKey = 'Alcudia', storageKey = 
           <thead className="text-gray-500 text-xs">
             <tr>
               <th className="text-right py-2 px-2">الشهر</th>
-              <th className="text-right py-2 px-2">رصيد أول المدة</th>
-              <th className="text-right py-2 px-2">+ سيولة البسّام</th>
-              <th className="text-right py-2 px-2">+ إضافات يدوية</th>
-              <th className="text-right py-2 px-2">− بنكر</th>
-              <th className="text-right py-2 px-2">− تحويلات لك</th>
-              <th className="text-right py-2 px-2">= رصيد آخر المدة</th>
+              <th className="text-right py-2 px-2">رصيد أول المدة (USD)</th>
+              <th className="text-right py-2 px-2">+ سيولة البسّام (USD)</th>
+              <th className="text-right py-2 px-2">+ إضافات يدوية (USD)</th>
+              <th className="text-right py-2 px-2">− بنكر (USD)</th>
+              <th className="text-right py-2 px-2">− تحويلات لك (USD)</th>
+              <th className="text-right py-2 px-2">= رصيد آخر المدة (USD)</th>
             </tr>
           </thead>
           <tbody>
@@ -322,7 +335,7 @@ export default function BassamAccountCard({ vesselKey = 'Alcudia', storageKey = 
         <div className="flex items-center justify-between mb-3">
           <button onClick={() => setShowTransfers((v) => !v)} className="font-bold text-gray-700 flex items-center gap-2 hover:text-blue-700">
             <span className="text-gray-400">{showTransfers ? '▾' : '▸'}</span>
-            💸 التحويلات المستلمة من البسّام <span className="text-xs text-gray-400 font-normal">(الإجمالي: {fmt(totalTransfers)})</span>
+            💸 التحويلات المستلمة من البسّام <span className="text-xs text-gray-400 font-normal">(الإجمالي: {fmt(totalTransfers)} USD)</span>
           </button>
           {showTransfers && (
             <div className="flex gap-2">
