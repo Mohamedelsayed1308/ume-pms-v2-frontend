@@ -83,7 +83,7 @@ interface UserReport {
   by_vessel: { vessel: string; count: number }[];
 }
 
-interface StatementSec { supplierId: string; supplierName: string; transactions: any[]; summary: { total_debit: number; total_credit: number; balance: number }; }
+interface StatementSec { supplierId: string; supplierName: string; currencies: any[]; }
 interface UnpaidSec { supplierId: string; supplierName: string; invoices: any[]; }
 
 function exportToExcel(rows: any[], filename: string) {
@@ -182,8 +182,7 @@ export default function ReportsPage() {
           const sections: StatementSec[] = results.map(({ id, d }) => ({
             supplierId: id,
             supplierName: d?.supplier?.name || nameOf(id),
-            transactions: d?.transactions || [],
-            summary: d?.summary || { total_debit: 0, total_credit: 0, balance: 0 },
+            currencies: d?.currencies || [],
           }));
           setData({ multi: 'statement', sections });
         } else {
@@ -266,7 +265,8 @@ export default function ReportsPage() {
     'السفينة': t.vessel || '—',
     'مدين': t.debit || 0,
     'دائن': t.credit || 0,
-    'الرصيد': t.running_balance,
+    'العملة': t.currency,
+    'الرصيد': t.balance,
   }));
   const unpaidRows = (invoices: any[], supplierName: string) => invoices.map((inv: any) => ({
     'المورد': supplierName,
@@ -464,71 +464,65 @@ export default function ReportsPage() {
         <div className="space-y-5">
           {(() => {
             const secs = data.sections as StatementSec[];
-            const gD = secs.reduce((s, x) => s + Number(x.summary.total_debit), 0);
-            const gC = secs.reduce((s, x) => s + Number(x.summary.total_credit), 0);
             return (
               <div className="bg-white rounded-xl shadow p-4 flex items-center justify-between flex-wrap gap-3">
                 <div>
                   <h3 className="font-bold text-gray-700">📒 كشف حساب — {secs.length} مورد</h3>
-                  <p className="text-[11px] text-amber-600 mt-1">⚠️ الإجماليات قد تشمل عملات مختلفة — راجع كل مورد على حدة.</p>
+                  <p className="text-[11px] text-gray-500 mt-1">كل عملة دفتر مستقل — لا يوجد رصيد موحّد ولا تحويل بين العملات.</p>
                 </div>
-                <div className="flex items-center gap-4 flex-wrap">
-                  <div className="flex gap-5 text-sm">
-                    <span className="text-red-600">إجمالي مدين: <strong>{num(gD)}</strong></span>
-                    <span className="text-green-600">إجمالي دائن: <strong>{num(gC)}</strong></span>
-                    <span className={gD - gC > 0 ? 'text-red-700 font-bold' : 'text-green-700 font-bold'}>الرصيد الكلي: {num(gD - gC)}</span>
-                  </div>
-                  <button onClick={() => exportMultiToExcel(secs.map((sec) => ({ name: sec.supplierName, rows: statementRows(sec.transactions) })), 'كشف-حساب-موردين')}
-                    className="bg-green-700 text-white text-sm px-4 py-1.5 rounded-lg hover:bg-green-800 flex items-center gap-2">📥 تصدير الكل</button>
-                </div>
+                <button onClick={() => exportMultiToExcel(secs.flatMap((sec) => (sec.currencies || []).map((L: any) => ({ name: `${sec.supplierName}-${L.currency}`, rows: statementRows(L.transactions) }))), 'كشف-حساب-موردين')}
+                  className="bg-green-700 text-white text-sm px-4 py-1.5 rounded-lg hover:bg-green-800 flex items-center gap-2">📥 تصدير الكل</button>
               </div>
             );
           })()}
 
           {(data.sections as StatementSec[]).map((sec) => (
             <div key={sec.supplierId} className="bg-white rounded-xl shadow p-4">
-              <div className="flex justify-between items-center mb-3 flex-wrap gap-2">
-                <h4 className="font-bold text-gray-800">📒 {sec.supplierName}</h4>
-                <div className="flex items-center gap-4 flex-wrap">
-                  <div className="flex gap-5 text-sm">
-                    <span className="text-red-600">مدين: <strong>{num(sec.summary.total_debit)}</strong></span>
-                    <span className="text-green-600">دائن: <strong>{num(sec.summary.total_credit)}</strong></span>
-                    <span className={sec.summary.balance > 0 ? 'text-red-700 font-bold' : 'text-green-700 font-bold'}>الرصيد: {num(sec.summary.balance)}</span>
-                  </div>
-                  <button onClick={() => exportToExcel(statementRows(sec.transactions), `كشف-حساب-${sec.supplierName}`)}
-                    className="bg-green-600 text-white text-sm px-3 py-1.5 rounded-lg hover:bg-green-700">📥 Excel</button>
-                </div>
-              </div>
-              {sec.transactions.length === 0 ? (
+              <h4 className="font-bold text-gray-800 mb-3">📒 {sec.supplierName}</h4>
+              {!(sec.currencies || []).length ? (
                 <p className="text-center py-4 text-gray-400 text-sm">لا توجد حركات لهذا المورد</p>
-              ) : (
-                <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="bg-gray-50 text-gray-600 text-right">
-                    <tr>
-                      <th className="px-4 py-2">التاريخ</th>
-                      <th className="px-4 py-2">البيان</th>
-                      <th className="px-4 py-2">السفينة</th>
-                      <th className="px-4 py-2">مدين</th>
-                      <th className="px-4 py-2">دائن</th>
-                      <th className="px-4 py-2">الرصيد</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {sec.transactions.map((t: any, i: number) => (
-                      <tr key={i} className={`border-t ${t.type === 'debit' ? 'bg-red-50/30' : 'bg-green-50/30'}`}>
-                        <td className="px-4 py-2 text-gray-500">{t.date?.slice(0, 10)}</td>
-                        <td className="px-4 py-2">{t.description}</td>
-                        <td className="px-4 py-2 text-gray-500">{t.vessel || '—'}</td>
-                        <td className="px-4 py-2 text-red-600 font-medium">{t.debit > 0 ? num(t.debit) : '—'}</td>
-                        <td className="px-4 py-2 text-green-600 font-medium">{t.credit > 0 ? num(t.credit) : '—'}</td>
-                        <td className={`px-4 py-2 font-bold ${t.running_balance > 0 ? 'text-red-700' : 'text-green-700'}`}>{num(t.running_balance)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              ) : (sec.currencies || []).map((L: any) => (
+                <div key={L.currency} className="mb-5 last:mb-0 border border-gray-100 rounded-xl overflow-hidden">
+                  <div className="bg-gray-50 px-4 py-2.5 flex items-center justify-between flex-wrap gap-2">
+                    <span className="font-bold text-gray-800">{L.currency}</span>
+                    <div className="flex gap-4 text-xs flex-wrap">
+                      <span className="text-gray-500">رصيد افتتاحي: <strong>{num(L.openingBalance)}</strong></span>
+                      <span className="text-red-600">فواتير: <strong>{num(L.invoicesTotal)}</strong></span>
+                      <span className="text-green-600">سدادات: <strong>{num(L.paymentsTotal)}</strong></span>
+                      {L.creditsTotal > 0 && <span className="text-indigo-600">إشعارات دائنة: <strong>{num(L.creditsTotal)}</strong></span>}
+                      <span className={L.closingBalance > 0 ? 'text-red-700 font-bold' : 'text-green-700 font-bold'}>الرصيد الختامي: {num(L.closingBalance)} {L.currency}</span>
+                    </div>
+                    <button onClick={() => exportToExcel(statementRows(L.transactions), `كشف-حساب-${sec.supplierName}-${L.currency}`)}
+                      className="bg-green-600 text-white text-xs px-3 py-1 rounded-lg hover:bg-green-700">📥 Excel</button>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="bg-white text-gray-600 text-right border-b">
+                        <tr>
+                          <th className="px-4 py-2">التاريخ</th>
+                          <th className="px-4 py-2">البيان</th>
+                          <th className="px-4 py-2">السفينة</th>
+                          <th className="px-4 py-2">مدين</th>
+                          <th className="px-4 py-2">دائن</th>
+                          <th className="px-4 py-2">الرصيد ({L.currency})</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {L.transactions.map((t: any, i: number) => (
+                          <tr key={i} className={`border-t ${t.kind === 'credit_note' ? 'bg-indigo-50/40' : t.type === 'debit' ? 'bg-red-50/30' : 'bg-green-50/30'}`}>
+                            <td className="px-4 py-2 text-gray-500">{t.date?.slice(0, 10)}</td>
+                            <td className="px-4 py-2">{t.description}</td>
+                            <td className="px-4 py-2 text-gray-500">{t.vessel || '—'}</td>
+                            <td className="px-4 py-2 text-red-600 font-medium">{t.debit > 0 ? num(t.debit) : '—'}</td>
+                            <td className="px-4 py-2 text-green-600 font-medium">{t.credit > 0 ? num(t.credit) : '—'}</td>
+                            <td className={`px-4 py-2 font-bold ${t.balance > 0 ? 'text-red-700' : 'text-green-700'}`}>{num(t.balance)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
-              )}
+              ))}
             </div>
           ))}
         </div>

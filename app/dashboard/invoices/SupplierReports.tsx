@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import * as XLSX from 'xlsx';
 import api from '@/lib/api';
 import { Drawer, Button, Icon, Spinner, Select as UISelect, cx } from '@/components/ui';
@@ -122,95 +122,76 @@ export default function SupplierReports({
 
 /* ── كشف حساب مورد (رصيد متراكم لكل عملة على حدة — العملات لا تُجمع) ── */
 function Statement({ d, name }: { d: any; name: string }) {
-  const txns: any[] = d?.transactions || [];
+  const ledgers: any[] = d?.currencies || [];
+  const creditNotes = ledgers.reduce((s, L) => s + L.transactions.filter((t: any) => t.kind === 'credit_note').length, 0);
+  const totalTx = ledgers.reduce((s, L) => s + L.transactions.length, 0);
 
-  // إعادة حساب الرصيد المتراكم لكل عملة على حدة
-  // الفاتورة بمبلغ سالب = إشعار دائن → تُعرض في خانة «دائن» بقيمتها المطلقة (الرصيد لا يتغيّر)
-  const { rows, totals, currencies, creditNotes } = useMemo(() => {
-    const run: Record<string, number> = {};
-    const tot: Record<string, { debit: number; credit: number }> = {};
-    let notes = 0;
-    const out = txns.map((t) => {
-      const c = t.currency || '—';
-      const rawDebit = Number(t.debit || 0);
-      const isNote = t.type === 'debit' && rawDebit < 0;
-      if (isNote) notes++;
-      const debit = isNote ? 0 : rawDebit;
-      const credit = isNote ? Math.abs(rawDebit) : Number(t.credit || 0);
+  const rowsOf = (L: any) => L.transactions.map((t: any) => ({
+    'التاريخ': t.date?.slice(0, 10),
+    'النوع': t.kind === 'credit_note' ? 'إشعار دائن' : t.kind === 'invoice' ? 'فاتورة' : 'سداد',
+    'البيان': t.description, 'السفينة': t.vessel || '—',
+    'العملة': t.currency, 'مدين': t.debit || 0, 'دائن': t.credit || 0, 'الرصيد': t.balance,
+  }));
 
-      run[c] = (run[c] || 0) + debit - credit;
-      tot[c] = tot[c] || { debit: 0, credit: 0 };
-      tot[c].debit += debit;
-      tot[c].credit += credit;
-      return { ...t, ccy: c, debit, credit, isNote, balance: run[c] };
-    });
-    return { rows: out, totals: tot, currencies: Object.keys(tot), creditNotes: notes };
-  }, [txns]);
-
-  if (!txns.length) return <p className="text-center text-gray-400 text-sm py-10">لا توجد حركات لهذا المورد</p>;
+  if (!ledgers.length) return <p className="text-center text-gray-400 text-sm py-10">لا توجد حركات لهذا المورد</p>;
 
   return (
     <>
       <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
-        <h4 className="font-bold text-gray-700">كشف حساب — {name} <span className="text-xs font-normal text-gray-400">({txns.length} حركة)</span></h4>
-        <Button size="sm" variant="success" icon="file" onClick={() => toExcel(rows.map((t) => ({
-          'التاريخ': t.date?.slice(0, 10),
-          'النوع': t.isNote ? 'إشعار دائن' : t.type === 'credit' ? 'سداد' : 'فاتورة',
-          'البيان': t.description, 'السفينة': t.vessel || '—',
-          'العملة': t.ccy, 'مدين': t.debit || 0, 'دائن': t.credit || 0, 'الرصيد': t.balance,
-        })), `كشف-حساب-${name}`)}>Excel</Button>
+        <h4 className="font-bold text-gray-700">كشف حساب — {name} <span className="text-xs font-normal text-gray-400">({totalTx} حركة · {ledgers.length} عملة)</span></h4>
       </div>
 
       {creditNotes > 0 && (
         <p className="text-[11px] text-indigo-700 bg-indigo-50 rounded-lg px-2.5 py-1.5 mb-3">
-          يحتوي الكشف على {creditNotes} إشعار دائن (فواتير بمبلغ سالب) — تظهر في خانة «دائن» لأنها تخصم من رصيد المورد.
+          يحتوي الكشف على {creditNotes} إشعار دائن — تُقيَّد دائناً لأنها تخصم من رصيد المورد.
+        </p>
+      )}
+      {ledgers.length > 1 && (
+        <p className="text-[11px] text-gray-600 bg-gray-50 rounded-lg px-2.5 py-1.5 mb-3">
+          كل عملة دفتر مستقل — لا يوجد رصيد موحّد ولا تحويل بين العملات.
         </p>
       )}
 
-      {/* إجماليات لكل عملة */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
-        {currencies.map((c) => (
-          <div key={c} className="rounded-lg border border-gray-100 p-2.5 text-xs flex items-center justify-between">
-            <span className="font-bold text-gray-700">{c}</span>
-            <span className="text-red-600">مدين {num(totals[c].debit)}</span>
-            <span className="text-green-600">دائن {num(totals[c].credit)}</span>
-            <span className={cx('font-bold', totals[c].debit - totals[c].credit > 0.01 ? 'text-red-700' : 'text-green-700')}>
-              الرصيد {num(totals[c].debit - totals[c].credit)}
-            </span>
+      {ledgers.map((L: any) => (
+        <div key={L.currency} className="mb-4 last:mb-0 border border-gray-100 rounded-xl overflow-hidden">
+          <div className="bg-gray-50 px-3 py-2 flex items-center justify-between flex-wrap gap-2">
+            <span className="font-bold text-gray-800 text-sm">{L.currency}</span>
+            <div className="flex gap-3 text-[11px] flex-wrap">
+              <span className="text-gray-500">افتتاحي {num(L.openingBalance)}</span>
+              <span className="text-red-600">فواتير {num(L.invoicesTotal)}</span>
+              <span className="text-green-600">سدادات {num(L.paymentsTotal)}</span>
+              {L.creditsTotal > 0 && <span className="text-indigo-600">إشعارات دائنة {num(L.creditsTotal)}</span>}
+              <span className={cx('font-bold', L.closingBalance > 0.01 ? 'text-red-700' : 'text-green-700')}>الرصيد {num(L.closingBalance)} {L.currency}</span>
+            </div>
+            <Button size="sm" variant="success" icon="file" onClick={() => toExcel(rowsOf(L), `كشف-حساب-${name}-${L.currency}`)}>Excel</Button>
           </div>
-        ))}
-      </div>
-      {currencies.length > 1 && (
-        <p className="text-[11px] text-amber-700 bg-amber-50 rounded-lg px-2.5 py-1.5 mb-3">
-          الحركات بأكثر من عملة — الرصيد معروض لكل عملة على حدة ولا يُجمع.
-        </p>
-      )}
-
-      <div className="overflow-x-auto">
-        <table className="w-full text-xs min-w-[560px]">
-          <thead className="bg-gray-50 text-gray-600"><tr>
-            <th className="px-2 py-2 text-right">التاريخ</th><th className="px-2 py-2 text-right">البيان</th>
-            <th className="px-2 py-2 text-right">السفينة</th><th className="px-2 py-2 text-center">العملة</th>
-            <th className="px-2 py-2 text-left">مدين</th><th className="px-2 py-2 text-left">دائن</th><th className="px-2 py-2 text-left">الرصيد</th>
-          </tr></thead>
-          <tbody>
-            {rows.map((t, i) => (
-              <tr key={i} className={cx('border-t border-gray-50', t.isNote && 'bg-indigo-50/50')}>
-                <td className="px-2 py-1.5 text-gray-500 whitespace-nowrap">{t.date?.slice(0, 10)}</td>
-                <td className="px-2 py-1.5 text-gray-700">
-                  {t.isNote && <span className="inline-block bg-indigo-100 text-indigo-700 rounded px-1.5 py-0.5 text-[10px] font-semibold ms-1.5">إشعار دائن</span>}
-                  {t.description}
-                </td>
-                <td className="px-2 py-1.5 text-gray-500">{t.vessel || '—'}</td>
-                <td className="px-2 py-1.5 text-center text-gray-500">{t.ccy}</td>
-                <td className="px-2 py-1.5 text-left tabular-nums text-red-600">{t.debit ? num(t.debit) : ''}</td>
-                <td className="px-2 py-1.5 text-left tabular-nums text-green-600">{t.credit ? num(t.credit) : ''}</td>
-                <td className={cx('px-2 py-1.5 text-left tabular-nums font-bold', t.balance > 0.01 ? 'text-red-700' : 'text-green-700')}>{num(t.balance)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs min-w-[540px]">
+              <thead className="bg-white text-gray-600 border-b"><tr>
+                <th className="px-2 py-2 text-right">التاريخ</th><th className="px-2 py-2 text-right">البيان</th>
+                <th className="px-2 py-2 text-right">السفينة</th>
+                <th className="px-2 py-2 text-left">مدين</th><th className="px-2 py-2 text-left">دائن</th>
+                <th className="px-2 py-2 text-left">الرصيد ({L.currency})</th>
+              </tr></thead>
+              <tbody>
+                {L.transactions.map((t: any, i: number) => (
+                  <tr key={i} className={cx('border-t border-gray-50', t.kind === 'credit_note' && 'bg-indigo-50/50')}>
+                    <td className="px-2 py-1.5 text-gray-500 whitespace-nowrap">{t.date?.slice(0, 10)}</td>
+                    <td className="px-2 py-1.5 text-gray-700">
+                      {t.kind === 'credit_note' && <span className="inline-block bg-indigo-100 text-indigo-700 rounded px-1.5 py-0.5 text-[10px] font-semibold ms-1.5">إشعار دائن</span>}
+                      {t.description}
+                    </td>
+                    <td className="px-2 py-1.5 text-gray-500">{t.vessel || '—'}</td>
+                    <td className="px-2 py-1.5 text-left tabular-nums text-red-600">{t.debit ? num(t.debit) : ''}</td>
+                    <td className="px-2 py-1.5 text-left tabular-nums text-green-600">{t.credit ? num(t.credit) : ''}</td>
+                    <td className={cx('px-2 py-1.5 text-left tabular-nums font-bold', t.balance > 0.01 ? 'text-red-700' : 'text-green-700')}>{num(t.balance)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ))}
     </>
   );
 }
