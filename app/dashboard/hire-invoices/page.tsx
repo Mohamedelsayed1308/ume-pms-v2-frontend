@@ -235,7 +235,7 @@ export default function HireInvoicesPage() {
     if (!payForm.payment_date || !payForm.amount) return;
     setPayLoading(true);
     try {
-      const updated = await api.post(`/api/hire-invoices/${viewInv!.id}/payments`, payForm);
+      const updated = await api.post(`/api/hire-invoices/${viewInv!.id}/payments`, { ...payForm, currency: viewInv!.currency });
       setViewInv(updated.data);
       setPayForm({ payment_date: '', amount: '', currency: 'EUR', reference: '', notes: '' });
       load();
@@ -924,11 +924,13 @@ export default function HireInvoicesPage() {
                       className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                   </div>
                   <div>
-                    <label className="block text-xs text-gray-500 mb-1">العملة</label>
-                    <select value={payForm.currency} onChange={(e) => setPayForm({ ...payForm, currency: e.target.value })}
-                      className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                      {CURRENCIES.map((c) => <option key={c.code} value={c.code}>{c.code}</option>)}
-                    </select>
+                    {/* R3C: العملة تُورَّث من الفاتورة قطعياً. كانت قائمة اختيار افتراضها EUR
+                        بصرف النظر عن عملة الفاتورة — أي أن سداداً بعملة مخالفة كان ممكناً
+                        بالنقر الافتراضي وحده. الخادم يرفضه الآن، والواجهة لم تعد تعرضه. */}
+                    <label className="block text-xs text-gray-500 mb-1">العملة (من الفاتورة)</label>
+                    <div className="w-full border rounded-lg px-3 py-2 text-sm bg-gray-50 text-gray-700 font-medium">
+                      {viewInv.currency}
+                    </div>
                   </div>
                   <div>
                     <label className="block text-xs text-gray-500 mb-1">المرجع</label>

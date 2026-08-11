@@ -92,7 +92,7 @@ export default function ManagementInvoicesPage() {
     if (!payForm.payment_date || !payForm.amount) return;
     setPayLoading(true);
     try {
-      const updated = await api.post(`/api/management-invoices/${viewInv!.id}/payments`, payForm);
+      const updated = await api.post(`/api/management-invoices/${viewInv!.id}/payments`, { ...payForm, currency: viewInv!.currency });
       setViewInv(updated.data);
       setPayForm({ payment_date: '', amount: '', currency: 'USD', reference: '', notes: '' });
       load();
@@ -539,11 +539,11 @@ export default function ManagementInvoicesPage() {
                       className="w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-teal-500" />
                   </div>
                   <div>
-                    <label className="block text-xs text-gray-500 mb-1">العملة</label>
-                    <select value={payForm.currency} onChange={(e) => setPayForm({ ...payForm, currency: e.target.value })}
-                      className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
-                      {CURRENCIES.map((c) => <option key={c.code} value={c.code}>{c.code}</option>)}
-                    </select>
+                    {/* R3C: العملة تُورَّث من الفاتورة — لا تُختار. الخادم يرفض المخالفة. */}
+                    <label className="block text-xs text-gray-500 mb-1">العملة (من الفاتورة)</label>
+                    <div className="w-full border rounded-lg px-3 py-2 text-sm bg-gray-50 text-gray-700 font-medium">
+                      {viewInv.currency}
+                    </div>
                   </div>
                   <div>
                     <label className="block text-xs text-gray-500 mb-1">المرجع</label>
