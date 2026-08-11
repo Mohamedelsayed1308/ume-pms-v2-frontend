@@ -123,6 +123,16 @@ function InvoicesContent() {
   const [payInv, setPayInv] = useState<Invoice | null>(null);
   const [payDate, setPayDate] = useState('');
   const [paySaving, setPaySaving] = useState(false);
+  // ── السداد السريع ────────────────────────────────────────────────────────
+  // يستدعي POST /api/payments — نفس نقطة نهاية شاشة الدفعات بالضبط.
+  // بذلك يرث كل حرّاس R3B (مبلغ موجب · تطابق العملة · منع التجاوز · معاملة
+  // ذرّية مع قفل صف الفاتورة) ونفس أثر التقارير — بالبناء لا بتكرار المنطق.
+  const emptySettle = { amount: '', payment_date: '', payment_type: 'installment',
+                        payment_method: 'bank_transfer', reference: '', notes: '' };
+  const [settleInv, setSettleInv] = useState<Invoice | null>(null);
+  const [settleForm, setSettleForm] = useState(emptySettle);
+  const [settleSaving, setSettleSaving] = useState(false);
+  const [settleError, setSettleError] = useState('');
   const [attachments, setAttachments] = useState<any[]>([]);
   const [uploading, setUploading] = useState(false);
   const [extracting, setExtracting] = useState(false);
@@ -359,6 +369,48 @@ function InvoicesContent() {
       alert('فشل تسجيل الاعتماد');
     } finally {
       setPaySaving(false);
+    }
+  }
+
+  // المتبقّي من مصدر الحقيقة نفسه المستخدم في كل الشاشات: الإجمالي − المسدَّد المخزَّن
+  const remainingOf = (i: Invoice) => Math.max(0, n0(i.total_amount) - n0(i.paid_amount));
+
+  function openSettle(inv: Invoice) {
+    setSettleError('');
+    setSettleForm({ ...emptySettle,
+      amount: String(remainingOf(inv)),                    // مقترح — قابل للتعديل
+      payment_date: new Date().toISOString().slice(0, 10) });
+    setSettleInv(inv);
+  }
+
+  async function confirmSettle() {
+    if (!settleInv) return;
+    const amt = parseFloat(settleForm.amount);
+    // تحقّق واجهة لتحسين التجربة فقط — الضابط المالي الحقيقي خادمي ولا يُتجاوز
+    if (!settleForm.payment_date) { setSettleError('تاريخ السداد مطلوب'); return; }
+    if (!isFinite(amt) || amt <= 0) { setSettleError('المبلغ يجب أن يكون أكبر من صفر'); return; }
+    if (amt > remainingOf(settleInv) + 0.005) {
+      setSettleError(`المبلغ يتجاوز المتبقّي (${fmtMoney(remainingOf(settleInv))} ${settleInv.currency})`); return;
+    }
+    setSettleSaving(true); setSettleError('');
+    try {
+      await api.post('/api/payments', {
+        invoice_id: settleInv.id,
+        amount: amt,
+        currency: settleInv.currency,                      // من الفاتورة قطعياً — لا اختيار
+        payment_date: settleForm.payment_date,
+        payment_type: settleForm.payment_type,
+        payment_method: settleForm.payment_method,
+        reference: settleForm.reference || null,
+        notes: settleForm.notes || null,
+      });
+      setSettleInv(null);
+      load();
+    } catch (err: any) {
+      // رسالة الخادم تُعرض كما هي: هي التي تشرح سبب الرفض (عملة · تجاوز · مبلغ)
+      setSettleError(err?.response?.data?.message || 'فشل تسجيل السداد');
+    } finally {
+      setSettleSaving(false);
     }
   }
 
@@ -864,6 +916,7 @@ function InvoicesContent() {
                   <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
                     <div className="flex gap-2 text-xs">
                       <button onClick={() => setDetail(inv)} className="text-gray-500 hover:text-brand-600">{t('inv.details')}</button>
+                      {inv.status !== 'paid' && inv.status !== 'cancelled' && <button onClick={() => openSettle(inv)} className="text-emerald-600 hover:underline font-medium">💵 سداد</button>}
                       {inv.status !== 'paid' && inv.status !== 'cancelled' && <button onClick={() => openPay(inv)} className="text-blue-600 hover:underline font-medium">{t('inv.pay')}</button>}
                       <button onClick={() => openEdit(inv)} className="text-brand-600 hover:underline">{t('inv.editShort')}</button>
                       <button onClick={() => openAttachments(inv)} className="text-gray-500 hover:text-gray-800">{t('inv.attachShort')}</button>
@@ -897,6 +950,7 @@ function InvoicesContent() {
               </div>
               <div className="flex items-center justify-between mt-1.5 text-[11px] text-gray-400">
                 <span>{t('inv.due')}: {inv.due_date?.slice(0, 10) || '—'}{isOverdue(inv) ? ` · ${t('att.overdueInv')}` : ''}</span>
+                {inv.status !== 'paid' && inv.status !== 'cancelled' && <button onClick={(e) => { e.stopPropagation(); openSettle(inv); }} className="text-emerald-600 font-medium">💵 سداد</button>}
                 {inv.status !== 'paid' && inv.status !== 'cancelled' && <button onClick={(e) => { e.stopPropagation(); openPay(inv); }} className="text-blue-600 font-medium">{t('inv.pay')}</button>}
               </div>
             </Card>
@@ -1013,6 +1067,7 @@ function InvoicesContent() {
 
               {/* Actions */}
               <div className="flex flex-wrap gap-2">
+                {inv.status !== 'paid' && inv.status !== 'cancelled' && <Button size="sm" variant="success" icon="coins" onClick={() => { setDetail(null); openSettle(inv); }}>💵 سداد</Button>}
                 {inv.status !== 'paid' && inv.status !== 'cancelled' && <Button size="sm" variant="outline" icon="check" onClick={() => { setDetail(null); openPay(inv); }}>{t('inv.pay')}</Button>}
                 <Button size="sm" variant="outline" icon="clipboard" onClick={() => { setDetail(null); openEdit(inv); }}>{t('inv.editShort')}</Button>
                 <Button size="sm" variant="outline" icon="file" onClick={() => { setDetail(null); openAttachments(inv); }}>{t('inv.attachments')}</Button>
@@ -1035,6 +1090,97 @@ function InvoicesContent() {
       </Drawer>
 
       <SupplierReports open={reportsOpen} onClose={() => setReportsOpen(false)} suppliers={suppliers} vessels={vessels} initial={reportsInit} />
+
+      {/* ── السداد السريع ────────────────────────────────────────────────────
+          نفس نقطة نهاية شاشة الدفعات (POST /api/payments) ⇒ نفس الحرّاس ونفس
+          الأثر في كل التقارير. لا منطق مالي مكرَّر هنا. */}
+      {settleInv && (() => {
+        const rem = remainingOf(settleInv);
+        return (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
+            <h3 className="font-bold text-lg mb-1">تسجيل سداد</h3>
+            <p className="text-sm text-gray-600 mb-3">
+              فاتورة <span className="font-mono font-medium text-blue-700">{settleInv.invoice_number}</span>
+              {settleInv.supplier?.name ? <> — {settleInv.supplier.name}</> : null}
+            </p>
+            <div className="grid grid-cols-3 gap-2 mb-4 text-center">
+              <div className="rounded-lg border border-gray-100 p-2">
+                <p className="text-[10px] text-gray-400">الإجمالي</p>
+                <p className="text-sm font-bold tabular-nums">{fmtMoney(settleInv.total_amount)}</p></div>
+              <div className="rounded-lg border border-gray-100 p-2">
+                <p className="text-[10px] text-gray-400">المسدَّد</p>
+                <p className="text-sm font-bold tabular-nums text-emerald-700">{fmtMoney(settleInv.paid_amount)}</p></div>
+              <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-2">
+                <p className="text-[10px] text-amber-700">المتبقّي</p>
+                <p className="text-sm font-extrabold tabular-nums text-amber-800">{fmtMoney(rem)}</p></div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">المبلغ</label>
+                <input type="number" step="0.01" value={settleForm.amount}
+                  onChange={(e) => setSettleForm({ ...settleForm, amount: e.target.value })}
+                  className="w-full border rounded-lg px-3 py-2 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+              </div>
+              <div>
+                {/* العملة من الفاتورة قطعياً — الخادم يرفض أي اختلاف ولا يجري تحويلاً */}
+                <label className="block text-xs text-gray-500 mb-1">العملة (من الفاتورة)</label>
+                <div className="w-full border rounded-lg px-3 py-2 text-sm bg-gray-50 text-gray-700 font-medium">{settleInv.currency}</div>
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">تاريخ السداد</label>
+                <input type="date" value={settleForm.payment_date}
+                  onChange={(e) => setSettleForm({ ...settleForm, payment_date: e.target.value })}
+                  className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">نوع الدفع</label>
+                <select value={settleForm.payment_type}
+                  onChange={(e) => setSettleForm({ ...settleForm, payment_type: e.target.value })}
+                  className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                  <option value="advance">مقدم</option><option value="installment">قسط</option><option value="full">سداد كامل</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">طريقة الدفع</label>
+                <select value={settleForm.payment_method}
+                  onChange={(e) => setSettleForm({ ...settleForm, payment_method: e.target.value })}
+                  className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                  <option value="bank_transfer">تحويل بنكي</option><option value="cheque">شيك</option><option value="cash">نقدي</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">رقم المرجع / التحويل</label>
+                <input value={settleForm.reference}
+                  onChange={(e) => setSettleForm({ ...settleForm, reference: e.target.value })}
+                  className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+              </div>
+            </div>
+            <div className="mt-3">
+              <label className="block text-xs text-gray-500 mb-1">ملاحظات</label>
+              <input value={settleForm.notes}
+                onChange={(e) => setSettleForm({ ...settleForm, notes: e.target.value })}
+                className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+            </div>
+
+            <p className="text-[11px] text-gray-500 mt-3 leading-relaxed">
+              يُنشئ سجل دفع فعلياً — تُشتقّ منه حالة الفاتورة والمبلغ المسدَّد، ويظهر في
+              شاشة الدفعات وكشف حساب المورد والتقارير كأي سداد آخر.
+              <strong className="text-gray-600"> سجّل رقم التحويل البنكي</strong> لتفادي تكرار السداد.
+            </p>
+            {settleError && <p className="text-xs text-red-600 mt-2 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{settleError}</p>}
+
+            <div className="flex gap-2 justify-end mt-4">
+              <button onClick={() => setSettleInv(null)} className="px-4 py-2 rounded-lg border text-sm hover:bg-gray-50">إلغاء</button>
+              <button onClick={confirmSettle} disabled={settleSaving}
+                className="px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm hover:bg-emerald-700 disabled:opacity-50">
+                {settleSaving ? 'جاري الحفظ...' : '💵 تأكيد السداد'}
+              </button>
+            </div>
+          </div>
+        </div>);
+      })()}
 
       {payInv && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
