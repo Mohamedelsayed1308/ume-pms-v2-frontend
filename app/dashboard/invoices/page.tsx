@@ -56,6 +56,11 @@ interface Invoice {
   supplier: { id: string; name: string };
   vessel: { id: string; name: string };
   purchase_order: { id: string; po_number: string };
+  payments?: { id: string }[];
+  // R3A · بيانات تحكّم مالي — للقراءة فقط، لا تُرسَل من الواجهة إطلاقاً
+  data_origin?: 'operational' | 'migrated';
+  settlement_basis?: 'payment_record' | 'pre_system_settled' | 'credit_note' | 'none';
+  import_batch?: { id: string; batch_code: string } | null;
 }
 
 type Line = { item_id: string; item_name: string; amount: string };
@@ -729,6 +734,16 @@ function InvoicesContent() {
   // approval-paid with no real payment transaction (current backend behavior — shown truthfully)
   const isApprovalPaidNoTxn = (i: Invoice) => i.status === 'paid' && i.approval_status === 'paid';
 
+  // ── R3A · تصنيف تاريخي ────────────────────────────────────────────────────
+  // مصدر الحقيقة حقول التحكّم المالي القادمة من الخادم، لا أي استنتاج من التاريخ.
+  // الشارة محايدة عمداً (لا خضراء): الأخضر لغة «سداد داخل PMS»، وهذه ليست كذلك.
+  const isLegacySettled = (i: Invoice) => i.settlement_basis === 'pre_system_settled';
+  const isLegacyCredit = (i: Invoice) => i.settlement_basis === 'credit_note';
+  const LegacyBadge = ({ i }: { i: Invoice }) =>
+    isLegacySettled(i) ? <Badge tone="info">مسوّاة قبل النظام</Badge>
+    : isLegacyCredit(i) ? <Badge tone="neutral">إشعار دائن</Badge>
+    : null;
+
   const SortTh = ({ k, label }: { k: string; label: string }) => (
     <th className="px-4 py-3 cursor-pointer select-none hover:text-blue-600 whitespace-nowrap" onClick={() => toggleSort(k)}>
       {label}<span className="text-blue-500">{sort.key === k ? (sort.dir === 'asc' ? ' ▲' : ' ▼') : ''}</span>
@@ -842,7 +857,7 @@ function InvoicesContent() {
                   <td className="px-3 py-2.5 text-emerald-600 tabular-nums">{fmtMoney(inv.paid_amount)}</td>
                   <td className={cx('px-3 py-2.5 tabular-nums', remaining > 0.005 ? 'text-red-600 font-medium' : 'text-gray-300')}>{remaining > 0.005 ? fmtMoney(remaining) : '—'}</td>
                   <td className="px-3 py-2.5 text-gray-500 tabular-nums">{inv.due_date?.slice(0, 10) || '—'}</td>
-                  <td className="px-3 py-2.5"><Badge tone={inv.status === 'paid' ? 'success' : inv.status === 'partial' ? 'warning' : inv.status === 'cancelled' ? 'neutral' : 'danger'}>{statusLabel[inv.status]}</Badge></td>
+                  <td className="px-3 py-2.5"><div className="flex flex-wrap items-center gap-1"><Badge tone={inv.status === 'paid' ? 'success' : inv.status === 'partial' ? 'warning' : inv.status === 'cancelled' ? 'neutral' : 'danger'}>{statusLabel[inv.status]}</Badge><LegacyBadge i={inv} /></div></td>
                   <td className="px-3 py-2.5">{inv.approval_status ? <Badge tone={inv.approval_status === 'paid' ? 'success' : 'info'}>{approvalLabel[inv.approval_status]}</Badge> : <span className="text-gray-300 text-xs">—</span>}</td>
                   <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
                     <div className="flex gap-2 text-xs">
@@ -869,7 +884,10 @@ function InvoicesContent() {
             <Card key={inv.id} className="p-4" onClick={() => setDetail(inv)}>
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0"><p className="font-mono font-bold text-brand-700 truncate">{inv.invoice_number}</p><p className="text-xs text-gray-500 truncate">{inv.supplier?.name || '—'}{inv.vessel?.name ? ` · ${inv.vessel.name}` : ''}</p></div>
-                <Badge tone={inv.status === 'paid' ? 'success' : inv.status === 'partial' ? 'warning' : inv.status === 'cancelled' ? 'neutral' : 'danger'}>{statusLabel[inv.status]}</Badge>
+                <div className="flex flex-col items-end gap-1 shrink-0">
+                  <Badge tone={inv.status === 'paid' ? 'success' : inv.status === 'partial' ? 'warning' : inv.status === 'cancelled' ? 'neutral' : 'danger'}>{statusLabel[inv.status]}</Badge>
+                  <LegacyBadge i={inv} />
+                </div>
               </div>
               <div className="flex items-center justify-between mt-3 text-xs">
                 <span className="text-gray-700 tabular-nums font-medium">{fmtMoney(inv.total_amount, inv.currency)}</span>
@@ -924,6 +942,34 @@ function InvoicesContent() {
                   <div><p className="text-[11px] text-gray-400">{t('inv.outstanding')}</p><p className={cx('text-sm font-bold tabular-nums', remaining > 0.005 ? 'text-red-600' : 'text-gray-400')}>{fmtMoneyC(remaining, inv.currency)}</p></div>
                 </div>
               </div>
+
+              {/* R3A · أساس الإغلاق — يُعرض فقط للسجلات المصنَّفة تاريخياً.
+                  يذكر صراحةً غياب سند الدفع داخل النظام حتى لا يُقرأ كأنه سداد. */}
+              {(isLegacySettled(inv) || isLegacyCredit(inv)) && (
+                <div className="rounded-xl border border-sky-200 bg-sky-50/50 p-3 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Icon name="shield" size={14} />
+                    <p className="text-xs font-bold text-sky-800">
+                      {isLegacySettled(inv) ? 'تسوية تاريخية سابقة للنظام' : 'إشعار دائن'}
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-[11px]">
+                    <div><span className="text-gray-500">أساس الإغلاق: </span>
+                      <span className="font-medium">{isLegacySettled(inv) ? 'تسوية سابقة للنظام' : 'إشعار دائن'}</span></div>
+                    <div><span className="text-gray-500">مصدر البيانات: </span>
+                      <span className="font-medium">{inv.data_origin === 'migrated' ? 'مُرحَّلة' : 'تشغيلية'}</span></div>
+                    <div><span className="text-gray-500">دفعة الاستيراد: </span>
+                      <span className="font-mono font-medium">{inv.import_batch?.batch_code || '—'}</span></div>
+                    <div><span className="text-gray-500">سجلات السداد داخل PMS: </span>
+                      <span className="font-bold text-sky-900">{inv.payments?.length ?? 0}</span></div>
+                  </div>
+                  <p className="text-[10px] text-gray-500 leading-relaxed">
+                    {isLegacySettled(inv)
+                      ? 'سُوِّيت قبل تشغيل PMS بتأكيد الإدارة. لا يوجد داخل النظام سند دفع تشغيلي ولا تاريخ سداد — ولم يُنشأ أي سجل دفع.'
+                      : 'إشعار دائن يخفّض الالتزام. لا يمثّل سداداً ولا يُحتسب ضمن مدفوعات PMS.'}
+                  </p>
+                </div>
+              )}
 
               {/* Payment status vs Approval status (distinct) */}
               <div className="grid grid-cols-2 gap-3">

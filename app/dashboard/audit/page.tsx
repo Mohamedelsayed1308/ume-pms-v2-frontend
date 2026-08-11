@@ -5,13 +5,21 @@ import api from '@/lib/api';
 import { getUser } from '@/lib/auth';
 import { Card, Button, Icon, Spinner, EmptyState, cx } from '@/components/ui';
 
-const SEV: Record<string, { ar: string; tone: string; dot: string }> = {
+const SEV_MAP: Record<string, { ar: string; tone: string; dot: string }> = {
   critical: { ar: 'حرِج', tone: 'bg-red-50 text-red-700 border-red-200', dot: '#dc2626' },
   high: { ar: 'مرتفع', tone: 'bg-orange-50 text-orange-700 border-orange-200', dot: '#ea580c' },
   medium: { ar: 'متوسط', tone: 'bg-amber-50 text-amber-700 border-amber-200', dot: '#d97706' },
   low: { ar: 'منخفض', tone: 'bg-gray-50 text-gray-600 border-gray-200', dot: '#6b7280' },
+  // تسوية تاريخية موثَّقة — ليست خللاً. لون محايد عمداً: الأخضر لغة «سداد PMS».
+  informational: { ar: 'معلوماتي', tone: 'bg-sky-50 text-sky-700 border-sky-200', dot: '#0284c7' },
 };
-const SEV_ORDER = ['critical', 'high', 'medium', 'low'];
+const SEV_FALLBACK = { ar: '—', tone: 'bg-gray-50 text-gray-600 border-gray-200', dot: '#9ca3af' };
+
+// الباك والفرونت يُنشران مستقلين؛ مستوى خطورة جديد يجب ألا يُسقِط الشاشة أبداً.
+const SEV: Record<string, { ar: string; tone: string; dot: string }> = new Proxy(SEV_MAP, {
+  get: (t, k: string) => t[k] ?? SEV_FALLBACK,
+});
+const SEV_ORDER = ['critical', 'high', 'medium', 'low', 'informational'];
 
 const fmt = (n: any) => Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const NEG_CLASS: Record<string, string> = { credit_note: 'إشعار دائن', refund: 'مرتجع', adjustment: 'تسوية', unclassified: 'غير مصنّف' };
@@ -125,7 +133,7 @@ export default function AuditPage() {
       </Card>
 
       {/* الخطورة */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
         {SEV_ORDER.map((k) => {
           const b = s.bySeverity?.[k] || { count: 0, exposureByCurrency: {} };
           return (
