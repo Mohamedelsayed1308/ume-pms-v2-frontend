@@ -287,7 +287,9 @@ const DICT: Record<string, { ar: string; en: string }> = {
   'inv.noTxn': { ar: 'لا توجد معاملات دفع مسجّلة', en: 'No payment transactions recorded' },
   'inv.actions': { ar: 'إجراءات', en: 'Actions' },
   'inv.details': { ar: 'تفاصيل', en: 'Details' },
-  'inv.pay': { ar: '💵 دفع', en: '💵 Pay' },
+  // R3B/R3C: هذا الإجراء يضبط حالة الاعتماد فقط ولا يُنشئ سجل دفع.
+  // كان اسمه «دفع» بينما لا يسجّل سداداً — والسداد الحقيقي من شاشة الدفعات وحدها.
+  'inv.pay': { ar: '✅ اعتماد للصرف', en: '✅ Approve for payment' },
   'inv.editShort': { ar: 'تعديل', en: 'Edit' },
   'inv.attachShort': { ar: '📎 مرفقات', en: '📎 Files' },
   'inv.attachments': { ar: 'المرفقات', en: 'Attachments' },

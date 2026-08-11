@@ -356,7 +356,7 @@ function InvoicesContent() {
       setPayInv(null);
       load();
     } catch {
-      alert('فشل تسجيل الدفع');
+      alert('فشل تسجيل الاعتماد');
     } finally {
       setPaySaving(false);
     }
@@ -864,7 +864,7 @@ function InvoicesContent() {
                   <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
                     <div className="flex gap-2 text-xs">
                       <button onClick={() => setDetail(inv)} className="text-gray-500 hover:text-brand-600">{t('inv.details')}</button>
-                      {inv.status !== 'paid' && inv.status !== 'cancelled' && <button onClick={() => openPay(inv)} className="text-emerald-600 hover:underline font-medium">{t('inv.pay')}</button>}
+                      {inv.status !== 'paid' && inv.status !== 'cancelled' && <button onClick={() => openPay(inv)} className="text-blue-600 hover:underline font-medium">{t('inv.pay')}</button>}
                       <button onClick={() => openEdit(inv)} className="text-brand-600 hover:underline">{t('inv.editShort')}</button>
                       <button onClick={() => openAttachments(inv)} className="text-gray-500 hover:text-gray-800">{t('inv.attachShort')}</button>
                       <button onClick={() => handleDelete(inv.id, inv.invoice_number)} className="text-red-400 hover:text-red-600">{t('inv.delShort')}</button>
@@ -897,7 +897,7 @@ function InvoicesContent() {
               </div>
               <div className="flex items-center justify-between mt-1.5 text-[11px] text-gray-400">
                 <span>{t('inv.due')}: {inv.due_date?.slice(0, 10) || '—'}{isOverdue(inv) ? ` · ${t('att.overdueInv')}` : ''}</span>
-                {inv.status !== 'paid' && inv.status !== 'cancelled' && <button onClick={(e) => { e.stopPropagation(); openPay(inv); }} className="text-emerald-600 font-medium">{t('inv.pay')}</button>}
+                {inv.status !== 'paid' && inv.status !== 'cancelled' && <button onClick={(e) => { e.stopPropagation(); openPay(inv); }} className="text-blue-600 font-medium">{t('inv.pay')}</button>}
               </div>
             </Card>
           );
@@ -1013,7 +1013,7 @@ function InvoicesContent() {
 
               {/* Actions */}
               <div className="flex flex-wrap gap-2">
-                {inv.status !== 'paid' && inv.status !== 'cancelled' && <Button size="sm" variant="success" icon="card" onClick={() => { setDetail(null); openPay(inv); }}>{t('inv.pay')}</Button>}
+                {inv.status !== 'paid' && inv.status !== 'cancelled' && <Button size="sm" variant="outline" icon="check" onClick={() => { setDetail(null); openPay(inv); }}>{t('inv.pay')}</Button>}
                 <Button size="sm" variant="outline" icon="clipboard" onClick={() => { setDetail(null); openEdit(inv); }}>{t('inv.editShort')}</Button>
                 <Button size="sm" variant="outline" icon="file" onClick={() => { setDetail(null); openAttachments(inv); }}>{t('inv.attachments')}</Button>
               </div>
@@ -1039,12 +1039,20 @@ function InvoicesContent() {
       {payInv && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-sm">
-            <h3 className="font-bold text-lg mb-1">تسجيل دفع الفاتورة</h3>
-            <p className="text-sm text-gray-600 mb-4">
+            <h3 className="font-bold text-lg mb-1">اعتماد الفاتورة للصرف</h3>
+            <p className="text-sm text-gray-600 mb-3">
               فاتورة <span className="font-mono font-medium text-blue-700">{payInv.invoice_number}</span> — مبلغ{' '}
-              <span className="font-medium">{Number(payInv.total_amount).toLocaleString()} {payInv.currency}</span> (دفع كامل)
+              <span className="font-medium">{Number(payInv.total_amount).toLocaleString()} {payInv.currency}</span>
             </p>
-            <label className="block text-sm text-gray-600 mb-1">تاريخ السداد</label>
+            {/* الوعد يجب أن يطابق الفعل: هذا الإجراء يضبط حالة الاعتماد فقط.
+                كان معنوناً «تسجيل دفع الفاتورة» بينما لا يُنشئ أي سجل دفع. */}
+            <div className="rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-2 mb-4">
+              <p className="text-[11px] text-amber-800 leading-relaxed">
+                هذا الإجراء يغيّر <strong>حالة الاعتماد</strong> فقط ولا يُسجّل سداداً.
+                لتسجيل سداد فعلي بمبلغ ومرجع بنكي، استخدم شاشة <strong>الدفعات</strong>.
+              </p>
+            </div>
+            <label className="block text-sm text-gray-600 mb-1">تاريخ الاعتماد</label>
             <input
               type="date"
               value={payDate}
@@ -1053,8 +1061,8 @@ function InvoicesContent() {
             />
             <div className="flex gap-2 justify-end">
               <button onClick={() => setPayInv(null)} className="px-4 py-2 rounded-lg border text-sm hover:bg-gray-50">إلغاء</button>
-              <button onClick={confirmPay} disabled={!payDate || paySaving} className="px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm hover:bg-emerald-700 disabled:opacity-50">
-                {paySaving ? 'جاري الحفظ...' : '💵 تأكيد الدفع'}
+              <button onClick={confirmPay} disabled={!payDate || paySaving} className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-700 disabled:opacity-50">
+                {paySaving ? 'جاري الحفظ...' : '✅ تأكيد الاعتماد'}
               </button>
             </div>
           </div>
