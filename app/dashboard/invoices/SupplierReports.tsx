@@ -250,31 +250,41 @@ function Unpaid({ invoices, name }: { invoices: any[]; name: string }) {
 /* ── موردو المركب ── */
 function VesselSuppliers({ rows, name }: { rows: any[]; name: string }) {
   if (!rows.length) return <p className="text-center text-gray-400 text-sm py-10">لا توجد بيانات لهذا المركب</p>;
+  // صف لكل (مورد × عملة) — لا يُجمع مبلغان بعملتين مختلفتين
+  const flat = rows.flatMap((r) => (r.totalsByCurrency || []).map((t: any) => ({ supplier: r.supplier_name, ...t })));
+  const multi = rows.filter((r) => (r.totalsByCurrency || []).length > 1).length;
   return (
     <>
       <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
         <h4 className="font-bold text-gray-700">موردو {name} <span className="text-xs font-normal text-gray-400">({rows.length} مورد)</span></h4>
-        <Button size="sm" variant="success" icon="file" onClick={() => toExcel(rows.map((r) => ({
-          'المورد': r.supplier_name, 'عدد الفواتير': r.total_invoices, 'إجمالي الفواتير': r.total_amount,
-          'المدفوع': r.paid_amount, 'المتبقي': +r.total_amount - +r.paid_amount,
+        <Button size="sm" variant="success" icon="file" onClick={() => toExcel(flat.map((r) => ({
+          'المورد': r.supplier, 'العملة': r.currency, 'عدد الفواتير': r.invoiceCount,
+          'إجمالي الفواتير': r.invoiced, 'المدفوع': r.paid, 'المتبقي': r.outstanding,
         })), `موردو-${name}`)}>Excel</Button>
       </div>
+      {multi > 0 && (
+        <p className="text-[11px] text-gray-600 bg-gray-50 rounded-lg px-2.5 py-1.5 mb-3">
+          {multi} مورد يتعامل بأكثر من عملة — صف مستقل لكل عملة، بلا إجمالي موحّد. الترتيب بعدد الفواتير لا بالقيمة.
+        </p>
+      )}
       <div className="overflow-x-auto">
-        <table className="w-full text-xs min-w-[480px]">
+        <table className="w-full text-xs min-w-[520px]">
           <thead className="bg-gray-50 text-gray-600"><tr>
-            <th className="px-2 py-2 text-right">المورد</th><th className="px-2 py-2 text-center">عدد الفواتير</th>
+            <th className="px-2 py-2 text-right">المورد</th><th className="px-2 py-2 text-center">العملة</th>
+            <th className="px-2 py-2 text-center">عدد الفواتير</th>
             <th className="px-2 py-2 text-left">إجمالي الفواتير</th><th className="px-2 py-2 text-left">المدفوع</th><th className="px-2 py-2 text-left">المتبقي</th>
           </tr></thead>
           <tbody>
-            {rows.map((r, i) => (
-              <tr key={i} className="border-t border-gray-50">
-                <td className="px-2 py-1.5 font-medium text-gray-700">{r.supplier_name}</td>
-                <td className="px-2 py-1.5 text-center text-gray-600">{r.total_invoices}</td>
-                <td className="px-2 py-1.5 text-left tabular-nums">{num(r.total_amount)}</td>
-                <td className="px-2 py-1.5 text-left tabular-nums text-green-600">{num(r.paid_amount)}</td>
-                <td className="px-2 py-1.5 text-left tabular-nums font-bold text-red-600">{num(+r.total_amount - +r.paid_amount)}</td>
+            {rows.map((r, ri) => (r.totalsByCurrency || []).map((t: any, ci: number) => (
+              <tr key={ri + '-' + ci} className="border-t border-gray-50">
+                <td className="px-2 py-1.5 font-medium text-gray-700">{ci === 0 ? r.supplier_name : ''}</td>
+                <td className="px-2 py-1.5 text-center text-gray-500">{t.currency}</td>
+                <td className="px-2 py-1.5 text-center text-gray-600">{t.invoiceCount}</td>
+                <td className="px-2 py-1.5 text-left tabular-nums">{num(t.invoiced)}</td>
+                <td className="px-2 py-1.5 text-left tabular-nums text-green-600">{num(t.paid)}</td>
+                <td className="px-2 py-1.5 text-left tabular-nums font-bold text-red-600">{num(t.outstanding)}</td>
               </tr>
-            ))}
+            )))}
           </tbody>
         </table>
       </div>

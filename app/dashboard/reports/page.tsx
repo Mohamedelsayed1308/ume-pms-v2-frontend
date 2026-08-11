@@ -736,13 +736,14 @@ export default function ReportsPage() {
             <>
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-bold text-gray-700">📊 موردو المركب — {data.length} مورد</h3>
-                <button onClick={() => exportToExcel(data.map((row: any) => ({
+                <button onClick={() => exportToExcel(data.flatMap((row: any) => (row.totalsByCurrency || []).map((t: any) => ({
                   'المورد': row.supplier_name,
-                  'عدد الفواتير': row.total_invoices,
-                  'إجمالي الفواتير': row.total_amount,
-                  'المدفوع': row.paid_amount,
-                  'المتبقي': +row.total_amount - +row.paid_amount,
-                })), 'موردو-المركب')}
+                  'العملة': t.currency,
+                  'عدد الفواتير': t.invoiceCount,
+                  'إجمالي الفواتير': t.invoiced,
+                  'المدفوع': t.paid,
+                  'المتبقي': t.outstanding,
+                }))), 'موردو-المركب')}
                   className="bg-green-600 text-white text-sm px-4 py-1.5 rounded-lg hover:bg-green-700 flex items-center gap-2">
                   📥 Excel
                 </button>
@@ -752,6 +753,7 @@ export default function ReportsPage() {
                 <thead className="bg-gray-50 text-gray-600 text-right">
                   <tr>
                     <th className="px-4 py-2">المورد</th>
+                    <th className="px-4 py-2">العملة</th>
                     <th className="px-4 py-2">عدد الفواتير</th>
                     <th className="px-4 py-2">إجمالي الفواتير</th>
                     <th className="px-4 py-2">المدفوع</th>
@@ -759,16 +761,17 @@ export default function ReportsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {data.map((row: any, i: number) => (
-                    <tr key={i} className="border-t">
-                      <td className="px-4 py-2 font-medium">{row.supplier_name}</td>
-                      <td className="px-4 py-2 text-center">{row.total_invoices}</td>
-                      <td className="px-4 py-2">{num(row.total_amount)}</td>
-                      <td className="px-4 py-2 text-green-600">{num(row.paid_amount)}</td>
-                      <td className="px-4 py-2 text-red-600 font-bold">{num(+row.total_amount - +row.paid_amount)}</td>
+                  {data.map((row: any, i: number) => (row.totalsByCurrency || []).map((t: any, ci: number) => (
+                    <tr key={i + '-' + ci} className="border-t">
+                      <td className="px-4 py-2 font-medium">{ci === 0 ? row.supplier_name : ''}</td>
+                      <td className="px-4 py-2 text-center text-gray-500">{t.currency}</td>
+                      <td className="px-4 py-2 text-center">{t.invoiceCount}</td>
+                      <td className="px-4 py-2">{num(t.invoiced)}</td>
+                      <td className="px-4 py-2 text-green-600">{num(t.paid)}</td>
+                      <td className="px-4 py-2 text-red-600 font-bold">{num(t.outstanding)}</td>
                     </tr>
-                  ))}
-                  {data.length === 0 && <tr><td colSpan={5} className="text-center py-6 text-gray-400">لا توجد بيانات</td></tr>}
+                  )))}
+                  {data.length === 0 && <tr><td colSpan={6} className="text-center py-6 text-gray-400">لا توجد بيانات</td></tr>}
                 </tbody>
               </table>
               </div>
