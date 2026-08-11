@@ -6,7 +6,7 @@ import { useInitialQuery } from '@/lib/useInitialQuery';
 import { getUser } from '@/lib/auth';
 import { useI18n } from '@/lib/i18n';
 import { Card, Button, Badge, Select as UISelect, Drawer, Icon, cx } from '@/components/ui';
-import { fmtNum, fmtMoney, fmtMoneyC, ccyEntries, n0 } from '@/lib/format';
+import { fmtNum, fmtMoney, fmtMoneyC, ccyEntries, n0, sumByCurrency, fmtCcyMap } from '@/lib/format';
 
 interface Payment {
   id: string;
@@ -143,6 +143,8 @@ export default function PaymentsPage() {
   }
 
   const checkedRows = invoiceRows.filter((r) => r.checked);
+  // إجمالي المحدَّد مفصول بالعملة — لا يُجمع مبلغان بعملتين مختلفتين
+  const checkedTotals = sumByCurrency(checkedRows, (r: any) => +r.amount || 0, (r: any) => r.currency);
 
   async function handleSaveAll() {
     if (checkedRows.length === 0) { setError('اختر فاتورة واحدة على الأقل'); return; }
@@ -519,7 +521,11 @@ export default function PaymentsPage() {
                                 إجمالي الدفع ({checkedRows.length} فاتورة):
                               </td>
                               <td colSpan={2} className="px-3 py-2 text-sm font-bold text-blue-700">
-                                {checkedRows.reduce((s, r) => s + (+r.amount || 0), 0).toLocaleString()}
+                                <div className="flex flex-col gap-0.5">
+                                  {ccyEntries(checkedTotals).map(({ ccy, value }) => (
+                                    <span key={ccy}>{fmtMoney(value, ccy)}</span>
+                                  ))}
+                                </div>
                               </td>
                             </tr>
                           </tfoot>
@@ -587,7 +593,7 @@ export default function PaymentsPage() {
                   {saving
                     ? 'جاري الحفظ...'
                     : checkedRows.length > 0
-                      ? `حفظ ${checkedRows.length} فاتورة — إجمالي ${checkedRows.reduce((s, r) => s + (+r.amount || 0), 0).toLocaleString()}`
+                      ? `حفظ ${checkedRows.length} فاتورة — ${fmtCcyMap(checkedTotals)}`
                       : 'حفظ'}
                 </button>
                 <button onClick={() => setShowModal(false)}
