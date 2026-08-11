@@ -80,7 +80,9 @@ const approvalLabel: Record<string, string> = {
   send_to_pay: 'Send to Pay',
   hold: 'Hold',
   delivery_missing: 'Delivery Missing',
-  paid: 'Paid',
+  // R3B: القيمة المخزَّنة 'paid' لم تتغيّر (توافق رجعي)، لكنها تعني «معتمد للصرف»
+  // لا «سُدِّد». عرضها كـ Paid كان يخلط الاعتماد الإداري بالسداد الفعلي.
+  paid: 'معتمد للصرف',
 };
 const approvalColor: Record<string, string> = {
   booking_waiting_payment: 'bg-sky-100 text-sky-700',
@@ -858,7 +860,7 @@ function InvoicesContent() {
                   <td className={cx('px-3 py-2.5 tabular-nums', remaining > 0.005 ? 'text-red-600 font-medium' : 'text-gray-300')}>{remaining > 0.005 ? fmtMoney(remaining) : '—'}</td>
                   <td className="px-3 py-2.5 text-gray-500 tabular-nums">{inv.due_date?.slice(0, 10) || '—'}</td>
                   <td className="px-3 py-2.5"><div className="flex flex-wrap items-center gap-1"><Badge tone={inv.status === 'paid' ? 'success' : inv.status === 'partial' ? 'warning' : inv.status === 'cancelled' ? 'neutral' : 'danger'}>{statusLabel[inv.status]}</Badge><LegacyBadge i={inv} /></div></td>
-                  <td className="px-3 py-2.5">{inv.approval_status ? <Badge tone={inv.approval_status === 'paid' ? 'success' : 'info'}>{approvalLabel[inv.approval_status]}</Badge> : <span className="text-gray-300 text-xs">—</span>}</td>
+                  <td className="px-3 py-2.5">{inv.approval_status ? <Badge tone={'info'}>{approvalLabel[inv.approval_status]}</Badge> : <span className="text-gray-300 text-xs">—</span>}</td>
                   <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
                     <div className="flex gap-2 text-xs">
                       <button onClick={() => setDetail(inv)} className="text-gray-500 hover:text-brand-600">{t('inv.details')}</button>
