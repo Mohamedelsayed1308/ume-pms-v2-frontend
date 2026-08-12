@@ -5,6 +5,7 @@ import { getUser } from '@/lib/auth';
 import { useInitialQuery } from '@/lib/useInitialQuery';
 import { useI18n } from '@/lib/i18n';
 import { Card, Button, Badge, Input, Field, Select, Modal, Drawer, Skeleton, EmptyState, Icon, useToast, cx } from '@/components/ui';
+import AccountingDefault from './AccountingDefault';
 import { fmtNum, fmtMoney, fmtMoneyC, ccyEntries, n0 } from '@/lib/format';
 
 interface Supplier { id: string; name: string; contact_person: string; email: string; phone: string; address: string; country: string; is_active: boolean; }
@@ -367,6 +368,7 @@ export default function SuppliersPage() {
           <Field label={t('sup.country')}><Input value={form.country} onChange={f('country')} /></Field>
           <div className="sm:col-span-2"><Field label={t('sup.address')}><Input value={form.address} onChange={f('address')} /></Field></div>
           <label className="sm:col-span-2 flex items-center gap-2 text-sm text-gray-600"><input type="checkbox" checked={form.is_active} onChange={(e) => setForm({ ...form, is_active: e.target.checked })} />{t('sup.active')}</label>
+          {showModal && <AccountingDefault supplierId={editing?.id ?? null} />}
         </div>
         {formErr && <p className="text-red-500 text-sm mt-2">{formErr}</p>}
       </Modal>

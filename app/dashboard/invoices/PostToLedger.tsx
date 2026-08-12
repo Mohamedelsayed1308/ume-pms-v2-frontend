@@ -60,7 +60,18 @@ export default function PostToLedger({ invoice, onDone, compact }: Props) {
       ]);
 
       if (accRes.status === 'fulfilled') {
-        setAccounts((accRes.value.data || []).filter((a: any) => a.is_postable && (a.account_type === 'expense' || a.account_type === 'asset')));
+        // المصروفات كلها، ومن الأصول اثنان فقط يصحّ أن تُحمَّل عليهما فاتورة
+        // مورّد: المقدَّم (خدمة متعددة الفترات) والرسملة (أصل يُضاف للمركب).
+        // البنوك والذمم لا يُرحَّل إليها مصروف فاتورة أصلاً — فوجودها في القائمة
+        // خطر اختيار لا مرونة.
+        const CAPITALIZABLE = ['1200', '1510'];
+        const usable = (accRes.value.data || []).filter((a: any) =>
+          a.is_postable && a.is_active !== false &&
+          (a.account_type === 'expense' || CAPITALIZABLE.includes(a.code)));
+        // مرتَّبة بمجموعتها: تشغيل المركب أولاً فالإدارية فالتمويلية.
+        const rank = (g: string) => ({ VESSEL_OPEX: 0, ADMIN: 1, FINANCE: 2 } as any)[g] ?? 3;
+        usable.sort((a: any, b: any) => rank(a.account_group) - rank(b.account_group) || a.code.localeCompare(b.code));
+        setAccounts(usable);
       }
       if (entRes.status === 'fulfilled') {
         const hit = (entRes.value.data || []).find((x: any) =>
@@ -157,7 +168,13 @@ export default function PostToLedger({ invoice, onDone, compact }: Props) {
                 <Field label="حساب المصروف">
                   <Select value={form.debit_account_id} onChange={(e: any) => setForm({ ...form, debit_account_id: e.target.value })}>
                     <option value="">— اختر —</option>
-                    {accounts.map((a) => <option key={a.id} value={a.id}>{a.code} — {a.name}</option>)}
+                    {accounts.map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.code} — {a.name}{a.account_group === 'VESSEL_OPEX' ? '  [تشغيل مركب]'
+                          : a.account_group === 'ADMIN' ? '  [إدارية]'
+                          : a.account_group === 'FINANCE' ? '  [تمويلية]' : ''}
+                      </option>
+                    ))}
                   </Select>
                 </Field>
 
