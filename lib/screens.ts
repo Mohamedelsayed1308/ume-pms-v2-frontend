@@ -8,6 +8,14 @@ export interface Screen {
   group?: GroupKey;     // مجموعة التنقّل
   adminOnly?: boolean;  // للأدمن فقط
   always?: boolean;     // متاح دائماً لكل مستخدم
+  /**
+   * مسجَّلة للصلاحيات لكن **لا تظهر في التنقّل**.
+   *
+   * تفصل بين أمرين كانا ملتصقين: "الشاشة موجودة ويمكن منحها" و"الشاشة لها صفحة
+   * تُفتح". شاشات المحاسبة في P1.1A لها حماية خادمية ونقاط نهاية عاملة، ولا صفحات
+   * بعد — فتسجيلها بلا هذا العلم كان سيضع في القائمة روابط تؤدي إلى 404.
+   */
+  hidden?: boolean;
 }
 
 // ترتيب مجموعات التنقّل + مفاتيح الترجمة
@@ -47,6 +55,16 @@ export const SCREENS: Screen[] = [
 
   { href: '/dashboard/users', label: 'الصلاحيات', icon: '🔐', iconName: 'shield', group: 'admin', adminOnly: true },
   { href: '/dashboard/audit', label: 'تدقيق السلامة المالية', icon: '🛡️', iconName: 'shield', group: 'admin', adminOnly: true },
+
+  // ── المحاسبة · P1.1A ──
+  // مسجَّلة ليتمكّن الأدمن من منحها صراحةً، ومخفيّة عن التنقّل حتى تُبنى صفحاتها.
+  // لا تُمنح لأحد تلقائياً: لا `always` ولا تعديل على allowed_screens لأي مستخدم.
+  // الفصل بين الواجبات هنا: مُعِدّ القيد (journals) ≠ مُرحِّله (posting).
+  { href: '/dashboard/accounting', label: 'المحاسبة', icon: '📒', iconName: 'file', group: 'finance', hidden: true },
+  { href: '/dashboard/accounting/journals', label: 'إعداد القيود', icon: '📝', iconName: 'file', group: 'finance', hidden: true },
+  { href: '/dashboard/accounting/posting', label: 'ترحيل القيود', icon: '📮', iconName: 'check', group: 'finance', hidden: true },
+  { href: '/dashboard/accounting/periods', label: 'الفترات المحاسبية', icon: '🗓️', iconName: 'file', group: 'finance', hidden: true },
+  { href: '/dashboard/accounting/setup', label: 'إعداد المحاسبة', icon: '⚙️', iconName: 'file', group: 'finance', hidden: true },
 ];
 
 // الشاشات التي يمكن منحها/منعها في شاشة الصلاحيات (استبعاد الرئيسية والأدمن-فقط)

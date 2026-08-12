@@ -52,7 +52,7 @@ function Shell({ children }: { children: React.ReactNode }) {
   const NavContent = ({ collapsed }: { collapsed: boolean }) => (
     <nav className="flex-1 overflow-y-auto px-2.5 py-3 space-y-4">
       {GROUPS.map((g) => {
-        const items = SCREENS.filter((s) => s.group === g.key && canAccess(user, s));
+        const items = SCREENS.filter((s) => s.group === g.key && !s.hidden && canAccess(user, s));
         if (!items.length) return null;
         return (
           <div key={g.key}>

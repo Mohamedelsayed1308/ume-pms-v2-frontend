@@ -136,7 +136,7 @@ export function CommandPaletteProvider({ children }: { children: React.ReactNode
     // Commands: navigation + quick-create (permission-aware)
     const navItems: { label: Bi; route: string; icon: string; kw: string }[] = [];
     navItems.push({ label: { ar: 'الرئيسية', en: 'Dashboard' }, route: '/dashboard', icon: 'home', kw: 'home dashboard رئيسية' });
-    for (const s of SCREENS) { if (s.href !== '/dashboard' && canAccess(user, s)) navItems.push({ label: { ar: `فتح ${s.label}`, en: `Open ${EN_SCREEN[s.href] || s.label}` }, route: s.href, icon: s.iconName || 'file', kw: `${s.label} ${EN_SCREEN[s.href] || ''} ${s.href}` }); }
+    for (const s of SCREENS) { if (s.href !== '/dashboard' && !s.hidden && canAccess(user, s)) navItems.push({ label: { ar: `فتح ${s.label}`, en: `Open ${EN_SCREEN[s.href] || s.label}` }, route: s.href, icon: s.iconName || 'file', kw: `${s.label} ${EN_SCREEN[s.href] || ''} ${s.href}` }); }
     navItems.push({ label: { ar: 'مركز الانتباه', en: 'Notifications' }, route: '/dashboard/notifications', icon: 'bell', kw: 'notifications تنبيهات انتباه' });
     const creates: { label: Bi; href: string; route: string; kw: string }[] = [
       { label: { ar: 'إضافة مورد', en: 'Add Supplier' }, href: '/dashboard/suppliers', route: '/dashboard/suppliers', kw: 'add supplier مورد جديد' },
