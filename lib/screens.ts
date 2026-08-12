@@ -65,6 +65,7 @@ export const SCREENS: Screen[] = [
   // القائمة، و`periods` و`setup` عبر الـAPI حتى تُبنيا. فتبقى `hidden` — الرابط
   // الذي يؤدي إلى 404 أسوأ من غياب الرابط.
   { href: '/dashboard/accounting', label: 'المحاسبة', icon: '📒', iconName: 'file', group: 'finance' },
+  { href: '/dashboard/accounting/statements', label: 'القوائم المالية', icon: '📑', iconName: 'chart', group: 'finance' },
   { href: '/dashboard/receipts', label: 'تأكيد الاستلام', icon: '📦', iconName: 'check', group: 'procurement' },
   { href: '/dashboard/accounting/journals', label: 'إعداد القيود', icon: '📝', iconName: 'file', group: 'finance', hidden: true },
   { href: '/dashboard/accounting/posting', label: 'ترحيل القيود', icon: '📮', iconName: 'check', group: 'finance', hidden: true },

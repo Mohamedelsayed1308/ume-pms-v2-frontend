@@ -6,6 +6,7 @@ import { CURRENCIES } from '@/lib/currencies';
 import { useI18n } from '@/lib/i18n';
 import { Card, Button, Badge, Select as UISelect, Drawer, Icon, cx } from '@/components/ui';
 import SupplierReports, { type SupplierReportKey } from './SupplierReports';
+import PostToLedger from './PostToLedger';
 import { fmtNum, fmtMoney, fmtMoneyC, ccyEntries, n0 } from '@/lib/format';
 import InvoiceAssistant from './InvoiceAssistant';
 
@@ -920,6 +921,7 @@ function InvoicesContent() {
                       {inv.status !== 'paid' && inv.status !== 'cancelled' && <button onClick={() => openPay(inv)} className="text-blue-600 hover:underline font-medium">{t('inv.pay')}</button>}
                       <button onClick={() => openEdit(inv)} className="text-brand-600 hover:underline">{t('inv.editShort')}</button>
                       <button onClick={() => openAttachments(inv)} className="text-gray-500 hover:text-gray-800">{t('inv.attachShort')}</button>
+                      <PostToLedger invoice={inv} compact onDone={load} />
                       <button onClick={() => handleDelete(inv.id, inv.invoice_number)} className="text-red-400 hover:text-red-600">{t('inv.delShort')}</button>
                     </div>
                   </td>
