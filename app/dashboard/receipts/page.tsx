@@ -34,7 +34,7 @@ interface Inv {
 export default function ReceiptsPage() {
   const toast = useToast();
   const [invoices, setInvoices] = useState<Inv[]>([]);
-  const [postedSources, setPostedSources] = useState<Set<string>>(new Set());
+  const [summary, setSummary] = useState<{ awaiting: number; confirmed: number; in_ledger: number } | null>(null);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState('');
   const [onlyMissing, setOnlyMissing] = useState(true);
@@ -47,34 +47,23 @@ export default function ReceiptsPage() {
   async function load() {
     setLoading(true);
     try {
-      const [invRes, entRes] = await Promise.allSettled([
-        api.get('/api/invoices'),
-        api.get('/api/accounting/entries'),
+      // نداءان لا نداء لكل فاتورة: العدّ والاستبعاد يتمّان في قاعدة البيانات.
+      const [pRes, sRes] = await Promise.allSettled([
+        api.get('/api/receipts/pending'),
+        api.get('/api/receipts/summary'),
       ]);
-
-      // ما رُحِّل لا يُنتظر استلامه — الفاتورة التي دخلت الدفتر خرجت من القائمة.
-      const posted = new Set<string>();
-      if (entRes.status === 'fulfilled') {
-        for (const e of entRes.value.data || []) {
-          if (e.source_type === 'invoice' && e.source_id && e.status !== 'void') posted.add(e.source_id);
-        }
+      if (pRes.status === 'fulfilled') {
+        setInvoices((pRes.value.data || []).map((r: any) => ({
+          ...r,
+          supplier: r.supplier_name ? { name: r.supplier_name } : undefined,
+          vessel: r.vessel_name ? { name: r.vessel_name } : undefined,
+          _receipts: Number(r.receipt_count ?? 0),
+        })));
       }
-      setPostedSources(posted);
-
-      const list: Inv[] = invRes.status === 'fulfilled'
-        ? (Array.isArray(invRes.value.data) ? invRes.value.data : invRes.value.data?.data ?? [])
-        : [];
-
-      // عدد وقائع الاستلام لكل فاتورة — الطلبات متوازية فلا تتراكم الانتظارات.
-      const pending = list.filter((i) => !posted.has(i.id));
-      const counts = await Promise.all(pending.map(async (i) => {
-        try { const { data } = await api.get(`/api/invoices/${i.id}/receipts`); return [i.id, (data || []).length] as const; }
-        catch { return [i.id, 0] as const; }
-      }));
-      const map = new Map(counts);
-      setInvoices(pending.map((i) => ({ ...i, _receipts: map.get(i.id) ?? 0 })));
+      if (sRes.status === 'fulfilled') setSummary(sRes.value.data || null);
     } finally { setLoading(false); }
   }
+
   useEffect(() => { load(); }, []);
 
   const shown = useMemo(() => {
@@ -85,7 +74,7 @@ export default function ReceiptsPage() {
       .sort((a, b) => (b.invoice_date || '').localeCompare(a.invoice_date || ''));
   }, [invoices, q, onlyMissing]);
 
-  const missingCount = invoices.filter((i) => (i._receipts ?? 0) === 0).length;
+  const missingCount = summary?.awaiting ?? invoices.filter((i) => (i._receipts ?? 0) === 0).length;
 
   function open(i: Inv) {
     setTarget(i);
@@ -131,11 +120,11 @@ export default function ReceiptsPage() {
         </Card>
         <Card className="p-4">
           <div className="text-xs text-gray-500">مؤكَّدة ولم تُرحَّل</div>
-          <div className="text-2xl font-bold">{invoices.length - missingCount}</div>
+          <div className="text-2xl font-bold">{summary?.confirmed ?? 0}</div>
         </Card>
         <Card className="p-4">
           <div className="text-xs text-gray-500">دخلت الدفتر</div>
-          <div className="text-2xl font-bold">{postedSources.size}</div>
+          <div className="text-2xl font-bold">{summary?.in_ledger ?? 0}</div>
         </Card>
       </div>
 
