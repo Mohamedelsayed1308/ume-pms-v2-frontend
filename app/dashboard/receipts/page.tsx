@@ -35,6 +35,7 @@ export default function ReceiptsPage() {
   const toast = useToast();
   const [invoices, setInvoices] = useState<Inv[]>([]);
   const [summary, setSummary] = useState<{ awaiting: number; confirmed: number; in_ledger: number } | null>(null);
+  const [entity, setEntity] = useState<{ id: string; name: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState('');
   const [onlyMissing, setOnlyMissing] = useState(true);
@@ -48,9 +49,17 @@ export default function ReceiptsPage() {
     setLoading(true);
     try {
       // نداءان لا نداء لكل فاتورة: العدّ والاستبعاد يتمّان في قاعدة البيانات.
+      // الدفتر يخصّ كياناً واحداً ومراكبه. عرض الأسطول كلّه هنا يُظهر عملاً
+      // ليس عملاً — فواتير مراكب شركات أخرى لا تدخل هذا الدفتر أصلاً.
+      let eid = entity?.id;
+      if (!eid) {
+        const { data } = await api.get('/api/accounting/entities');
+        if (data?.length) { setEntity({ id: data[0].id, name: data[0].name }); eid = data[0].id; }
+      }
+      const scope = eid ? `?legal_entity_id=${eid}` : '';
       const [pRes, sRes] = await Promise.allSettled([
-        api.get('/api/receipts/pending'),
-        api.get('/api/receipts/summary'),
+        api.get(`/api/receipts/pending${scope}`),
+        api.get(`/api/receipts/summary${scope}`),
       ]);
       if (pRes.status === 'fulfilled') {
         setInvoices((pRes.value.data || []).map((r: any) => ({
@@ -104,7 +113,10 @@ export default function ReceiptsPage() {
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold">تأكيد الاستلام</h1>
-          <p className="text-sm text-gray-500">فواتير لم تُؤكَّد استلاماً ولم تدخل الدفتر بعد</p>
+          <p className="text-sm text-gray-500">
+            فواتير لم تُؤكَّد استلاماً ولم تدخل الدفتر بعد
+            {entity && <> — نطاق <b>{entity.name}</b> ومراكبها وحدها</>}
+          </p>
         </div>
         <Button variant="secondary" onClick={load}>تحديث</Button>
       </header>
