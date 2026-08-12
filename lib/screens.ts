@@ -70,7 +70,7 @@ export const SCREENS: Screen[] = [
   { href: '/dashboard/accounting/journals', label: 'إعداد القيود', icon: '📝', iconName: 'file', group: 'finance', hidden: true },
   { href: '/dashboard/accounting/posting', label: 'ترحيل القيود', icon: '📮', iconName: 'check', group: 'finance', hidden: true },
   { href: '/dashboard/accounting/periods', label: 'الفترات المحاسبية', icon: '🗓️', iconName: 'file', group: 'finance', hidden: true },
-  { href: '/dashboard/accounting/setup', label: 'إعداد المحاسبة', icon: '⚙️', iconName: 'file', group: 'finance', hidden: true },
+  { href: '/dashboard/accounting/setup', label: 'إعداد المحاسبة', icon: '⚙️', iconName: 'file', group: 'finance' },
 ];
 
 // الشاشات التي يمكن منحها/منعها في شاشة الصلاحيات (استبعاد الرئيسية والأدمن-فقط)
