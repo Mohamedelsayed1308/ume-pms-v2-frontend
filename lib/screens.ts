@@ -57,10 +57,15 @@ export const SCREENS: Screen[] = [
   { href: '/dashboard/audit', label: 'تدقيق السلامة المالية', icon: '🛡️', iconName: 'shield', group: 'admin', adminOnly: true },
 
   // ── المحاسبة · P1.1A ──
-  // مسجَّلة ليتمكّن الأدمن من منحها صراحةً، ومخفيّة عن التنقّل حتى تُبنى صفحاتها.
   // لا تُمنح لأحد تلقائياً: لا `always` ولا تعديل على allowed_screens لأي مستخدم.
   // الفصل بين الواجبات هنا: مُعِدّ القيد (journals) ≠ مُرحِّله (posting).
-  { href: '/dashboard/accounting', label: 'المحاسبة', icon: '📒', iconName: 'file', group: 'finance', hidden: true },
+  //
+  // `accounting` و `receipts` لهما صفحتان فظهرتا في التنقّل. والثلاث الباقيات
+  // صلاحيات بلا صفحات بعد: `journals` و `posting` تحكمان أزراراً داخل الشاشات
+  // القائمة، و`periods` و`setup` عبر الـAPI حتى تُبنيا. فتبقى `hidden` — الرابط
+  // الذي يؤدي إلى 404 أسوأ من غياب الرابط.
+  { href: '/dashboard/accounting', label: 'المحاسبة', icon: '📒', iconName: 'file', group: 'finance' },
+  { href: '/dashboard/receipts', label: 'تأكيد الاستلام', icon: '📦', iconName: 'check', group: 'procurement' },
   { href: '/dashboard/accounting/journals', label: 'إعداد القيود', icon: '📝', iconName: 'file', group: 'finance', hidden: true },
   { href: '/dashboard/accounting/posting', label: 'ترحيل القيود', icon: '📮', iconName: 'check', group: 'finance', hidden: true },
   { href: '/dashboard/accounting/periods', label: 'الفترات المحاسبية', icon: '🗓️', iconName: 'file', group: 'finance', hidden: true },
