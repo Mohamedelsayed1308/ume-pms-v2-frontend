@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import api from '@/lib/api';
+import { findDuplicateGroups, type DupCandidate } from '@/lib/duplicates';
 import { getUser } from '@/lib/auth';
 import { useInitialQuery } from '@/lib/useInitialQuery';
 import { useI18n } from '@/lib/i18n';
@@ -12,17 +13,6 @@ interface Supplier { id: string; name: string; contact_person: string; email: st
 const empty = { name: '', contact_person: '', email: '', phone: '', address: '', country: '', is_active: true };
 
 const norm = (s: string) => (s || '').toLowerCase().replace(/[^a-z0-9؀-ۿ]/g, '');
-const CORP = new Set(['ltd', 'limited', 'co', 'company', 'corp', 'corporation', 'inc', 'sa', 'sl', 'sae', 'fze', 'llc', 'gmbh', 'ab', 'as', 'dmcc', 'plc', 'bv', 'nv', 'pte', 'srl', 'est', 'group']);
-const looseSig = (name: string) => [...new Set((name || '').toLowerCase().replace(/[^a-z0-9؀-ۿ\s]/g, ' ').split(/\s+/).filter((tk) => tk && tk.length > 1 && !CORP.has(tk)))].sort().join(' ');
-function findDuplicates(list: Supplier[]) {
-  const exactMap: Record<string, Supplier[]> = {};
-  for (const s of list) { const k = norm(s.name); if (!k) continue; (exactMap[k] ||= []).push(s); }
-  const exactGroups = Object.values(exactMap).filter((g) => g.length > 1);
-  const looseMap: Record<string, Supplier[]> = {};
-  for (const s of list) { const k = looseSig(s.name); if (!k) continue; (looseMap[k] ||= []).push(s); }
-  const similarGroups = Object.values(looseMap).filter((g) => g.length > 1 && new Set(g.map((s) => norm(s.name))).size > 1);
-  return { exactGroups, similarGroups };
-}
 const fmtDate = (d: any) => (d ? String(d).slice(0, 10) : '—');
 interface SupStat { count: number; open: Record<string, number>; invoiced: Record<string, number>; last: string | null; pos: number; recentInv: any[]; recentPay: any[]; }
 const emptyStat = (): SupStat => ({ count: 0, open: {}, invoiced: {}, last: null, pos: 0, recentInv: [], recentPay: [] });
@@ -192,11 +182,23 @@ export default function SuppliersPage() {
 
       {/* duplicate detection panel (functionality preserved) */}
       {showDup && !loading && (() => {
-        const { exactGroups, similarGroups } = findDuplicates(suppliers);
-        const Group = ({ g, kind }: { g: Supplier[]; kind: 'exact' | 'similar' }) => {
+        const { exact: exactGroups, similar: similarCands } = findDuplicateGroups(suppliers);
+        const Group = ({ g, kind, cand }: { g: Supplier[]; kind: 'exact' | 'similar'; cand?: DupCandidate<Supplier> }) => {
           const gid = g[0].id; const keepId = keepSel[gid] || g[0].id;
           return (
             <div className={cx('rounded-xl border p-3', kind === 'exact' ? 'border-red-200 bg-red-50/50' : 'border-amber-200 bg-amber-50/50')}>
+              {cand && (
+                <div className="mb-2 flex flex-wrap items-center gap-2 text-xs">
+                  <span className="rounded-full bg-white/70 px-2 py-0.5 font-medium text-amber-800">
+                    تشابه {Math.round(cand.score * 100)}٪
+                  </span>
+                  {cand.legalFormOnly && (
+                    <span className="text-gray-600">
+                      الاسم واحد والشكل القانوني مختلف — <b>الأرجح كيانان لا تكرار</b>
+                    </span>
+                  )}
+                </div>
+              )}
               {g.map((s) => (
                 <div key={s.id} className="flex items-center justify-between py-1 border-b last:border-0 border-black/5">
                   <label className="flex items-center gap-2 cursor-pointer text-sm">
@@ -213,9 +215,9 @@ export default function SuppliersPage() {
         return (
           <Card className="p-4">
             <h3 className="font-bold text-gray-700 mb-3">{t('sup.detectDup')}</h3>
-            {!exactGroups.length && !similarGroups.length && <p className="text-emerald-600 text-sm">🎉</p>}
+            {!exactGroups.length && !similarCands.length && <p className="text-emerald-600 text-sm">🎉</p>}
             {exactGroups.length > 0 && <div className="mb-3"><p className="text-sm font-medium text-red-700 mb-2">تكرار مؤكد ({exactGroups.length})</p><div className="space-y-2">{exactGroups.map((g, i) => <Group key={i} g={g} kind="exact" />)}</div></div>}
-            {similarGroups.length > 0 && <div><p className="text-sm font-medium text-amber-700 mb-2">تشابه محتمل ({similarGroups.length})</p><div className="space-y-2">{similarGroups.map((g, i) => <Group key={i} g={g} kind="similar" />)}</div></div>}
+            {similarCands.length > 0 && <div><p className="text-sm font-medium text-amber-700 mb-2">تشابه محتمل ({similarCands.length}) — مرتَّب بقوّة التشابه</p><div className="space-y-2">{similarCands.map((c, i) => <Group key={i} g={c.items} kind="similar" cand={c} />)}</div></div>}
           </Card>
         );
       })()}
