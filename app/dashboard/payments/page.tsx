@@ -5,7 +5,7 @@ import { CURRENCIES } from '@/lib/currencies';
 import { useInitialQuery } from '@/lib/useInitialQuery';
 import { getUser } from '@/lib/auth';
 import { useI18n } from '@/lib/i18n';
-import { Card, Button, Badge, Select as UISelect, Drawer, Icon, cx } from '@/components/ui';
+import { Card, Button, Badge, Select as UISelect, Drawer, Icon, cx, TableSkeleton, Callout } from '@/components/ui';
 import { fmtNum, fmtMoney, fmtMoneyC, ccyEntries, n0, sumByCurrency, fmtCcyMap } from '@/lib/format';
 
 interface Payment {
@@ -83,15 +83,33 @@ export default function PaymentsPage() {
   useEffect(() => { setUser(getUser()); }, []);
   const HIGH_VALUE = 100000; // documented threshold (payment's own currency)
 
+  /*
+   * التحميل حالة ثالثة مستقلّة عن «فيه بيانات» و«مفيش بيانات».
+   *
+   * وكان فشل النداء يمرّ بلا مُلتقِط: `Promise.all` يُخفق كلّه لإخفاق واحد،
+   * فتبقى القوائم فارغة ويقرأ المستخدم «لا توجد مدفوعات» — وهي في الحقيقة
+   * «لم أستطع أن أعرف». والفرق بين النفي والجهل ليس تفصيلاً في شاشة مالية.
+   */
+  const [listLoading, setListLoading] = useState(true);
+  const [listError, setListError] = useState('');
+
   async function load() {
-    const [payRes, invRes, supRes] = await Promise.all([
-      api.get('/api/payments'),
-      api.get('/api/invoices'),
-      api.get('/api/suppliers'),
-    ]);
-    setPayments(payRes.data);
-    setAllInvoices(invRes.data.filter((i: any) => i.status !== 'paid' && i.status !== 'cancelled'));
-    setSuppliers(supRes.data);
+    setListLoading(true);
+    try {
+      const [payRes, invRes, supRes] = await Promise.all([
+        api.get('/api/payments'),
+        api.get('/api/invoices'),
+        api.get('/api/suppliers'),
+      ]);
+      setPayments(payRes.data);
+      setAllInvoices(invRes.data.filter((i: any) => i.status !== 'paid' && i.status !== 'cancelled'));
+      setSuppliers(supRes.data);
+      setListError('');
+    } catch {
+      setListError('تعذّر تحميل المدفوعات — حدّث الصفحة أو أعد المحاولة.');
+    } finally {
+      setListLoading(false);
+    }
   }
 
   useEffect(() => { load(); }, []);
@@ -261,6 +279,8 @@ export default function PaymentsPage() {
         </div>
       </div>
 
+      {listError && <Callout tone="danger">{listError}</Callout>}
+
       {/* Presets */}
       <div className="flex items-center gap-1.5 flex-wrap">
         {([['all', t('pay.presetAll')], ['today', t('pay.presetToday')], ['week', t('pay.presetWeek')], ['month', t('pay.presetMonth')], ['high', t('pay.highValue')]] as const).map(([k, lbl]) => (
@@ -311,7 +331,8 @@ export default function PaymentsPage() {
                 </div></td>
               </tr>
             ))}
-            {sorted.length === 0 && <tr><td colSpan={9} className="text-center py-10 text-gray-400">{t('pay.noResults')}</td></tr>}
+            {listLoading && payments.length === 0 && <tr><td colSpan={9} className="py-3"><TableSkeleton rows={8} cols={9} /></td></tr>}
+            {!listLoading && sorted.length === 0 && <tr><td colSpan={9} className="text-center py-10 text-gray-400">{t('pay.noResults')}</td></tr>}
           </tbody>
         </table>
       </Card>
@@ -331,7 +352,8 @@ export default function PaymentsPage() {
             {isMismatch(p) && <p className="text-[11px] text-orange-500 mt-1">⚠ {t('pay.ccyMismatch')}</p>}
           </Card>
         ))}
-        {sorted.length === 0 && <Card><p className="text-center py-8 text-gray-400 text-sm">{t('pay.noResults')}</p></Card>}
+        {listLoading && payments.length === 0 && <Card><TableSkeleton rows={5} cols={2} /></Card>}
+        {!listLoading && sorted.length === 0 && <Card><p className="text-center py-8 text-gray-400 text-sm">{t('pay.noResults')}</p></Card>}
       </div>
       <p className="text-[11px] text-gray-400 text-center">{t('note.currency')}</p>
 

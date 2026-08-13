@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import api from '@/lib/api';
 import { CURRENCIES } from '@/lib/currencies';
+import { TableSkeleton } from '@/components/ui';
 
 interface HireInvoice {
   id: string; invoice_number: string; invoice_date: string; status: string;
@@ -69,17 +70,29 @@ export default function HireInvoicesPage() {
   const [docFilter, setDocFilter] = useState('');
   const [search, setSearch] = useState('');
 
+  // التحميل حالة ثالثة — «لا توجد مستندات» أثناء الجلب نفيٌ قاطع في غير موضعه.
+  const [listLoading, setListLoading] = useState(true);
+  const [listError, setListError] = useState('');
+
   async function load() {
-    const [invRes, custRes, vesRes, compRes] = await Promise.all([
-      api.get('/api/hire-invoices'),
-      api.get('/api/customers'),
-      api.get('/api/vessels'),
-      api.get('/api/shipping-companies'),
-    ]);
-    setInvoices(invRes.data);
-    setCustomers(custRes.data);
-    setVessels(vesRes.data);
-    setCompanies(compRes.data);
+    setListLoading(true);
+    try {
+      const [invRes, custRes, vesRes, compRes] = await Promise.all([
+        api.get('/api/hire-invoices'),
+        api.get('/api/customers'),
+        api.get('/api/vessels'),
+        api.get('/api/shipping-companies'),
+      ]);
+      setInvoices(invRes.data);
+      setCustomers(custRes.data);
+      setVessels(vesRes.data);
+      setCompanies(compRes.data);
+      setListError('');
+    } catch {
+      setListError('تعذّر تحميل مستندات الإيجار — حدّث الصفحة أو أعد المحاولة.');
+    } finally {
+      setListLoading(false);
+    }
   }
   useEffect(() => { load(); }, []);
 
@@ -531,7 +544,9 @@ export default function HireInvoicesPage() {
                 </td>
               </tr>
             );})}
-            {displayed.length === 0 && <tr><td colSpan={10} className="text-center py-8 text-gray-400">لا توجد مستندات</td></tr>}
+            {listLoading && invoices.length === 0 && <tr><td colSpan={10} className="py-3"><TableSkeleton rows={6} cols={10} /></td></tr>}
+            {!listLoading && listError && <tr><td colSpan={10} className="text-center py-8 text-red-600 text-sm">{listError}</td></tr>}
+            {!listLoading && !listError && displayed.length === 0 && <tr><td colSpan={10} className="text-center py-8 text-gray-400">لا توجد مستندات</td></tr>}
           </tbody>
         </table>
       </div>

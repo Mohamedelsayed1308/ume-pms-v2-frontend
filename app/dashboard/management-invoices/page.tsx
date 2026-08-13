@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import api from '@/lib/api';
 import { CURRENCIES } from '@/lib/currencies';
+import { TableSkeleton } from '@/components/ui';
 
 const UME = {
   name: 'UME Shipping DMCC',
@@ -44,10 +45,22 @@ export default function ManagementInvoicesPage() {
   const [payLoading, setPayLoading] = useState(false);
   const [filterStatus, setFilterStatus] = useState('');
 
+  // التحميل حالة ثالثة — «لا توجد فواتير» أثناء الجلب نفيٌ قاطع في غير موضعه.
+  const [listLoading, setListLoading] = useState(true);
+  const [listError, setListError] = useState('');
+
   async function load() {
-    const [invRes, vesRes] = await Promise.all([api.get('/api/management-invoices'), api.get('/api/vessels')]);
-    setInvoices(invRes.data);
-    setVessels(vesRes.data);
+    setListLoading(true);
+    try {
+      const [invRes, vesRes] = await Promise.all([api.get('/api/management-invoices'), api.get('/api/vessels')]);
+      setInvoices(invRes.data);
+      setVessels(vesRes.data);
+      setListError('');
+    } catch {
+      setListError('تعذّر تحميل فواتير الإدارة — حدّث الصفحة أو أعد المحاولة.');
+    } finally {
+      setListLoading(false);
+    }
   }
   useEffect(() => { load(); }, []);
 
@@ -297,7 +310,9 @@ export default function ManagementInvoicesPage() {
                 </td>
               </tr>
             ))}
-            {displayed.length === 0 && <tr><td colSpan={8} className="text-center py-8 text-gray-400">لا توجد فواتير</td></tr>}
+            {listLoading && invoices.length === 0 && <tr><td colSpan={8} className="py-3"><TableSkeleton rows={6} cols={8} /></td></tr>}
+            {!listLoading && listError && <tr><td colSpan={8} className="text-center py-8 text-red-600 text-sm">{listError}</td></tr>}
+            {!listLoading && !listError && displayed.length === 0 && <tr><td colSpan={8} className="text-center py-8 text-gray-400">لا توجد فواتير</td></tr>}
           </tbody>
         </table>
       </div>

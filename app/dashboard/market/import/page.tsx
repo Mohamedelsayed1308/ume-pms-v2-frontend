@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import api from '@/lib/api';
 import { getUser } from '@/lib/auth';
-import { Card, Icon, Button, EmptyState, cx } from '@/components/ui';
+import { Card, Icon, Button, EmptyState, cx, TableSkeleton } from '@/components/ui';
 
 const AGENCIES = [
   { key: 'BADAWY', name: 'بدوي' }, { key: 'ETIHAD', name: 'الاتحاد' },
@@ -30,8 +30,14 @@ export default function MarketImportPage() {
   const [editId, setEditId] = useState<string | null>(null);
   const [agencyMsg, setAgencyMsg] = useState('');
 
-  const loadAgencies = () => api.get('/api/market/agency-history').then((r) => setAgencies(r.data)).catch(() => {});
-  const loadLogs = () => api.get('/api/market/import-logs').then((r) => setLogs(r.data)).catch(() => {});
+  // التحميل حالة ثالثة — «لا يوجد بعد» أثناء الجلب نفيٌ قاطع في غير موضعه.
+  const [agenciesLoading, setAgenciesLoading] = useState(true);
+  const [logsLoading, setLogsLoading] = useState(true);
+
+  const loadAgencies = () => api.get('/api/market/agency-history')
+    .then((r) => setAgencies(r.data)).catch(() => {}).finally(() => setAgenciesLoading(false));
+  const loadLogs = () => api.get('/api/market/import-logs')
+    .then((r) => setLogs(r.data)).catch(() => {}).finally(() => setLogsLoading(false));
   useEffect(() => { if (isAdmin) { loadAgencies(); loadLogs(); } }, [isAdmin]);
 
   if (!isAdmin) return (
@@ -165,7 +171,8 @@ export default function MarketImportPage() {
                   </td>
                 </tr>
               ))}
-              {agencies.length === 0 && <tr><td colSpan={5} className="text-center py-6 text-gray-400">لا يوجد تاريخ وكالات بعد (يُبذر تلقائياً عند الاستيراد)</td></tr>}
+              {agenciesLoading && agencies.length === 0 && <tr><td colSpan={5} className="py-2"><TableSkeleton rows={3} cols={5} /></td></tr>}
+              {!agenciesLoading && agencies.length === 0 && <tr><td colSpan={5} className="text-center py-6 text-gray-400">لا يوجد تاريخ وكالات بعد (يُبذر تلقائياً عند الاستيراد)</td></tr>}
             </tbody>
           </table>
         </div>
@@ -188,7 +195,8 @@ export default function MarketImportPage() {
                 <td className="py-2 px-2 text-gray-400 font-mono text-xs">{l.file_hash?.slice(0, 10) || '—'}</td>
               </tr>
             ))}
-            {logs.length === 0 && <tr><td colSpan={5} className="text-center py-6 text-gray-400">لا عمليات استيراد بعد</td></tr>}
+            {logsLoading && logs.length === 0 && <tr><td colSpan={5} className="py-2"><TableSkeleton rows={3} cols={5} /></td></tr>}
+            {!logsLoading && logs.length === 0 && <tr><td colSpan={5} className="text-center py-6 text-gray-400">لا عمليات استيراد بعد</td></tr>}
           </tbody>
         </table>
       </Card>

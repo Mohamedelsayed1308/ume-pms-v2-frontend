@@ -29,6 +29,11 @@ export default function UsersPage() {
   const [showAdd, setShowAdd] = useState(false);
   const [newUser, setNewUser] = useState({ full_name: '', email: '', password: '', role: 'user' });
   const [adding, setAdding] = useState(false);
+  /*
+   * الرسالة كانت مربوطة بفراغ القائمة لا بحالة الجلب، فتقول «جاري التحميل»
+   * أبداً متى كانت القائمة فارغة حقاً. الحالة هنا تفصل الانتظار عن النتيجة.
+   */
+  const [listLoading, setListLoading] = useState(true);
 
   useEffect(() => {
     const u = getUser();
@@ -49,6 +54,8 @@ export default function UsersPage() {
       setPerms(p);
     } catch (e: any) {
       setError(e?.response?.data?.message || 'تعذّر تحميل المستخدمين');
+    } finally {
+      setListLoading(false);
     }
   }
 
@@ -201,7 +208,8 @@ export default function UsersPage() {
             </div>
           );
         })}
-        {users.length === 0 && !error && <p className="text-gray-400 text-sm">جاري التحميل...</p>}
+        {listLoading && users.length === 0 && <p className="text-gray-400 text-sm">جاري التحميل...</p>}
+        {!listLoading && !error && users.length === 0 && <p className="text-gray-400 text-sm">لا يوجد مستخدمون.</p>}
       </div>
     </div>
   );

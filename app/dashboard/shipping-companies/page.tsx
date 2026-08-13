@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import api from '@/lib/api';
+import { TableSkeleton } from '@/components/ui';
 
 interface ShippingCompany {
   id: string; name: string; address: string;
@@ -17,7 +18,22 @@ export default function ShippingCompaniesPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  async function load() { const res = await api.get('/api/shipping-companies'); setCompanies(res.data); }
+  // التحميل حالة ثالثة — «لا توجد شركات» أثناء الجلب نفيٌ قاطع في غير موضعه.
+  const [listLoading, setListLoading] = useState(true);
+  const [listError, setListError] = useState('');
+
+  async function load() {
+    setListLoading(true);
+    try {
+      const res = await api.get('/api/shipping-companies');
+      setCompanies(Array.isArray(res.data) ? res.data : []);
+      setListError('');
+    } catch {
+      setListError('تعذّر تحميل شركات الشحن — حدّث الصفحة أو أعد المحاولة.');
+    } finally {
+      setListLoading(false);
+    }
+  }
   useEffect(() => { load(); }, []);
 
   function openAdd() { setEditing(null); setForm(empty); setError(''); setShowModal(true); }
@@ -65,7 +81,9 @@ export default function ShippingCompaniesPage() {
             )}
           </div>
         ))}
-        {companies.length === 0 && <p className="text-center text-gray-400 py-8">لا توجد شركات شحن</p>}
+        {listLoading && companies.length === 0 && <TableSkeleton rows={4} cols={3} />}
+        {!listLoading && listError && <p className="text-center text-red-600 text-sm py-8">{listError}</p>}
+        {!listLoading && !listError && companies.length === 0 && <p className="text-center text-gray-400 py-8">لا توجد شركات شحن</p>}
       </div>
 
       {showModal && (

@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState, useCallback } from 'react';
 import api from '@/lib/api';
+import { TableSkeleton } from '@/components/ui';
 
 interface Period {
   id: string;
@@ -119,9 +120,21 @@ export default function ProfitDistributionPage() {
   const [confirmedVoyFrom, setConfirmedVoyFrom] = useState<number | null>(null);
   const [confirmedVoyTo, setConfirmedVoyTo] = useState<number | null>(null);
 
+  // التحميل حالة ثالثة — «لا توجد فترات» أثناء الجلب نفيٌ قاطع في غير موضعه.
+  const [listLoading, setListLoading] = useState(true);
+  const [listError, setListError] = useState('');
+
   const load = useCallback(async () => {
-    const res = await api.get('/api/profit-periods');
-    setPeriods(res.data);
+    setListLoading(true);
+    try {
+      const res = await api.get('/api/profit-periods');
+      setPeriods(Array.isArray(res.data) ? res.data : []);
+      setListError('');
+    } catch {
+      setListError('تعذّر تحميل فترات التوزيع — حدّث الصفحة أو أعد المحاولة.');
+    } finally {
+      setListLoading(false);
+    }
   }, []);
 
   useEffect(() => { load(); }, [load]);
@@ -277,7 +290,13 @@ export default function ProfitDistributionPage() {
                 </tr>
               );
             })}
-            {periods.length === 0 && (
+            {listLoading && periods.length === 0 && (
+              <tr><td colSpan={7} className="py-3"><TableSkeleton rows={4} cols={7} /></td></tr>
+            )}
+            {!listLoading && listError && (
+              <tr><td colSpan={7} className="text-center py-8 text-red-600 text-sm">{listError}</td></tr>
+            )}
+            {!listLoading && !listError && periods.length === 0 && (
               <tr><td colSpan={7} className="text-center py-8 text-gray-400">لا توجد فترات بعد</td></tr>
             )}
           </tbody>

@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import api from '@/lib/api';
+import { TableSkeleton } from '@/components/ui';
 
 interface Customer {
   id: string; name: string; address: string; vat_no: string;
@@ -17,9 +18,25 @@ export default function CustomersPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  /*
+   * التحميل حالة ثالثة مستقلّة عن «فيه بيانات» و«مفيش بيانات» — بدونها تُعرض
+   * «لا يوجد عملاء» أثناء الجلب، فيقرأ المستخدم نفياً حيث السؤال ما زال مفتوحاً.
+   */
+  const [listLoading, setListLoading] = useState(true);
+  const [listError, setListError] = useState('');
+
   async function load() {
-    const res = await api.get('/api/customers');
-    setCustomers(res.data);
+    setListLoading(true);
+    try {
+      const res = await api.get('/api/customers');
+      setCustomers(Array.isArray(res.data) ? res.data : []);
+      setListError('');
+    } catch {
+      // الفشل يُقال صراحةً — القائمة الفارغة الصامتة تُقرأ «لا يوجد» وهي «لم أعرف».
+      setListError('تعذّر تحميل العملاء — حدّث الصفحة أو أعد المحاولة.');
+    } finally {
+      setListLoading(false);
+    }
   }
   useEffect(() => { load(); }, []);
 
@@ -79,7 +96,9 @@ export default function CustomersPage() {
                 </td>
               </tr>
             ))}
-            {customers.length === 0 && <tr><td colSpan={6} className="text-center py-8 text-gray-400">لا يوجد عملاء</td></tr>}
+            {listLoading && customers.length === 0 && <tr><td colSpan={6} className="py-3"><TableSkeleton rows={5} cols={6} /></td></tr>}
+            {!listLoading && listError && <tr><td colSpan={6} className="text-center py-8 text-red-600 text-sm">{listError}</td></tr>}
+            {!listLoading && !listError && customers.length === 0 && <tr><td colSpan={6} className="text-center py-8 text-gray-400">لا يوجد عملاء</td></tr>}
           </tbody>
         </table>
       </div>

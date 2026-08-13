@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import api from '@/lib/api';
+import { TableSkeleton } from '@/components/ui';
 
 interface Item { id: string; name: string; is_active: boolean }
 
@@ -12,9 +13,14 @@ export default function ItemsPage() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
+  // التحميل حالة ثالثة — «لا توجد بنود» أثناء الجلب نفيٌ قاطع في غير موضعه.
+  const [listLoading, setListLoading] = useState(true);
+
   async function load() {
+    setListLoading(true);
     try { const res = await api.get('/api/items'); setItems(res.data || []); }
     catch (e: any) { setError(e?.response?.data?.message || 'تعذّر التحميل'); }
+    finally { setListLoading(false); }
   }
   useEffect(() => { load(); }, []);
 
@@ -100,7 +106,8 @@ export default function ItemsPage() {
                 </td>
               </tr>
             ))}
-            {items.length === 0 && <tr><td colSpan={3} className="text-center py-8 text-gray-400">لا توجد بنود</td></tr>}
+            {listLoading && items.length === 0 && <tr><td colSpan={3} className="py-3"><TableSkeleton rows={5} cols={3} /></td></tr>}
+            {!listLoading && items.length === 0 && <tr><td colSpan={3} className="text-center py-8 text-gray-400">لا توجد بنود</td></tr>}
           </tbody>
         </table>
       </div>
