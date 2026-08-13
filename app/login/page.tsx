@@ -26,8 +26,8 @@ export default function LoginPage() {
     }
   }
 
+  // على الشاشات الضيّقة كانت البطاقة تلتصق بالحافّتين فتُقصّ زواياها المستديرة — ومن هنا `p-4`.
   return (
-    {/* على الشاشات الضيّقة كانت البطاقة تلتصق بالحافّتين فتُقصّ زواياها المستديرة. */}
     <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
       <div className="bg-white p-8 rounded-xl shadow-md w-full max-w-md">
         <div className="text-center mb-8">
