@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import api from '@/lib/api';
+import { expenseAccountOptions, accountOptionLabel } from '@/lib/accounting';
 import { Button, Badge, Field, Select, Input, Modal, Skeleton, useToast } from '@/components/ui';
 
 /*
@@ -64,14 +65,7 @@ export default function PostToLedger({ invoice, onDone, compact }: Props) {
         // مورّد: المقدَّم (خدمة متعددة الفترات) والرسملة (أصل يُضاف للمركب).
         // البنوك والذمم لا يُرحَّل إليها مصروف فاتورة أصلاً — فوجودها في القائمة
         // خطر اختيار لا مرونة.
-        const CAPITALIZABLE = ['1200', '1510'];
-        const usable = (accRes.value.data || []).filter((a: any) =>
-          a.is_postable && a.is_active !== false &&
-          (a.account_type === 'expense' || CAPITALIZABLE.includes(a.code)));
-        // مرتَّبة بمجموعتها: تشغيل المركب أولاً فالإدارية فالتمويلية.
-        const rank = (g: string) => ({ VESSEL_OPEX: 0, ADMIN: 1, FINANCE: 2 } as any)[g] ?? 3;
-        usable.sort((a: any, b: any) => rank(a.account_group) - rank(b.account_group) || a.code.localeCompare(b.code));
-        setAccounts(usable);
+        setAccounts(expenseAccountOptions(accRes.value.data || []));
       }
       if (entRes.status === 'fulfilled') {
         const hit = (entRes.value.data || []).find((x: any) =>

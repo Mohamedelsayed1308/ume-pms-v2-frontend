@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import api from '@/lib/api';
+import { expenseAccountOptions, accountOptionLabel } from '@/lib/accounting';
 import { Field, Select, Badge, Skeleton, Button } from '@/components/ui';
 import NewAccountModal from '@/app/dashboard/accounting/NewAccountModal';
 
@@ -47,13 +48,7 @@ export default function AccountingDefault({ supplierId }: Props) {
         if (!alive) return;
 
         if (accRes.status === 'fulfilled') {
-          const CAPITALIZABLE = ['1200', '1510'];
-          const usable = (accRes.value.data || []).filter((a: any) =>
-            a.is_postable && a.is_active !== false &&
-            (a.account_type === 'expense' || CAPITALIZABLE.includes(a.code)));
-          const rank = (g: string) => ({ VESSEL_OPEX: 0, ADMIN: 1, FINANCE: 2 } as any)[g] ?? 3;
-          usable.sort((a: any, b: any) => rank(a.account_group) - rank(b.account_group) || a.code.localeCompare(b.code));
-          setAccounts(usable);
+          setAccounts(expenseAccountOptions(accRes.value.data || []));
         }
         if (defRes.status === 'fulfilled' && supplierId) {
           const d = (defRes.value.data || []).find((x: any) => x.supplier_id === supplierId);
@@ -84,11 +79,7 @@ export default function AccountingDefault({ supplierId }: Props) {
   if (loading) return <div className="sm:col-span-2"><Skeleton className="h-20" /></div>;
   if (!entity) return null;
 
-  const label = (a: any) =>
-    `${a.code} — ${a.name}` +
-    (a.account_group === 'VESSEL_OPEX' ? '  [تشغيل مركب]'
-      : a.account_group === 'ADMIN' ? '  [إدارية]'
-      : a.account_group === 'FINANCE' ? '  [تمويلية]' : '');
+  
 
   return (
     <div className="sm:col-span-2 rounded-lg border border-gray-200 bg-gray-50/60 p-3 space-y-3">
@@ -109,7 +100,7 @@ export default function AccountingDefault({ supplierId }: Props) {
               <Select value={value.debit_account_id} className="flex-1"
                 onChange={(e: any) => persist({ ...value, debit_account_id: e.target.value })}>
                 <option value="">— بلا افتراضي —</option>
-                {accounts.map((a) => <option key={a.id} value={a.id}>{label(a)}</option>)}
+                {accounts.map((a) => <option key={a.id} value={a.id}>{accountOptionLabel(a)}</option>)}
               </Select>
               <Button size="sm" variant="outline" type="button" onClick={() => setNewOpen(true)}>+ حساب</Button>
             </div>

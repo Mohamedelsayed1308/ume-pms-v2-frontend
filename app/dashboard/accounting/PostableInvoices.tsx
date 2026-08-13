@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
 import api from '@/lib/api';
+import { expenseAccountOptions, accountOptionLabel } from '@/lib/accounting';
 import { Button, Badge, Input, Select, Field, Skeleton, EmptyState, Modal, useToast, cx } from '@/components/ui';
 import NewAccountModal from './NewAccountModal';
 
@@ -52,15 +53,7 @@ export default function PostableInvoices({ entityId, onDone }: { entityId: strin
       api.get(`/api/accounting/accounts?legal_entity_id=${entityId}`),
     ]);
     if (r[0].status === 'fulfilled') setRows(r[0].value.data || []);
-    if (r[1].status === 'fulfilled') {
-      const CAPITALIZABLE = ['1200', '1510'];
-      const usable = (r[1].value.data || []).filter((a: any) =>
-        a.is_postable && a.is_active !== false &&
-        (a.account_type === 'expense' || CAPITALIZABLE.includes(a.code)));
-      const rank = (g: string) => ({ VESSEL_OPEX: 0, ADMIN: 1, FINANCE: 2 } as any)[g] ?? 3;
-      usable.sort((a: any, b: any) => rank(a.account_group) - rank(b.account_group) || a.code.localeCompare(b.code));
-      setAccounts(usable);
-    }
+    if (r[1].status === 'fulfilled') setAccounts(expenseAccountOptions(r[1].value.data || []));
     setLoading(false);
   }
   useEffect(() => { load(); }, [entityId]);
@@ -113,11 +106,7 @@ export default function PostableInvoices({ entityId, onDone }: { entityId: strin
     await load(); onDone?.();
   }
 
-  const label = (a: any) =>
-    `${a.code} — ${a.name}` +
-    (a.account_group === 'VESSEL_OPEX' ? '  [تشغيل مركب]'
-      : a.account_group === 'ADMIN' ? '  [إدارية]'
-      : a.account_group === 'FINANCE' ? '  [تمويلية]' : '');
+  
 
   if (loading) return <div className="p-4 space-y-2"><Skeleton className="h-10" /><Skeleton className="h-10" /><Skeleton className="h-10" /></div>;
 
@@ -190,7 +179,7 @@ export default function PostableInvoices({ entityId, onDone }: { entityId: strin
                       }}
                       className={cx('text-xs', !chosen && 'border-amber-400')}>
                       <option value="">— بلا حساب —</option>
-                      {accounts.map((a) => <option key={a.id} value={a.id}>{label(a)}</option>)}
+                      {accounts.map((a) => <option key={a.id} value={a.id}>{accountOptionLabel(a)}</option>)}
                       <option value="__new">＋ حساب جديد…</option>
                     </Select>
                     {isOverridden && <div className="mt-0.5 text-[11px] text-blue-600">مُعدَّل عن افتراضي المورّد</div>}
