@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import api from '@/lib/api';
 import { expenseAccountOptions, accountOptionLabel } from '@/lib/accounting';
-import { Button, Badge, Field, Select, Input, Modal, Skeleton, useToast } from '@/components/ui';
+import { Button, Badge, Field, Select, Input, Modal, Skeleton, useToast, IconButton } from '@/components/ui';
 
 /*
  * زرّ «إلى الدفتر» ونافذة مراجعته.
@@ -129,10 +129,15 @@ export default function PostToLedger({ invoice, onDone, compact }: Props) {
 
   return (
     <>
-      <button onClick={prepare}
-        className={compact ? 'text-indigo-600 hover:underline font-medium' : ''}>
-        {compact ? '📒 للدفتر' : <Button size="sm" variant="outline" icon="file">إلى الدفتر</Button>}
-      </button>
+      {/*
+        * في صفّ الجدول يقف هذا الزرّ بين ستّة أفعال أخرى صارت أيقونات، فبقاؤه
+        * نصّاً بإيموجي يكسر الصفّ ويُشغل ضعف ما يستحقّ. والتلميح يحمل الاسم
+        * كاملاً، فلا يضيع المعنى.
+        */}
+      {compact
+        ? <IconButton icon="clipboard" label="ترحيل إلى دفتر الأستاذ" size="sm"
+            className="text-indigo-600 hover:bg-indigo-50" onClick={prepare} />
+        : <Button size="sm" variant="outline" icon="file" onClick={prepare}>إلى الدفتر</Button>}
 
       <Modal open={open} onClose={() => !busy && setOpen(false)}
         title={`قيد استحقاق — ${invoice.invoice_number}`} size="lg">
