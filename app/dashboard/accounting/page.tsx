@@ -53,6 +53,9 @@ export default function AccountingPage() {
   const [detail, setDetail] = useState<any>(null);
   const [ledgerFor, setLedgerFor] = useState<TbRow | null>(null);
   const [posting, setPosting] = useState<Entry | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkResult, setBulkResult] = useState<{ ok: string[]; failed: { ref: string; msg: string }[] } | null>(null);
   const [busy, setBusy] = useState(false);
 
   const screens: string[] = user?.allowed_screens ?? [];
@@ -108,6 +111,54 @@ export default function AccountingPage() {
     }
     return g;
   }, [rows]);
+
+  // المسوّدات المعروضة وحدها قابلة للتحديد — تحديد ما لا تراه يفتح باب ترحيل
+  // ما لم يُراجَع.
+  const selectableIds = useMemo(
+    () => filteredEntries.filter((e) => e.status === 'draft').map((e) => e.id),
+    [filteredEntries]);
+  const selectedEntries = useMemo(
+    () => entries.filter((e) => selected.has(e.id) && e.status === 'draft'),
+    [entries, selected]);
+  const selectedTotal = useMemo(
+    () => selectedEntries.reduce((a, e) => a + Number(e.total_debit_eur), 0),
+    [selectedEntries]);
+  const allSelected = selectableIds.length > 0 && selectableIds.every((id) => selected.has(id));
+
+  function toggleOne(id: string) {
+    setSelected((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  }
+  function toggleAll() {
+    setSelected((prev) => {
+      const n = new Set(prev);
+      if (allSelected) selectableIds.forEach((id) => n.delete(id));
+      else selectableIds.forEach((id) => n.add(id));
+      return n;
+    });
+  }
+
+  /**
+   * الترحيل الجماعي — واحداً تلو الآخر لا دفعةً واحدة.
+   *
+   * كل قيد يمرّ بمحرّك الترحيل كاملاً بضوابطه، وفشل أحدها لا يُسقط الباقي ولا
+   * يتركك تجهل أيّها نجح. النتيجة تُعرَض مفصّلة بالرقم والسبب.
+   */
+  async function doBulkPost() {
+    setBusy(true);
+    const ok: string[] = []; const failed: { ref: string; msg: string }[] = [];
+    for (const e of selectedEntries) {
+      try {
+        const { data } = await api.post(`/api/accounting/entries/${e.id}/post`);
+        ok.push(data.entry_no);
+      } catch (err: any) {
+        failed.push({ ref: e.reference || e.description.slice(0, 30), msg: err?.response?.data?.message || 'تعذّر الترحيل' });
+      }
+    }
+    setBulkResult({ ok, failed });
+    setSelected(new Set());
+    setBusy(false);
+    await load(entityId);
+  }
 
   async function openEntry(id: string) {
     try { const { data } = await api.get(`/api/accounting/entries/${id}`); setDetail(data); }
@@ -183,9 +234,20 @@ export default function AccountingPage() {
               </button>
             ))}
           </div>
-          {drafts.length > 0 && (
-            <Badge tone="warning">{drafts.length} مسوّدة تنتظر الترحيل</Badge>
-          )}
+          <div className="flex items-center gap-2">
+            {selectedEntries.length > 0 && canPost && (
+              <>
+                <span className="text-sm text-gray-600">
+                  {selectedEntries.length} محدَّدة · <b className="tabular-nums">{money(selectedTotal)}</b> EUR
+                </span>
+                <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>إلغاء التحديد</Button>
+                <Button size="sm" variant="primary" onClick={() => setBulkOpen(true)}>ترحيل المحدَّد</Button>
+              </>
+            )}
+            {drafts.length > 0 && selectedEntries.length === 0 && (
+              <Badge tone="warning">{drafts.length} مسوّدة تنتظر الترحيل</Badge>
+            )}
+          </div>
         </div>
 
         {tab === 'tb' ? (
@@ -250,6 +312,12 @@ export default function AccountingPage() {
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 text-xs text-gray-500">
                   <tr>
+                    {canPost && (
+                      <th className="px-3 py-2 w-8">
+                        <input type="checkbox" checked={allSelected} onChange={toggleAll}
+                          disabled={!selectableIds.length} title="تحديد كل المسوّدات المعروضة" />
+                      </th>
+                    )}
                     <th className="px-4 py-2 text-right">القيد</th>
                     <th className="px-4 py-2 text-right">التاريخ</th>
                     <th className="px-4 py-2 text-right">البيان</th>
@@ -261,7 +329,14 @@ export default function AccountingPage() {
                 </thead>
                 <tbody className="divide-y">
                   {filteredEntries.map((e) => (
-                    <tr key={e.id} className="hover:bg-blue-50/40">
+                    <tr key={e.id} className={cx('hover:bg-blue-50/40', selected.has(e.id) && 'bg-blue-50')}>
+                      {canPost && (
+                        <td className="px-3 py-2">
+                          {e.status === 'draft'
+                            ? <input type="checkbox" checked={selected.has(e.id)} onChange={() => toggleOne(e.id)} />
+                            : null}
+                        </td>
+                      )}
                       <td className="px-4 py-2 font-mono text-xs">
                         {e.entry_no || <span className="text-gray-400">—</span>}
                         {e.is_backdated && <span className="mr-1 text-amber-600" title="بأثر رجعي">⏱</span>}
@@ -356,6 +431,68 @@ export default function AccountingPage() {
         title={ledgerFor ? `${ledgerFor.code} — ${ledgerFor.name}` : ''} size="lg">
         {ledgerFor && (
           <AccountLedger accountId={ledgerFor.id} entries={entries} onOpen={openEntry} />
+        )}
+      </Modal>
+
+      {/* الترحيل الجماعي */}
+      <Modal open={bulkOpen} onClose={() => !busy && setBulkOpen(false)} title="ترحيل جماعي" size="lg">
+        <div className="space-y-4">
+          <p className="text-sm">
+            سيُرحَّل <b>{selectedEntries.length}</b> قيداً بإجمالي مدين{' '}
+            <b className="tabular-nums">{money(selectedTotal)} EUR</b>.
+          </p>
+          <div className="max-h-56 overflow-y-auto rounded-lg border">
+            <table className="w-full text-sm">
+              <tbody className="divide-y">
+                {selectedEntries.map((e) => (
+                  <tr key={e.id}>
+                    <td className="px-3 py-1.5 font-mono text-xs">{e.reference || '—'}</td>
+                    <td className="px-3 py-1.5 text-xs text-gray-500">{dateOnly(e.accounting_date)}</td>
+                    <td className="px-3 py-1.5"><div className="max-w-sm truncate text-xs">{e.description}</div></td>
+                    <td className="px-3 py-1.5 text-left tabular-nums">{money(e.total_debit_eur)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+            بعد الترحيل <b>لا تعديل ولا حذف</b> على أيٍّ منها. والتصحيح بقيد عكس جديد يبقى أثره في الدفتر.
+            <div className="mt-1 text-xs">
+              يُرحَّل كلٌّ على حدة — فإن تعثّر واحد لا يسقط الباقي، وستُعرَض النتيجة مفصّلة.
+            </div>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" onClick={() => setBulkOpen(false)} disabled={busy}>إلغاء</Button>
+            <Button variant="primary" loading={busy}
+              onClick={async () => { await doBulkPost(); setBulkOpen(false); }}>
+              ترحيل {selectedEntries.length} قيداً نهائياً
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* نتيجة الترحيل الجماعي — تُعرَض ولا تُبتلع في إشعار عابر */}
+      <Modal open={!!bulkResult} onClose={() => setBulkResult(null)} title="نتيجة الترحيل">
+        {bulkResult && (
+          <div className="space-y-3">
+            {bulkResult.ok.length > 0 && (
+              <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3">
+                <div className="text-sm font-medium text-emerald-900">رُحِّل {bulkResult.ok.length} قيداً</div>
+                <div className="mt-1 font-mono text-xs text-emerald-800">{bulkResult.ok.join(' · ')}</div>
+              </div>
+            )}
+            {bulkResult.failed.length > 0 && (
+              <div className="rounded-lg border border-red-200 bg-red-50 p-3">
+                <div className="text-sm font-medium text-red-900">تعذّر {bulkResult.failed.length}</div>
+                <ul className="mt-1 space-y-1 text-xs text-red-800">
+                  {bulkResult.failed.map((f, i) => <li key={i}><b>{f.ref}</b> — {f.msg}</li>)}
+                </ul>
+              </div>
+            )}
+            <div className="flex justify-end">
+              <Button variant="secondary" onClick={() => setBulkResult(null)}>إغلاق</Button>
+            </div>
+          </div>
         )}
       </Modal>
 
