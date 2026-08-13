@@ -174,7 +174,10 @@ export default function PostableInvoices({ entityId, onDone }: { entityId: strin
                     )}
                   </td>
                   <td className="px-4 py-2 font-mono text-xs">{r.invoice_number}</td>
-                  <td className="px-4 py-2"><div className="max-w-[13rem] truncate">{r.supplier_name || '—'}</div></td>
+                  <td className="px-4 py-2">
+                    <div className="min-w-[13rem] break-words leading-snug" dir="auto"
+                      title={r.supplier_name || ''}>{r.supplier_name || '—'}</div>
+                  </td>
                   <td className="px-4 py-2 whitespace-nowrap text-gray-600">{dateOnly(r.invoice_date)}</td>
                   <td className="px-4 py-2 text-left tabular-nums whitespace-nowrap">{money(r.total_amount, r.currency)}</td>
                   <td className="px-4 py-2">

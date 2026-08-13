@@ -362,7 +362,7 @@ export default function AccountingPage() {
                       </td>
                       <td className="px-4 py-2 whitespace-nowrap">{dateOnly(e.accounting_date)}</td>
                       <td className="px-4 py-2">
-                        <div className="max-w-md truncate">{e.description}</div>
+                        <div className="max-w-md truncate" title={e.description}>{e.description}</div>
                         {e.reference && <div className="text-xs text-gray-400">{e.reference}</div>}
                       </td>
                       <td className="px-4 py-2 text-xs text-gray-500">{EVENT_LABEL[e.accounting_event_type] ?? e.accounting_event_type}</td>
@@ -467,7 +467,7 @@ export default function AccountingPage() {
                   <tr key={e.id}>
                     <td className="px-3 py-1.5 font-mono text-xs">{e.reference || '—'}</td>
                     <td className="px-3 py-1.5 text-xs text-gray-500">{dateOnly(e.accounting_date)}</td>
-                    <td className="px-3 py-1.5"><div className="max-w-sm truncate text-xs">{e.description}</div></td>
+                    <td className="px-3 py-1.5"><div className="max-w-sm truncate text-xs" title={e.description}>{e.description}</div></td>
                     <td className="px-3 py-1.5 text-left tabular-nums">{money(e.total_debit_eur)}</td>
                   </tr>
                 ))}
@@ -582,7 +582,7 @@ function AccountLedger({ accountId, entries, onOpen }: { accountId: string; entr
             <tr key={l.id} className="hover:bg-blue-50/40 cursor-pointer" onClick={() => onOpen(l.entry.id)}>
               <td className="px-3 py-2 whitespace-nowrap">{dateOnly(l.entry.accounting_date)}</td>
               <td className="px-3 py-2 font-mono text-xs">{l.entry.entry_no}</td>
-              <td className="px-3 py-2"><div className="max-w-xs truncate">{l.description || l.entry.description}</div></td>
+              <td className="px-3 py-2"><div className="max-w-xs truncate" title={l.description || l.entry.description}>{l.description || l.entry.description}</div></td>
               <td className="px-3 py-2 text-left tabular-nums">{Number(l.debit_eur) ? money(l.debit_eur) : '—'}</td>
               <td className="px-3 py-2 text-left tabular-nums">{Number(l.credit_eur) ? money(l.credit_eur) : '—'}</td>
               <td className="px-3 py-2 text-left tabular-nums font-medium">{money(Math.abs(running))} {running < 0 ? 'دائن' : 'مدين'}</td>

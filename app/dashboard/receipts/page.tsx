@@ -246,7 +246,13 @@ export default function ReceiptsPage() {
                         )}
                       </td>
                       <td className="px-4 py-2 font-mono text-xs">{i.invoice_number}</td>
-                      <td className="px-4 py-2"><div className="max-w-[16rem] truncate">{i.supplier?.name || '—'}</div></td>
+                      <td className="px-4 py-2">
+                        {/* الاسم لاتيني داخل جدول عربي: القصّ يضع الحذف يساراً فيبدو
+                            المقطوع أوّلَه لا آخرَه. فيُترك كاملاً ويلتفّ — واسم مورّد
+                            لا يُقرأ يجعل الصفّ بلا معنى. */}
+                        <div className="min-w-[13rem] break-words leading-snug" dir="auto"
+                          title={i.supplier?.name || ''}>{i.supplier?.name || '—'}</div>
+                      </td>
                       <td className="px-4 py-2 text-gray-600">{i.vessel?.name || '—'}</td>
                       <td className="px-4 py-2 whitespace-nowrap">{dateOnly(i.invoice_date)}</td>
                       <td className="px-4 py-2 text-left tabular-nums whitespace-nowrap">{money(i.total_amount, i.currency)}</td>
@@ -286,7 +292,7 @@ export default function ReceiptsPage() {
                 {selectedInvoices.map((i) => (
                   <tr key={i.id}>
                     <td className="px-3 py-1.5 font-mono text-xs">{i.invoice_number}</td>
-                    <td className="px-3 py-1.5 text-xs"><div className="max-w-[14rem] truncate">{i.supplier?.name}</div></td>
+                    <td className="px-3 py-1.5 text-xs"><div className="break-words" dir="auto">{i.supplier?.name}</div></td>
                     <td className="px-3 py-1.5 text-xs text-gray-500">{dateOnly(i.invoice_date)}</td>
                     <td className="px-3 py-1.5 text-left tabular-nums text-xs">{money(i.total_amount, i.currency)}</td>
                   </tr>
