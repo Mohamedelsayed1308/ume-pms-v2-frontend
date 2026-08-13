@@ -171,15 +171,30 @@ export function Field({ label, error, hint, required, children }:
     </label>
   );
 }
-const CONTROL = 'w-full border border-gray-300 rounded-lg px-3 h-9 text-sm bg-white text-gray-900 placeholder:text-gray-400 transition-colors focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 disabled:bg-gray-50 disabled:text-gray-500';
+const CONTROL_BASE = 'border border-gray-300 rounded-lg px-3 h-9 text-sm bg-white text-gray-900 placeholder:text-gray-400 transition-colors focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 disabled:bg-gray-50 disabled:text-gray-500';
+
+/**
+ * العرض الافتراضي كامل — إلا أن يطلب المستدعي غيره.
+ *
+ * `w-full` و`w-auto` أداتان بنفس الأولوية، فالغالبة منهما تُحسم بترتيبهما في ملف
+ * الأنماط لا بترتيبهما في السلسلة. فكانت `w-auto` القادمة من شريط المرشِّحات
+ * تخسر بصمت، وتتمدّد كل مرشِّحة لعرض الحاوية فتنكسر إلى سطرها.
+ *
+ * فالحلّ ألّا تُضاف `w-full` أصلاً متى صرّح المستدعي بعرض — لا أن يتنافسا.
+ */
+const control = (className?: string, extra?: string) => {
+  const declaresWidth = /(?:^|\s)(w-|min-w-|max-w-|flex-1|grow|basis-)/.test(className ?? '');
+  return cx(!declaresWidth && 'w-full', CONTROL_BASE, extra, className);
+};
+
 export function Input({ className, ...rest }: InputHTMLAttributes<HTMLInputElement>) {
-  return <input className={cx(CONTROL, className)} {...rest} />;
+  return <input className={control(className)} {...rest} />;
 }
 export function Select({ className, children, ...rest }: SelectHTMLAttributes<HTMLSelectElement>) {
-  return <select className={cx(CONTROL, 'cursor-pointer pe-8', className)} {...rest}>{children}</select>;
+  return <select className={control(className, 'cursor-pointer pe-8')} {...rest}>{children}</select>;
 }
 export function Textarea({ className, ...rest }: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
-  return <textarea className={cx(CONTROL, 'h-auto py-2 min-h-[80px] resize-y', className)} {...rest} />;
+  return <textarea className={control(className, 'h-auto py-2 min-h-[80px] resize-y')} {...rest} />;
 }
 
 /** حقل بحث — الأيقونة داخله ومسح سريع بزرّ. */
@@ -191,7 +206,7 @@ export function SearchInput({ value, onValueChange, placeholder, className }:
         <Icon name="search" size={15} />
       </span>
       <input value={value} onChange={(e) => onValueChange(e.target.value)} placeholder={placeholder}
-        className={cx(CONTROL, 'ps-8', value && 'pe-8')} />
+        className={control(undefined, cx('ps-8', value && 'pe-8'))} />
       {value && (
         <button type="button" onClick={() => onValueChange('')} aria-label="مسح البحث"
           className="absolute inset-y-0 end-2 flex items-center text-gray-400 hover:text-gray-700">

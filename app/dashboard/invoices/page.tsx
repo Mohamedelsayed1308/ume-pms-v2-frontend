@@ -4,7 +4,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import api from '@/lib/api';
 import { CURRENCIES } from '@/lib/currencies';
 import { useI18n } from '@/lib/i18n';
-import { Card, Button, Badge, Select as UISelect, Drawer, Icon, cx } from '@/components/ui';
+import { Card, Button, Badge, Select as UISelect, Drawer, Icon, cx, TableSkeleton, Callout } from '@/components/ui';
 import SupplierReports, { type SupplierReportKey } from './SupplierReports';
 import PostToLedger from './PostToLedger';
 import { fmtNum, fmtMoney, fmtMoneyC, ccyEntries, n0 } from '@/lib/format';
@@ -108,6 +108,18 @@ function InvoicesContent() {
   const router = useRouter();
   const filterPoId = searchParams.get('po_id') || '';
   const [invoices, setInvoices] = useState<Invoice[]>([]);
+  /*
+   * التحميل حالةٌ ثالثة مستقلّة عن «فيه بيانات» و«مفيش بيانات».
+   *
+   * بدونها تُعرض رسالة «لا توجد فواتير» في أثناء جلب البيانات، فيقرأ المستخدم
+   * نفياً قاطعاً حيث لا يزال السؤال مفتوحاً — وهذا أسوأ من الانتظار.
+   */
+  const [listLoading, setListLoading] = useState(true);
+  /*
+   * خطأ التحميل منفصل عن خطأ النموذج: الأول يخصّ الصفحة كلّها ويجب أن يُرى فور
+   * وقوعه، والثاني لا يُعرض إلا داخل النافذة المنبثقة. دمجهما كان يُخفي الأول.
+   */
+  const [loadError, setLoadError] = useState('');
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [vessels, setVessels] = useState<any[]>([]);
   const [items, setItems] = useState<any[]>([]);
@@ -175,6 +187,7 @@ function InvoicesContent() {
   }
 
   async function load() {
+    setListLoading(true);
     // كل قائمة تُحمّل باستقلال — فشل نداء واحد (مثلاً 500 عابر) لا يُفرّغ باقي القوائم
     const endpoints: [string, (d: any) => void][] = [
       ['/api/invoices', setInvoices],
@@ -191,8 +204,11 @@ function InvoicesContent() {
     });
     if (failed.length) {
       console.error('load() فشل تحميل:', failed);
-      setError('تعذّر تحميل بعض القوائم: ' + failed.join('، ') + ' — حدّث الصفحة أو أعد المحاولة.');
+      setLoadError('تعذّر تحميل بعض القوائم: ' + failed.join('، ') + ' — حدّث الصفحة أو أعد المحاولة.');
+    } else {
+      setLoadError('');
     }
+    setListLoading(false);
   }
 
   useEffect(() => { load(); }, []);
@@ -857,6 +873,12 @@ function InvoicesContent() {
         </Card>
       )}
 
+      {loadError && (
+        <div className="mb-3">
+          <Callout tone="danger">{loadError}</Callout>
+        </div>
+      )}
+
       {/* ===== Preset views ===== */}
       <div className="flex items-center gap-1.5 flex-wrap mb-3">
         {([['all', t('sup.all')], ['unpaid', t('st.unpaid')], ['paid', t('st.paid')], ['overdue', t('inv.overdue')], ['duesoon', t('att.dueSoon')], ['approval', t('inv.awaitingApproval')]] as const).map(([k, lbl]) => (
@@ -928,7 +950,10 @@ function InvoicesContent() {
                 </tr>
               );
             })}
-            {sorted.length === 0 && <tr><td colSpan={10} className="text-center py-10 text-gray-400">{t('inv.noResults')}</td></tr>}
+            {listLoading && invoices.length === 0 && (
+              <tr><td colSpan={10} className="py-3"><TableSkeleton rows={8} cols={10} /></td></tr>
+            )}
+            {!listLoading && sorted.length === 0 && <tr><td colSpan={10} className="text-center py-10 text-gray-400">{t('inv.noResults')}</td></tr>}
           </tbody>
         </table>
       </Card>
@@ -958,7 +983,8 @@ function InvoicesContent() {
             </Card>
           );
         })}
-        {sorted.length === 0 && <Card><p className="text-center py-8 text-gray-400 text-sm">{t('inv.noResults')}</p></Card>}
+        {listLoading && invoices.length === 0 && <Card><TableSkeleton rows={5} cols={2} /></Card>}
+        {!listLoading && sorted.length === 0 && <Card><p className="text-center py-8 text-gray-400 text-sm">{t('inv.noResults')}</p></Card>}
       </div>
       <p className="text-[11px] text-gray-400 text-center mt-3">{t('note.currency')}</p>
 
