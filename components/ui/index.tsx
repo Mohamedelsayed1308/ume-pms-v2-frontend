@@ -171,7 +171,12 @@ export function Field({ label, error, hint, required, children }:
     </label>
   );
 }
-const CONTROL_BASE = 'border border-gray-300 rounded-lg px-3 h-9 text-sm bg-white text-gray-900 placeholder:text-gray-400 transition-colors focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 disabled:bg-gray-50 disabled:text-gray-500';
+/*
+ * `max-w-full` ليس زينة: القائمة بعرض `auto` تتّسع لأطول خياراتها، واسم مورد
+ * طويل يجعلها ٦٣١ بكسل في شاشة ٥٠٠ فتُقصّ خارج الحافّة. والحدّ الأعلى يمنع ذلك
+ * دون أن يمسّ العرض المطلوب حيث تتّسع الشاشة.
+ */
+const CONTROL_BASE = 'border border-gray-300 rounded-lg px-3 h-9 text-sm bg-white text-gray-900 placeholder:text-gray-400 max-w-full transition-colors focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 disabled:bg-gray-50 disabled:text-gray-500';
 
 /**
  * العرض الافتراضي كامل — إلا أن يطلب المستدعي غيره.
