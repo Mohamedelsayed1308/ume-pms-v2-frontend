@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import api from '@/lib/api';
 import { getUser } from '@/lib/auth';
 import { Card, Button, Badge, Input, Select, Skeleton, EmptyState, Modal, useToast, cx } from '@/components/ui';
+import PostableInvoices from './PostableInvoices';
 
 /*
  * الشاشة المحاسبية.
@@ -46,7 +47,8 @@ export default function AccountingPage() {
   const [entries, setEntries] = useState<Entry[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<'tb' | 'entries'>('tb');
+  const [tab, setTab] = useState<'tb' | 'entries' | 'postable'>('tb');
+  const [postableCount, setPostableCount] = useState<number | null>(null);
   const [q, setQ] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
 
@@ -96,6 +98,14 @@ export default function AccountingPage() {
     setLoading(false);
   }
   useEffect(() => { if (entityId) load(entityId); }, [entityId]);
+
+  // عدّاد التبويب — يُظهر أن هناك عملاً ينتظر بلا فتحه.
+  useEffect(() => {
+    if (!entityId) return;
+    api.get(`/api/accounting/bridge/postable-invoices?legal_entity_id=${entityId}`)
+      .then(({ data }) => setPostableCount((data || []).filter((r: any) => r.eligible).length))
+      .catch(() => setPostableCount(null));
+  }, [entityId, entries.length]);
 
   const rows: TbRow[] = tb?.accounts ?? [];
   const drafts = useMemo(() => entries.filter((e) => e.status === 'draft'), [entries]);
@@ -233,7 +243,7 @@ export default function AccountingPage() {
       <Card className="p-0 overflow-hidden">
         <div className="flex items-center justify-between border-b px-4 py-3">
           <div className="flex gap-1">
-            {([['tb', 'ميزان المراجعة'], ['entries', `القيود (${entries.length})`]] as const).map(([k, label]) => (
+            {([['tb', 'ميزان المراجعة'], ['entries', `القيود (${entries.length})`], ['postable', `فواتير مؤهَّلة${postableCount != null ? ` (${postableCount})` : ''}`]] as const).map(([k, label]) => (
               <button key={k} onClick={() => setTab(k as any)}
                 className={cx('rounded-md px-3 py-1.5 text-sm font-medium transition',
                   tab === k ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-100')}>
@@ -257,7 +267,9 @@ export default function AccountingPage() {
           </div>
         </div>
 
-        {tab === 'tb' ? (
+        {tab === 'postable' ? (
+          <PostableInvoices entityId={entityId} onDone={() => load(entityId)} />
+        ) : tab === 'tb' ? (
           <div className="overflow-x-auto">
             {!rows.length ? <EmptyState title="لا حركة بعد" description="لم يُرحَّل قيد على هذا الكيان." /> : (
               <table className="w-full text-sm">
