@@ -99,19 +99,19 @@ export default function MarketPage() {
         <div className="flex items-end gap-3 flex-wrap">
           <div>
             <label className="block text-xs text-gray-500 mb-1">من شهر</label>
-            <select value={from} onChange={(e) => setFrom(e.target.value)} className="border rounded-lg px-3 py-2 text-sm">
+            <select aria-label="من شهر" value={from} onChange={(e) => setFrom(e.target.value)} className="border rounded-lg px-3 py-2 text-sm">
               {ymOptions().map((o) => <option key={o.v} value={o.v}>{o.label}</option>)}
             </select>
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">إلى شهر</label>
-            <select value={to} onChange={(e) => setTo(e.target.value)} className="border rounded-lg px-3 py-2 text-sm">
+            <select aria-label="إلى شهر" value={to} onChange={(e) => setTo(e.target.value)} className="border rounded-lg px-3 py-2 text-sm">
               {ymOptions().map((o) => <option key={o.v} value={o.v}>{o.label}</option>)}
             </select>
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">السفينة (اختياري)</label>
-            <select value={ship} onChange={(e) => setShip(e.target.value)} className="border rounded-lg px-3 py-2 text-sm min-w-[140px]">
+            <select aria-label="السفينة (اختياري)" value={ship} onChange={(e) => setShip(e.target.value)} className="border rounded-lg px-3 py-2 text-sm min-w-[140px]">
               <option value="">كل السفن</option>
               {ships.map((s: any) => <option key={s.key} value={s.key}>{s.name}</option>)}
             </select>

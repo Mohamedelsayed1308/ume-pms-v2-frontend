@@ -334,7 +334,9 @@ export default function AccountingPage() {
                     {canPost && (
                       <th scope="col" className="px-3 py-2 w-8">
                         <input type="checkbox" checked={allSelected} onChange={toggleAll}
-                          disabled={!selectableIds.length} title="تحديد كل المسوّدات المعروضة" />
+                          disabled={!selectableIds.length}
+                          aria-label="تحديد كل المسوّدات المعروضة"
+                          title="تحديد كل المسوّدات المعروضة" />
                       </th>
                     )}
                     <th scope="col" className="px-4 py-2 text-right">القيد</th>
@@ -352,7 +354,8 @@ export default function AccountingPage() {
                       {canPost && (
                         <td className="px-3 py-2">
                           {e.status === 'draft'
-                            ? <input type="checkbox" checked={selected.has(e.id)} onChange={() => toggleOne(e.id)} />
+                            ? <input type="checkbox" aria-label={`تحديد القيد ${e.entry_no || 'مسوّدة'}`}
+                                checked={selected.has(e.id)} onChange={() => toggleOne(e.id)} />
                             : null}
                         </td>
                       )}

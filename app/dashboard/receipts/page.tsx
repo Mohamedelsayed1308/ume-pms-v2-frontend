@@ -226,6 +226,7 @@ export default function ReceiptsPage() {
                     <th scope="col" className="px-3 py-2 w-8">
                       <input type="checkbox" checked={allSelected} onChange={toggleAll}
                         disabled={!bulkSafeIds.length}
+                        aria-label="تحديد المعروض — عدا «تسليم مفقود»"
                         title="تحديد المعروض — عدا «تسليم مفقود»" />
                     </th>
                     <th scope="col" className="px-4 py-2 text-right">الفاتورة</th>
@@ -241,8 +242,10 @@ export default function ReceiptsPage() {
                   {shown.map((i) => (
                     <tr key={i.id} className={cx('hover:bg-blue-50/40', selected.has(i.id) && 'bg-blue-50')}>
                       <td className="px-3 py-2">
+                        {/* الاسم يحمل رقم الفاتورة — «مربّع اختيار» مجرّداً لا يقول أيّ فاتورة يُؤكَّد استلامها. */}
                         {(i._receipts ?? 0) === 0 && (
-                          <input type="checkbox" checked={selected.has(i.id)} onChange={() => toggleOne(i.id)} />
+                          <input type="checkbox" aria-label={`تحديد الفاتورة ${i.invoice_number}`}
+                            checked={selected.has(i.id)} onChange={() => toggleOne(i.id)} />
                         )}
                       </td>
                       <td className="px-4 py-2 font-mono text-xs">{i.invoice_number}</td>
