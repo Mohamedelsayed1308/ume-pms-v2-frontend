@@ -906,7 +906,7 @@ function InvoicesContent() {
                     {/* فاتورة بمبلغ سالب = إشعار دائن */}
                     {Number(inv.total_amount) < 0 && <span className="inline-block bg-indigo-100 text-indigo-700 rounded px-1.5 py-0.5 text-[10px] font-semibold ms-1 font-sans">إشعار دائن</span>}
                   </td>
-                  <td className="px-3 py-2.5 text-gray-700">{inv.supplier?.name || '—'}</td>
+                  <td className="px-3 py-2.5 text-gray-700" dir="auto">{inv.supplier?.name || '—'}</td>
                   <td className="px-3 py-2.5 text-gray-500">{inv.vessel?.name || '—'}</td>
                   <td className="px-3 py-2.5 font-medium tabular-nums">{fmtMoney(inv.total_amount)} <span className="text-[11px] text-gray-400">{inv.currency}</span></td>
                   <td className="px-3 py-2.5 text-emerald-600 tabular-nums">{fmtMoney(inv.paid_amount)}</td>

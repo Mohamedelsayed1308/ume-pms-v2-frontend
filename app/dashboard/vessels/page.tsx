@@ -192,7 +192,7 @@ export default function VesselsPage() {
               <tbody>
                 {list.map((v) => { const st = stats[v.id] || emptyStat(); return (
                   <tr key={v.id} onClick={() => setDetail(v)} className="border-b border-gray-50 last:border-0 hover:bg-brand-50/40 cursor-pointer">
-                    <td className="py-2.5 px-4 font-medium text-gray-800">{v.name}{v.imo_number ? <span className="block text-[11px] text-gray-400 font-normal">IMO {v.imo_number}</span> : null}</td>
+                    <td className="py-2.5 px-4 font-medium text-gray-800" dir="auto">{v.name}{v.imo_number ? <span className="block text-[11px] text-gray-400 font-normal">IMO {v.imo_number}</span> : null}</td>
                     <td className="py-2.5 px-4 text-gray-500">{v.vessel_type || '—'}</td>
                     <td className="py-2.5 px-4 text-gray-500">{v.shipping_company?.name || v.owner_name || '—'}</td>
                     <td className="py-2.5 px-4"><OutCell open={st.open} /></td>
@@ -215,7 +215,7 @@ export default function VesselsPage() {
             {list.map((v) => { const st = stats[v.id] || emptyStat(); return (
               <Card key={v.id} className="p-4" onClick={() => setDetail(v)}>
                 <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0"><p className="font-bold text-gray-800 truncate">{v.name}</p><p className="text-xs text-gray-500 truncate">{v.vessel_type || '—'}{v.flag ? ` · ${v.flag}` : ''}</p></div>
+                  <div className="min-w-0"><p className="font-bold text-gray-800 break-words" dir="auto">{v.name}</p><p className="text-xs text-gray-500 truncate">{v.vessel_type || '—'}{v.flag ? ` · ${v.flag}` : ''}</p></div>
                   <Badge tone={v.is_active ? 'success' : 'neutral'}>{v.is_active ? t('ves.active') : t('ves.inactive')}</Badge>
                 </div>
                 <div className="flex items-center justify-between mt-3 text-xs">

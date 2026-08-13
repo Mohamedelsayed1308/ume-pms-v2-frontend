@@ -203,7 +203,7 @@ export default function SuppliersPage() {
                 <div key={s.id} className="flex items-center justify-between py-1 border-b last:border-0 border-black/5">
                   <label className="flex items-center gap-2 cursor-pointer text-sm">
                     <input type="radio" name={`keep-${gid}`} checked={keepId === s.id} onChange={() => setKeepSel((k) => ({ ...k, [gid]: s.id }))} />
-                    <span className="font-medium text-gray-800">{s.name}</span>
+                    <span className="font-medium text-gray-800" dir="auto">{s.name}</span>
                   </label>
                   <span className="flex gap-3 text-xs"><button onClick={() => openEdit(s)} className="text-brand-600 hover:underline">{t('common.save') && t('sup.edit')}</button><button onClick={() => setDelTarget(s)} className="text-red-500 hover:underline">{t('sup.delete')}</button></span>
                 </div>
@@ -263,7 +263,7 @@ export default function SuppliersPage() {
                     const st = stats[s.id] || emptyStat();
                     return (
                       <tr key={s.id} onClick={() => setDetail(s)} className="border-b border-gray-50 last:border-0 hover:bg-brand-50/40 cursor-pointer">
-                        <td className="py-2.5 px-4 font-medium text-gray-800">{s.name}</td>
+                        <td className="py-2.5 px-4 font-medium text-gray-800"><span dir="auto">{s.name}</span></td>
                         <td className="py-2.5 px-4 text-gray-500">{s.contact_person || '—'}</td>
                         <td className="py-2.5 px-4 text-gray-500">{s.country || '—'}</td>
                         <td className="py-2.5 px-4"><OutCell open={st.open} /></td>
@@ -292,7 +292,7 @@ export default function SuppliersPage() {
                   <Card key={s.id} className="p-4" onClick={() => setDetail(s)}>
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
-                        <p className="font-bold text-gray-800 truncate">{s.name}</p>
+                        <p className="font-bold text-gray-800 break-words" dir="auto">{s.name}</p>
                         <p className="text-xs text-gray-500 truncate">{s.contact_person || '—'}{s.country ? ` · ${s.country}` : ''}</p>
                       </div>
                       <Badge tone={s.is_active ? 'success' : 'neutral'}>{s.is_active ? t('sup.active') : t('sup.inactive')}</Badge>
@@ -361,7 +361,7 @@ export default function SuppliersPage() {
               <Input value={form.name} onChange={f('name')} className={dupExact ? 'border-red-400 focus:ring-red-500/40' : ''} autoFocus />
             </Field>
             {!dupExact && similar.length > 0 && (
-              <div className="text-amber-600 text-xs mt-1"><span>⚠ {t('sup.similarNames')}:</span><ul className="list-disc ps-5 mt-0.5">{similar.map((s) => <li key={s.id}>{s.name}</li>)}</ul></div>
+              <div className="text-amber-600 text-xs mt-1"><span>⚠ {t('sup.similarNames')}:</span><ul className="list-disc ps-5 mt-0.5">{similar.map((s) => <li key={s.id} dir="auto">{s.name}</li>)}</ul></div>
             )}
           </div>
           <Field label={t('sup.contact')}><Input value={form.contact_person} onChange={f('contact_person')} /></Field>
