@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import api from '@/lib/api';
 import { Button, Input, Select, Field, Modal, useToast } from '@/components/ui';
+import { suggestAccountCode } from '@/lib/accounting';
 
 /*
  * نموذج إنشاء حساب — مشترك بين شاشة الإعداد وأي مكان يحتاجه.
@@ -38,6 +39,7 @@ export default function NewAccountModal({ open, onClose, entityId, defaultType =
   const toast = useToast();
   const [accounts, setAccounts] = useState<any[]>([]);
   const [saving, setSaving] = useState(false);
+  const [codeTouched, setCodeTouched] = useState(false);
   const [err, setErr] = useState('');
   const [form, setForm] = useState({
     code: '', name: '', name_ar: '', account_type: defaultType,
@@ -47,7 +49,7 @@ export default function NewAccountModal({ open, onClose, entityId, defaultType =
 
   useEffect(() => {
     if (!open || !entityId) return;
-    setErr('');
+    setErr(''); setCodeTouched(false);
     setForm((f) => ({ ...f, code: '', name: '', name_ar: '', account_type: defaultType, parent_id: '' }));
     api.get(`/api/accounting/accounts?legal_entity_id=${entityId}`)
       .then(({ data }) => setAccounts(data || []))
@@ -58,6 +60,18 @@ export default function NewAccountModal({ open, onClose, entityId, defaultType =
   const parents = useMemo(
     () => accounts.filter((a) => !a.is_postable && a.account_type === form.account_type),
     [accounts, form.account_type]);
+
+  /*
+   * الرمز يُقترح ويُعاد اقتراحه كلّما تغيّر ما يحدّده — ما لم يكتبه المستخدم بنفسه.
+   * فالاقتراح خدمة لا وصاية: أوّل حرف يكتبه يوقف التوليد ولا يعود يفاجئه.
+   */
+  useEffect(() => {
+    if (codeTouched || !open || !accounts.length) return;
+    const next = suggestAccountCode(accounts, {
+      account_type: form.account_type, account_group: form.account_group, parent_id: form.parent_id || null,
+    });
+    setForm((f) => (f.code === next ? f : { ...f, code: next }));
+  }, [open, accounts, form.account_type, form.account_group, form.parent_id, codeTouched]);
 
   const taken = accounts.some((a) => a.code === form.code.trim());
 
@@ -87,8 +101,15 @@ export default function NewAccountModal({ open, onClose, entityId, defaultType =
     <Modal open={open} onClose={() => !saving && onClose()} title="حساب جديد" size="lg">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field label="الرمز *" error={taken ? 'الرمز مستخدم في هذا الكيان' : undefined}>
-          <Input value={form.code} dir="ltr" placeholder="5140"
-            onChange={(e: any) => setForm({ ...form, code: e.target.value })} />
+          <div className="flex items-center gap-2">
+            <Input value={form.code} dir="ltr" className="flex-1"
+              onChange={(e: any) => { setCodeTouched(true); setForm({ ...form, code: e.target.value }); }} />
+            {codeTouched && (
+              <Button size="sm" variant="ghost" type="button" onClick={() => setCodeTouched(false)}>
+                توليد
+              </Button>
+            )}
+          </div>
         </Field>
         <Field label="التصنيف">
           <Select value={form.account_type}
@@ -133,6 +154,14 @@ export default function NewAccountModal({ open, onClose, entityId, defaultType =
           </Field>
         )}
       </div>
+
+      <p className="mt-2 text-xs text-gray-500">
+        {codeTouched
+          ? 'الرمز مكتوب بيدك — اضغط «توليد» ليعود الاقتراح التلقائي.'
+          : form.parent_id
+            ? 'الرمز مقترَح من ترقيم الحساب الأب — الفرع يرث ترقيم أبيه.'
+            : 'الرمز مقترَح من أعلى رمز في نطاق هذا التصنيف زائد عشرة — والفجوات مقصودة لحسابات بينية لاحقاً.'}
+      </p>
 
       {!parents.length && (
         <p className="mt-3 text-xs text-gray-500">
