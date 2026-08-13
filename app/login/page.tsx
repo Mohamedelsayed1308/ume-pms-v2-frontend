@@ -27,7 +27,8 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+    {/* على الشاشات الضيّقة كانت البطاقة تلتصق بالحافّتين فتُقصّ زواياها المستديرة. */}
+    <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
       <div className="bg-white p-8 rounded-xl shadow-md w-full max-w-md">
         <div className="text-center mb-8">
           <h1 className="text-2xl font-bold text-gray-800">UME Holding</h1>
