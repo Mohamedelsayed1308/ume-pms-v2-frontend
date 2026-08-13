@@ -422,10 +422,10 @@ function FleetSnapshot({ monthly, range, t }: { monthly: any[]; range: { from: D
   return (
     <table className="w-full text-sm whitespace-nowrap">
       <thead><tr className="text-gray-500 text-xs border-b border-gray-100">
-        <th className="text-right py-2 px-2">{t('lbl.vessel')}</th>
-        <th className="text-left py-2 px-2">{t('lbl.revenue')}</th>
-        <th className="text-left py-2 px-2">{t('lbl.expenses')}</th>
-        <th className="text-left py-2 px-2">{t('lbl.net')}</th>
+        <th scope="col" className="text-right py-2 px-2">{t('lbl.vessel')}</th>
+        <th scope="col" className="text-left py-2 px-2">{t('lbl.revenue')}</th>
+        <th scope="col" className="text-left py-2 px-2">{t('lbl.expenses')}</th>
+        <th scope="col" className="text-left py-2 px-2">{t('lbl.net')}</th>
       </tr></thead>
       <tbody>
         {list.map((v) => (

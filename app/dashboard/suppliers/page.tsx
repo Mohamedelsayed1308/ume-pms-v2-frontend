@@ -248,14 +248,14 @@ export default function SuppliersPage() {
               <table className="w-full text-sm whitespace-nowrap">
                 <thead className="text-gray-500 text-xs border-b border-gray-100">
                   <tr>
-                    <th className="text-start py-3 px-4">{t('sup.title')}</th>
-                    <th className="text-start py-3 px-4">{t('sup.contact')}</th>
-                    <th className="text-start py-3 px-4">{t('sup.country')}</th>
-                    <th className="text-start py-3 px-4">{t('sup.outstanding')}</th>
-                    <th className="text-start py-3 px-4">{t('sup.invoices')}</th>
-                    <th className="text-start py-3 px-4">{t('sup.lastActivity')}</th>
-                    <th className="text-start py-3 px-4">{t('sup.status')}</th>
-                    <th className="text-start py-3 px-4">{t('sup.actions')}</th>
+                    <th scope="col" className="text-start py-3 px-4">{t('sup.title')}</th>
+                    <th scope="col" className="text-start py-3 px-4">{t('sup.contact')}</th>
+                    <th scope="col" className="text-start py-3 px-4">{t('sup.country')}</th>
+                    <th scope="col" className="text-start py-3 px-4">{t('sup.outstanding')}</th>
+                    <th scope="col" className="text-start py-3 px-4">{t('sup.invoices')}</th>
+                    <th scope="col" className="text-start py-3 px-4">{t('sup.lastActivity')}</th>
+                    <th scope="col" className="text-start py-3 px-4">{t('sup.status')}</th>
+                    <th scope="col" className="text-start py-3 px-4">{t('sup.actions')}</th>
                   </tr>
                 </thead>
                 <tbody>

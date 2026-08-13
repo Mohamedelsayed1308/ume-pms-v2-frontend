@@ -139,17 +139,17 @@ export default function PostableInvoices({ entityId, onDone }: { entityId: strin
         <table className="w-full text-sm">
           <thead className="bg-gray-50 text-xs text-gray-500">
             <tr>
-              <th className="px-3 py-2 w-8">
+              <th scope="col" className="px-3 py-2 w-8">
                 <input type="checkbox" checked={allSelected} onChange={toggleAll} disabled={!readyIds.length}
                   title="تحديد المؤهَّل الذي له حساب" />
               </th>
-              <th className="px-4 py-2 text-right">الفاتورة</th>
-              <th className="px-4 py-2 text-right">المورّد</th>
-              <th className="px-4 py-2 text-right">التاريخ</th>
-              <th className="px-4 py-2 text-left">المبلغ</th>
-              <th className="px-4 py-2 text-right w-72">حساب المصروف</th>
-              <th className="px-4 py-2 text-right">التصنيف</th>
-              <th className="px-4 py-2 text-center">الأهلية</th>
+              <th scope="col" className="px-4 py-2 text-right">الفاتورة</th>
+              <th scope="col" className="px-4 py-2 text-right">المورّد</th>
+              <th scope="col" className="px-4 py-2 text-right">التاريخ</th>
+              <th scope="col" className="px-4 py-2 text-left">المبلغ</th>
+              <th scope="col" className="px-4 py-2 text-right w-72">حساب المصروف</th>
+              <th scope="col" className="px-4 py-2 text-right">التصنيف</th>
+              <th scope="col" className="px-4 py-2 text-center">الأهلية</th>
             </tr>
           </thead>
           <tbody className="divide-y">

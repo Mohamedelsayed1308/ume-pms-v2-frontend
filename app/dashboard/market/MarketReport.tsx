@@ -149,7 +149,7 @@ function ReportView({ report: r, meta }: { report: any; meta: any }) {
 
       <Sec title="ج. الوضع التنافسي للوكلاء">
         <div className="overflow-x-auto"><table className="w-full text-xs whitespace-nowrap">
-          <thead><tr className="text-gray-500 border-b"><th className="text-right py-1 px-1">الوكيل</th><th className="text-left px-1">رحلات</th><th className="text-left px-1">حصة%</th><th className="text-left px-1">ترتيب</th><th className="text-right px-1">ملاحظة</th></tr></thead>
+          <thead><tr className="text-gray-500 border-b"><th scope="col" className="text-right py-1 px-1">الوكيل</th><th scope="col" className="text-left px-1">رحلات</th><th scope="col" className="text-left px-1">حصة%</th><th scope="col" className="text-left px-1">ترتيب</th><th scope="col" className="text-right px-1">ملاحظة</th></tr></thead>
           <tbody>{(r.competitive_position || []).map((c: any, i: number) => (
             <tr key={i} className="border-b border-gray-50"><td className="py-1 px-1 font-medium">{c.agency}</td><td className="text-left px-1 tabular-nums">{fmt(c.trips)}</td><td className="text-left px-1">{c.trip_share_pct}%</td><td className="text-left px-1">{c.rank}</td><td className="px-1 text-gray-600">{c.note}</td></tr>
           ))}</tbody>

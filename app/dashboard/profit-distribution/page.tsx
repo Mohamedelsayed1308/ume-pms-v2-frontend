@@ -263,13 +263,13 @@ export default function ProfitDistributionPage() {
         <table className="w-full text-sm">
           <thead className="bg-gray-50 text-gray-600 text-right">
             <tr>
-              <th className="px-4 py-3">الفترة</th>
-              <th className="px-4 py-3">من</th>
-              <th className="px-4 py-3">إلى</th>
-              <th className="px-4 py-3 text-left">إجمالي الإيراد</th>
-              <th className="px-4 py-3 text-left">رصيد بدوي</th>
-              <th className="px-4 py-3 text-left">رصيد الاتحاد</th>
-              <th className="px-4 py-3">إجراءات</th>
+              <th scope="col" className="px-4 py-3">الفترة</th>
+              <th scope="col" className="px-4 py-3">من</th>
+              <th scope="col" className="px-4 py-3">إلى</th>
+              <th scope="col" className="px-4 py-3 text-left">إجمالي الإيراد</th>
+              <th scope="col" className="px-4 py-3 text-left">رصيد بدوي</th>
+              <th scope="col" className="px-4 py-3 text-left">رصيد الاتحاد</th>
+              <th scope="col" className="px-4 py-3">إجراءات</th>
             </tr>
           </thead>
           <tbody>

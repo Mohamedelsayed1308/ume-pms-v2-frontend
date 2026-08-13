@@ -619,7 +619,7 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
                 <div key={panel.key} className="bg-white rounded-xl shadow p-4">
                   <h3 className={`font-bold text-${panel.color}-700 mb-3`}>{panel.label}</h3>
                   <table className="w-full text-sm mb-3">
-                    <thead className="text-gray-500 text-xs"><tr><th className="text-right py-1">الإيراد</th><th className="text-right py-1">العدد</th><th className="text-right py-1">المبلغ</th><th className="text-right py-1">متوسط/وحدة</th></tr></thead>
+                    <thead className="text-gray-500 text-xs"><tr><th scope="col" className="text-right py-1">الإيراد</th><th scope="col" className="text-right py-1">العدد</th><th scope="col" className="text-right py-1">المبلغ</th><th scope="col" className="text-right py-1">متوسط/وحدة</th></tr></thead>
                     <tbody>
                       {REV_ROWS.map((r) => {
                         const cnt = (panel.side as any)[r.cKey] as number;
@@ -631,7 +631,7 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
                     </tbody>
                   </table>
                   <table className="w-full text-sm">
-                    <thead className="text-gray-500 text-xs"><tr><th className="text-right py-1">المصروف</th><th className="text-right py-1">المبلغ</th></tr></thead>
+                    <thead className="text-gray-500 text-xs"><tr><th scope="col" className="text-right py-1">المصروف</th><th scope="col" className="text-right py-1">المبلغ</th></tr></thead>
                     <tbody>
                       {Object.entries(panel.side.exp).map(([k, v]) => (<tr key={k} className="border-t"><td className="py-1">{labelOf[k] || k}</td><td className="py-1 text-red-600">{fmt(v)}</td></tr>))}
                       <tr className="border-t bg-gray-50 font-bold"><td className="py-1">إجمالي المصروفات</td><td className="py-1 text-red-700">{fmt(panel.exp)}</td></tr>
@@ -645,7 +645,7 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
               <h3 className="font-bold text-gray-700 mb-3">📊 الإحصائيات</h3>
               <div className="inline-block bg-emerald-50 rounded-lg px-4 py-2 mb-3"><span className="text-xs text-emerald-700">متوسط ربح الرحلة</span><span className="font-bold text-emerald-800 text-lg mr-2">{fmt(data.net / data.count)}</span></div>
               <table className="w-full text-sm max-w-md">
-                <thead className="text-gray-500 text-xs"><tr><th className="text-right py-1">متوسط لكل رحلة</th><th className="text-right py-1">صادر</th><th className="text-right py-1">وارد</th></tr></thead>
+                <thead className="text-gray-500 text-xs"><tr><th scope="col" className="text-right py-1">متوسط لكل رحلة</th><th scope="col" className="text-right py-1">صادر</th><th scope="col" className="text-right py-1">وارد</th></tr></thead>
                 <tbody>
                   <tr className="border-t"><td className="py-1">شاحنات</td><td className="py-1 font-medium">{fmt(data.E.truckC / data.count)}</td><td className="py-1 font-medium">{fmt(data.I.truckC / data.count)}</td></tr>
                   <tr className="border-t"><td className="py-1">سيارات</td><td className="py-1 font-medium">{fmt(data.E.vehC / data.count)}</td><td className="py-1 font-medium">{fmt(data.I.vehC / data.count)}</td></tr>
@@ -712,7 +712,7 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
                 )}
                 {purchases.items.length ? (
                   <table className="w-full text-sm">
-                    <thead className="text-gray-500 text-xs"><tr><th className="text-right py-1">رقم الفاتورة</th><th className="text-right py-1">التاريخ</th><th className="text-right py-1">المورد</th><th className="text-right py-1">البند</th><th className="text-right py-1">المبلغ الأصلي</th><th className="text-right py-1">شهور الإهلاك</th><th className="text-right py-1">القسط الشهري (USD)</th></tr></thead>
+                    <thead className="text-gray-500 text-xs"><tr><th scope="col" className="text-right py-1">رقم الفاتورة</th><th scope="col" className="text-right py-1">التاريخ</th><th scope="col" className="text-right py-1">المورد</th><th scope="col" className="text-right py-1">البند</th><th scope="col" className="text-right py-1">المبلغ الأصلي</th><th scope="col" className="text-right py-1">شهور الإهلاك</th><th scope="col" className="text-right py-1">القسط الشهري (USD)</th></tr></thead>
                     <tbody>
                       {purchases.items.map((i) => (
                         <tr key={i.id} className={`border-t ${i.amount < 0 ? 'bg-indigo-50/50' : ''}`}>
@@ -753,13 +753,13 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
                 <table className="w-full text-sm whitespace-nowrap">
                   <thead className="text-gray-500 text-xs">
                     <tr>
-                      <th className="text-right py-1 px-2">الرحلة</th>
-                      <th className="text-right py-1 px-2">الإيراد</th>
-                      <th className="text-right py-1 px-2">صافي قبل التوزيع</th>
-                      <th className="text-right py-1 px-2">− بنكر</th>
-                      <th className="text-right py-1 px-2">− مرتبات</th>
-                      {allocPurchasesTotal > 0 && <th className="text-right py-1 px-2">− مشتريات</th>}
-                      <th className="text-right py-1 px-2">الصافي بعد التوزيع</th>
+                      <th scope="col" className="text-right py-1 px-2">الرحلة</th>
+                      <th scope="col" className="text-right py-1 px-2">الإيراد</th>
+                      <th scope="col" className="text-right py-1 px-2">صافي قبل التوزيع</th>
+                      <th scope="col" className="text-right py-1 px-2">− بنكر</th>
+                      <th scope="col" className="text-right py-1 px-2">− مرتبات</th>
+                      {allocPurchasesTotal > 0 && <th scope="col" className="text-right py-1 px-2">− مشتريات</th>}
+                      <th scope="col" className="text-right py-1 px-2">الصافي بعد التوزيع</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -820,7 +820,7 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
             </div>
             <h3>الإيرادات</h3>
             <table>
-              <thead><tr><th>البند</th><th>صادر — عدد</th><th>صادر — مبلغ</th><th>وارد — عدد</th><th>وارد — مبلغ</th><th>الإجمالي</th></tr></thead>
+              <thead><tr><th scope="col">البند</th><th scope="col">صادر — عدد</th><th scope="col">صادر — مبلغ</th><th scope="col">وارد — عدد</th><th scope="col">وارد — مبلغ</th><th scope="col">الإجمالي</th></tr></thead>
               <tbody>
                 {REV_ROWS.map((r) => {
                   const eC = (data.E as any)[r.cKey], eA = (data.E as any)[r.key], iC = (data.I as any)[r.cKey], iA = (data.I as any)[r.key];
@@ -833,9 +833,9 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
             <h3>أعداد المنقولات خلال الشهر ومتوسطها لكل رحلة</h3>
             <table>
               <thead><tr>
-                <th>البند</th>
-                <th>صادر — إجمالي</th><th>وارد — إجمالي</th><th>الإجمالي</th>
-                <th>متوسط صادر / رحلة</th><th>متوسط وارد / رحلة</th>
+                <th scope="col">البند</th>
+                <th scope="col">صادر — إجمالي</th><th scope="col">وارد — إجمالي</th><th scope="col">الإجمالي</th>
+                <th scope="col">متوسط صادر / رحلة</th><th scope="col">متوسط وارد / رحلة</th>
               </tr></thead>
               <tbody>
                 {([
@@ -863,19 +863,19 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
               </tbody>
             </table>
             <div className="cols">
-              <div><h3>مصروفات الصادر ({cfg.agentExport})</h3><table><thead><tr><th>المصروف</th><th>المبلغ</th></tr></thead><tbody>{Object.entries(data.E.exp).map(([k, v]) => (<tr key={k}><td>{labelOf[k] || k}</td><td>{fmt(v)}</td></tr>))}<tr className="tot"><td>إجمالي المصروفات</td><td>{fmt(data.expE)}</td></tr></tbody></table></div>
-              <div><h3>مصروفات الوارد ({cfg.agentImport})</h3><table><thead><tr><th>المصروف</th><th>المبلغ</th></tr></thead><tbody>{Object.entries(data.I.exp).map(([k, v]) => (<tr key={k}><td>{labelOf[k] || k}</td><td>{fmt(v)}</td></tr>))}<tr className="tot"><td>إجمالي المصروفات</td><td>{fmt(data.expI)}</td></tr></tbody></table></div>
+              <div><h3>مصروفات الصادر ({cfg.agentExport})</h3><table><thead><tr><th scope="col">المصروف</th><th scope="col">المبلغ</th></tr></thead><tbody>{Object.entries(data.E.exp).map(([k, v]) => (<tr key={k}><td>{labelOf[k] || k}</td><td>{fmt(v)}</td></tr>))}<tr className="tot"><td>إجمالي المصروفات</td><td>{fmt(data.expE)}</td></tr></tbody></table></div>
+              <div><h3>مصروفات الوارد ({cfg.agentImport})</h3><table><thead><tr><th scope="col">المصروف</th><th scope="col">المبلغ</th></tr></thead><tbody>{Object.entries(data.I.exp).map(([k, v]) => (<tr key={k}><td>{labelOf[k] || k}</td><td>{fmt(v)}</td></tr>))}<tr className="tot"><td>إجمالي المصروفات</td><td>{fmt(data.expI)}</td></tr></tbody></table></div>
             </div>
             <div className="cols">
               <div>
                 <h3>البنكر (مخزون)</h3>
-                <table><thead><tr><th>رصيد أول المدة</th><th>+ تموينات الشهر</th><th>− مخزون آخر المدة</th><th>= المستهلك</th></tr></thead><tbody><tr><td>{fmt(data.opening)}</td><td>{fmt(data.supplies)}</td><td>{fmt(data.closing)}</td><td>{fmt(data.bunkerCost)}</td></tr></tbody></table>
+                <table><thead><tr><th scope="col">رصيد أول المدة</th><th scope="col">+ تموينات الشهر</th><th scope="col">− مخزون آخر المدة</th><th scope="col">= المستهلك</th></tr></thead><tbody><tr><td>{fmt(data.opening)}</td><td>{fmt(data.supplies)}</td><td>{fmt(data.closing)}</td><td>{fmt(data.bunkerCost)}</td></tr></tbody></table>
                 <h3>مصروفات أخرى</h3><table><tbody><tr><td>مرتبات الشهر</td><td>{fmt(data.salaries)}</td></tr></tbody></table>
               </div>
               <div>
                 {!cfg.hideAgentLiquidity && <>
                   <h3>السيولة عند الوكلاء</h3>
-                  <table><thead><tr><th>{cfg.agentExport} (P−O)</th><th>{cfg.agentImport} (O)</th><th>إجمالي التحصيل (P)</th></tr></thead><tbody><tr><td>{fmt(data.liqIttihad)}</td><td>{fmt(data.liqBassam)}</td><td>{fmt(data.P)}</td></tr></tbody></table>
+                  <table><thead><tr><th scope="col">{cfg.agentExport} (P−O)</th><th scope="col">{cfg.agentImport} (O)</th><th scope="col">إجمالي التحصيل (P)</th></tr></thead><tbody><tr><td>{fmt(data.liqIttihad)}</td><td>{fmt(data.liqBassam)}</td><td>{fmt(data.P)}</td></tr></tbody></table>
                 </>}
               </div>
             </div>
@@ -884,7 +884,7 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
                 <h3>المشتريات (فواتير المركب) — بالدولار</h3>
                 {purchases.byItem.length > 0 && (
                   <table>
-                    <thead><tr><th>البند</th><th>إجمالي القسط (USD)</th></tr></thead>
+                    <thead><tr><th scope="col">البند</th><th scope="col">إجمالي القسط (USD)</th></tr></thead>
                     <tbody>
                       {purchases.byItem.map((b) => (<tr key={b.name}><td>{b.name}</td><td>{fmt(b.value)}</td></tr>))}
                       <tr className="tot"><td>الإجمالي</td><td>{fmt(purchases.total)}</td></tr>
@@ -892,7 +892,7 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
                   </table>
                 )}
                 <table>
-                  <thead><tr><th>رقم الفاتورة</th><th>التاريخ</th><th>المورد</th><th>البند</th><th>المبلغ الأصلي</th><th>شهور الإهلاك</th><th>القسط الشهري (USD)</th></tr></thead>
+                  <thead><tr><th scope="col">رقم الفاتورة</th><th scope="col">التاريخ</th><th scope="col">المورد</th><th scope="col">البند</th><th scope="col">المبلغ الأصلي</th><th scope="col">شهور الإهلاك</th><th scope="col">القسط الشهري (USD)</th></tr></thead>
                   <tbody>
                     {purchases.items.length ? purchases.items.map((i) => (
                       <tr key={i.id}><td>{i.number}{i.amount < 0 ? ' (إشعار دائن)' : ''}</td><td>{i.date || '—'}</td><td>{i.supplier}</td><td>{i.item}</td><td>{fmt(i.amount)} {i.currency}</td><td>{i.nMonths > 1 ? `${i.seq}/${i.nMonths}` : 'كامل'}</td><td>{i.missing ? 'سعر ناقص' : `${fmt(i.installment)}${i.usedDefault ? ' *' : ''}`}</td></tr>
@@ -901,7 +901,7 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
                   </tbody>
                 </table>
                 <table>
-                  <thead><tr><th>صافي قبل المشتريات</th><th>إجمالي المشتريات</th><th>صافي نهائي بعد المشتريات</th></tr></thead>
+                  <thead><tr><th scope="col">صافي قبل المشتريات</th><th scope="col">إجمالي المشتريات</th><th scope="col">صافي نهائي بعد المشتريات</th></tr></thead>
                   <tbody><tr className="tot"><td>{fmt(data.net)}</td><td>{fmt(purchases.total)}</td><td>{fmt(data.net - purchases.total)}</td></tr></tbody>
                 </table>
               </>

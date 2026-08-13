@@ -189,10 +189,10 @@ export default function PurchaseOrdersPage() {
           <Card className="hidden lg:block overflow-x-auto">
             <table className="w-full text-sm whitespace-nowrap">
               <thead className="text-gray-500 text-xs border-b border-gray-100"><tr>
-                <th className="text-start py-3 px-4">{t('po.number')}</th><th className="text-start py-3 px-4">{t('po.date')}</th>
-                <th className="text-start py-3 px-4">{t('po.supplier')}</th><th className="text-start py-3 px-4">{t('po.vessel')}</th>
-                <th className="text-start py-3 px-4">{t('po.invoices')}</th><th className="text-start py-3 px-4">{t('po.invoicedValue')}</th>
-                <th className="text-start py-3 px-4">{t('po.invoiceStatus')}</th><th className="text-start py-3 px-4">{t('po.actions')}</th>
+                <th scope="col" className="text-start py-3 px-4">{t('po.number')}</th><th scope="col" className="text-start py-3 px-4">{t('po.date')}</th>
+                <th scope="col" className="text-start py-3 px-4">{t('po.supplier')}</th><th scope="col" className="text-start py-3 px-4">{t('po.vessel')}</th>
+                <th scope="col" className="text-start py-3 px-4">{t('po.invoices')}</th><th scope="col" className="text-start py-3 px-4">{t('po.invoicedValue')}</th>
+                <th scope="col" className="text-start py-3 px-4">{t('po.invoiceStatus')}</th><th scope="col" className="text-start py-3 px-4">{t('po.actions')}</th>
               </tr></thead>
               <tbody>
                 {list.map((po) => { const st = stats[po.id] || emptyStat(); const has = st.invCount > 0; return (

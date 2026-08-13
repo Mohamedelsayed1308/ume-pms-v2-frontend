@@ -168,10 +168,10 @@ function Statement({ d, name }: { d: any; name: string }) {
           <div className="overflow-x-auto">
             <table className="w-full text-xs min-w-[540px]">
               <thead className="bg-white text-gray-600 border-b"><tr>
-                <th className="px-2 py-2 text-right">التاريخ</th><th className="px-2 py-2 text-right">البيان</th>
-                <th className="px-2 py-2 text-right">السفينة</th>
-                <th className="px-2 py-2 text-left">مدين</th><th className="px-2 py-2 text-left">دائن</th>
-                <th className="px-2 py-2 text-left">الرصيد ({L.currency})</th>
+                <th scope="col" className="px-2 py-2 text-right">التاريخ</th><th scope="col" className="px-2 py-2 text-right">البيان</th>
+                <th scope="col" className="px-2 py-2 text-right">السفينة</th>
+                <th scope="col" className="px-2 py-2 text-left">مدين</th><th scope="col" className="px-2 py-2 text-left">دائن</th>
+                <th scope="col" className="px-2 py-2 text-left">الرصيد ({L.currency})</th>
               </tr></thead>
               <tbody>
                 {L.transactions.map((t: any, i: number) => (
@@ -224,9 +224,9 @@ function Unpaid({ invoices, name }: { invoices: any[]; name: string }) {
       <div className="overflow-x-auto">
         <table className="w-full text-xs min-w-[600px]">
           <thead className="bg-gray-50 text-gray-600"><tr>
-            <th className="px-2 py-2 text-right">رقم الفاتورة</th><th className="px-2 py-2 text-right">السفينة</th>
-            <th className="px-2 py-2 text-left">المبلغ</th><th className="px-2 py-2 text-left">المدفوع</th>
-            <th className="px-2 py-2 text-left">المتبقي</th><th className="px-2 py-2 text-center">الاستحقاق</th><th className="px-2 py-2 text-center">الحالة</th>
+            <th scope="col" className="px-2 py-2 text-right">رقم الفاتورة</th><th scope="col" className="px-2 py-2 text-right">السفينة</th>
+            <th scope="col" className="px-2 py-2 text-left">المبلغ</th><th scope="col" className="px-2 py-2 text-left">المدفوع</th>
+            <th scope="col" className="px-2 py-2 text-left">المتبقي</th><th scope="col" className="px-2 py-2 text-center">الاستحقاق</th><th scope="col" className="px-2 py-2 text-center">الحالة</th>
           </tr></thead>
           <tbody>
             {invoices.map((inv) => (
@@ -270,9 +270,9 @@ function VesselSuppliers({ rows, name }: { rows: any[]; name: string }) {
       <div className="overflow-x-auto">
         <table className="w-full text-xs min-w-[520px]">
           <thead className="bg-gray-50 text-gray-600"><tr>
-            <th className="px-2 py-2 text-right">المورد</th><th className="px-2 py-2 text-center">العملة</th>
-            <th className="px-2 py-2 text-center">عدد الفواتير</th>
-            <th className="px-2 py-2 text-left">إجمالي الفواتير</th><th className="px-2 py-2 text-left">المدفوع</th><th className="px-2 py-2 text-left">المتبقي</th>
+            <th scope="col" className="px-2 py-2 text-right">المورد</th><th scope="col" className="px-2 py-2 text-center">العملة</th>
+            <th scope="col" className="px-2 py-2 text-center">عدد الفواتير</th>
+            <th scope="col" className="px-2 py-2 text-left">إجمالي الفواتير</th><th scope="col" className="px-2 py-2 text-left">المدفوع</th><th scope="col" className="px-2 py-2 text-left">المتبقي</th>
           </tr></thead>
           <tbody>
             {rows.map((r, ri) => (r.totalsByCurrency || []).map((t: any, ci: number) => (

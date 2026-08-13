@@ -429,11 +429,11 @@ export default function TasksPage() {
             <table className="w-full text-sm">
               <thead className="bg-gray-50 text-gray-500 text-xs">
                 <tr>
-                  <th className="text-start px-3 py-2">{L({ ar: 'المسؤول', en: 'Owner' })}</th>
-                  <th className="text-start px-3 py-2">{L({ ar: 'مفتوحة', en: 'Open' })}</th>
-                  <th className="text-start px-3 py-2">{L({ ar: 'متأخرة', en: 'Overdue' })}</th>
-                  <th className="text-start px-3 py-2">{L({ ar: 'أولوية عالية', en: 'High' })}</th>
-                  <th className="text-start px-3 py-2">{L({ ar: 'منتهية', en: 'Done' })}</th>
+                  <th scope="col" className="text-start px-3 py-2">{L({ ar: 'المسؤول', en: 'Owner' })}</th>
+                  <th scope="col" className="text-start px-3 py-2">{L({ ar: 'مفتوحة', en: 'Open' })}</th>
+                  <th scope="col" className="text-start px-3 py-2">{L({ ar: 'متأخرة', en: 'Overdue' })}</th>
+                  <th scope="col" className="text-start px-3 py-2">{L({ ar: 'أولوية عالية', en: 'High' })}</th>
+                  <th scope="col" className="text-start px-3 py-2">{L({ ar: 'منتهية', en: 'Done' })}</th>
                 </tr>
               </thead>
               <tbody>
@@ -629,14 +629,14 @@ export default function TasksPage() {
           <table className="w-full text-sm">
             <thead className="bg-gray-50 text-gray-500 text-xs">
               <tr>
-                <th className="text-start px-4 py-3">{L({ ar: 'المهمة', en: 'Task' })}</th>
-                <th className="text-start px-4 py-3 w-32">{L({ ar: 'المسؤول', en: 'Owner' })}</th>
-                <th className="text-start px-4 py-3 w-28">{L({ ar: 'الأولوية', en: 'Priority' })}</th>
-                <th className="text-start px-4 py-3 w-32">{L({ ar: 'الحالة', en: 'Status' })}</th>
-                <th className="text-start px-4 py-3 w-28">{L({ ar: 'الاستحقاق', en: 'Due' })}</th>
-                <th className="text-start px-4 py-3 w-20">{L({ ar: 'تكرار', en: 'Repeat' })}</th>
-                <th className="text-start px-4 py-3 w-16">{L({ ar: 'تعليق', en: 'Notes' })}</th>
-                <th className="px-4 py-3 w-20"></th>
+                <th scope="col" className="text-start px-4 py-3">{L({ ar: 'المهمة', en: 'Task' })}</th>
+                <th scope="col" className="text-start px-4 py-3 w-32">{L({ ar: 'المسؤول', en: 'Owner' })}</th>
+                <th scope="col" className="text-start px-4 py-3 w-28">{L({ ar: 'الأولوية', en: 'Priority' })}</th>
+                <th scope="col" className="text-start px-4 py-3 w-32">{L({ ar: 'الحالة', en: 'Status' })}</th>
+                <th scope="col" className="text-start px-4 py-3 w-28">{L({ ar: 'الاستحقاق', en: 'Due' })}</th>
+                <th scope="col" className="text-start px-4 py-3 w-20">{L({ ar: 'تكرار', en: 'Repeat' })}</th>
+                <th scope="col" className="text-start px-4 py-3 w-16">{L({ ar: 'تعليق', en: 'Notes' })}</th>
+                <th scope="col" className="px-4 py-3 w-20"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">

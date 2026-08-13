@@ -74,7 +74,7 @@ export default function ItemsPage() {
       <div className="bg-white rounded-xl shadow overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-gray-50 text-gray-600 text-right">
-            <tr><th className="px-4 py-3">البند</th><th className="px-4 py-3">الحالة</th><th className="px-4 py-3">إجراءات</th></tr>
+            <tr><th scope="col" className="px-4 py-3">البند</th><th scope="col" className="px-4 py-3">الحالة</th><th scope="col" className="px-4 py-3">إجراءات</th></tr>
           </thead>
           <tbody>
             {items.map((it) => (

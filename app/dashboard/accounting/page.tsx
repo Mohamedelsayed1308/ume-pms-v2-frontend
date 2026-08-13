@@ -275,11 +275,11 @@ export default function AccountingPage() {
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 text-xs text-gray-500">
                   <tr>
-                    <th className="px-4 py-2 text-right">الحساب</th>
-                    <th className="px-4 py-2 text-right">التصنيف</th>
-                    <th className="px-4 py-2 text-left">مدين</th>
-                    <th className="px-4 py-2 text-left">دائن</th>
-                    <th className="px-4 py-2 text-left">الرصيد</th>
+                    <th scope="col" className="px-4 py-2 text-right">الحساب</th>
+                    <th scope="col" className="px-4 py-2 text-right">التصنيف</th>
+                    <th scope="col" className="px-4 py-2 text-left">مدين</th>
+                    <th scope="col" className="px-4 py-2 text-left">دائن</th>
+                    <th scope="col" className="px-4 py-2 text-left">الرصيد</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
@@ -332,18 +332,18 @@ export default function AccountingPage() {
                 <thead className="bg-gray-50 text-xs text-gray-500">
                   <tr>
                     {canPost && (
-                      <th className="px-3 py-2 w-8">
+                      <th scope="col" className="px-3 py-2 w-8">
                         <input type="checkbox" checked={allSelected} onChange={toggleAll}
                           disabled={!selectableIds.length} title="تحديد كل المسوّدات المعروضة" />
                       </th>
                     )}
-                    <th className="px-4 py-2 text-right">القيد</th>
-                    <th className="px-4 py-2 text-right">التاريخ</th>
-                    <th className="px-4 py-2 text-right">البيان</th>
-                    <th className="px-4 py-2 text-right">الحدث</th>
-                    <th className="px-4 py-2 text-left">EUR</th>
-                    <th className="px-4 py-2 text-center">الحالة</th>
-                    <th className="px-4 py-2" />
+                    <th scope="col" className="px-4 py-2 text-right">القيد</th>
+                    <th scope="col" className="px-4 py-2 text-right">التاريخ</th>
+                    <th scope="col" className="px-4 py-2 text-right">البيان</th>
+                    <th scope="col" className="px-4 py-2 text-right">الحدث</th>
+                    <th scope="col" className="px-4 py-2 text-left">EUR</th>
+                    <th scope="col" className="px-4 py-2 text-center">الحالة</th>
+                    <th scope="col" className="px-4 py-2" />
                   </tr>
                 </thead>
                 <tbody className="divide-y">
@@ -403,11 +403,11 @@ export default function AccountingPage() {
             <table className="w-full text-sm">
               <thead className="bg-gray-50 text-xs text-gray-500">
                 <tr>
-                  <th className="px-3 py-2 text-right">الحساب</th>
-                  <th className="px-3 py-2 text-left">مدين</th>
-                  <th className="px-3 py-2 text-left">دائن</th>
-                  <th className="px-3 py-2 text-center">العملة</th>
-                  <th className="px-3 py-2 text-left">EUR</th>
+                  <th scope="col" className="px-3 py-2 text-right">الحساب</th>
+                  <th scope="col" className="px-3 py-2 text-left">مدين</th>
+                  <th scope="col" className="px-3 py-2 text-left">دائن</th>
+                  <th scope="col" className="px-3 py-2 text-center">العملة</th>
+                  <th scope="col" className="px-3 py-2 text-left">EUR</th>
                 </tr>
               </thead>
               <tbody className="divide-y">
@@ -567,12 +567,12 @@ function AccountLedger({ accountId, entries, onOpen }: { accountId: string; entr
     <table className="w-full text-sm">
       <thead className="bg-gray-50 text-xs text-gray-500">
         <tr>
-          <th className="px-3 py-2 text-right">التاريخ</th>
-          <th className="px-3 py-2 text-right">القيد</th>
-          <th className="px-3 py-2 text-right">البيان</th>
-          <th className="px-3 py-2 text-left">مدين</th>
-          <th className="px-3 py-2 text-left">دائن</th>
-          <th className="px-3 py-2 text-left">الرصيد</th>
+          <th scope="col" className="px-3 py-2 text-right">التاريخ</th>
+          <th scope="col" className="px-3 py-2 text-right">القيد</th>
+          <th scope="col" className="px-3 py-2 text-right">البيان</th>
+          <th scope="col" className="px-3 py-2 text-left">مدين</th>
+          <th scope="col" className="px-3 py-2 text-left">دائن</th>
+          <th scope="col" className="px-3 py-2 text-left">الرصيد</th>
         </tr>
       </thead>
       <tbody className="divide-y">

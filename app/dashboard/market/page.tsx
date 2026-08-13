@@ -292,8 +292,8 @@ function RankTable({ byAgency, focus }: { byAgency: any[]; focus: string }) {
   return (
     <table className="w-full text-sm whitespace-nowrap">
       <thead><tr className="text-gray-500 text-xs border-b-2 border-gray-100">
-        <th className="text-right py-2 px-2">الوكيل</th>
-        {METRICS.map((m) => <th key={m.key} className="text-left py-2 px-2">{m.label}</th>)}
+        <th scope="col" className="text-right py-2 px-2">الوكيل</th>
+        {METRICS.map((m) => <th scope="col" key={m.key} className="text-left py-2 px-2">{m.label}</th>)}
       </tr></thead>
       <tbody>
         {rows.map((a) => (
@@ -358,10 +358,10 @@ function ProductivityTable({ byAgency, focus, market }: { byAgency: any[]; focus
   return (
     <table className="w-full text-sm whitespace-nowrap">
       <thead><tr className="text-gray-500 text-xs border-b-2 border-gray-100">
-        <th className="text-right py-2 px-2">الوكيل</th>
-        <th className="text-left py-2 px-2">شاحنات/رحلة</th>
-        <th className="text-left py-2 px-2">سيارات/رحلة</th>
-        <th className="text-left py-2 px-2">ركاب/رحلة</th>
+        <th scope="col" className="text-right py-2 px-2">الوكيل</th>
+        <th scope="col" className="text-left py-2 px-2">شاحنات/رحلة</th>
+        <th scope="col" className="text-left py-2 px-2">سيارات/رحلة</th>
+        <th scope="col" className="text-left py-2 px-2">ركاب/رحلة</th>
       </tr></thead>
       <tbody>
         {[...byAgency].sort((a, b) => b.productivity.trucksPerTrip - a.productivity.trucksPerTrip).map((a) => (
@@ -436,7 +436,7 @@ function ContributingShips({ ships, hasPrev }: { ships: any[]; hasPrev: boolean 
   );
   return (
     <table className="w-full text-sm whitespace-nowrap">
-      <thead><tr className="text-gray-500 text-xs border-b-2 border-gray-100"><th className="text-right py-2">السفينة</th><th className="text-left py-2">حالي</th><th className="text-left py-2">سابق</th><th className="text-left py-2">التغيّر</th></tr></thead>
+      <thead><tr className="text-gray-500 text-xs border-b-2 border-gray-100"><th scope="col" className="text-right py-2">السفينة</th><th scope="col" className="text-left py-2">حالي</th><th scope="col" className="text-left py-2">سابق</th><th scope="col" className="text-left py-2">التغيّر</th></tr></thead>
       <tbody>
         {ships.map((s) => (
           <tr key={s.ship} className="border-b border-gray-50">

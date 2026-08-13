@@ -285,13 +285,13 @@ export default function BassamAccountCard({ vesselKey = 'Alcudia', storageKey = 
         <table className="w-full text-sm whitespace-nowrap">
           <thead className="text-gray-500 text-xs">
             <tr>
-              <th className="text-right py-2 px-2">الشهر</th>
-              <th className="text-right py-2 px-2">رصيد أول المدة (USD)</th>
-              <th className="text-right py-2 px-2">+ سيولة البسّام (USD)</th>
-              <th className="text-right py-2 px-2">+ إضافات يدوية (USD)</th>
-              <th className="text-right py-2 px-2">− بنكر (USD)</th>
-              <th className="text-right py-2 px-2">− تحويلات لك (USD)</th>
-              <th className="text-right py-2 px-2">= رصيد آخر المدة (USD)</th>
+              <th scope="col" className="text-right py-2 px-2">الشهر</th>
+              <th scope="col" className="text-right py-2 px-2">رصيد أول المدة (USD)</th>
+              <th scope="col" className="text-right py-2 px-2">+ سيولة البسّام (USD)</th>
+              <th scope="col" className="text-right py-2 px-2">+ إضافات يدوية (USD)</th>
+              <th scope="col" className="text-right py-2 px-2">− بنكر (USD)</th>
+              <th scope="col" className="text-right py-2 px-2">− تحويلات لك (USD)</th>
+              <th scope="col" className="text-right py-2 px-2">= رصيد آخر المدة (USD)</th>
             </tr>
           </thead>
           <tbody>

@@ -223,18 +223,18 @@ export default function ReceiptsPage() {
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 text-xs text-gray-500">
                   <tr>
-                    <th className="px-3 py-2 w-8">
+                    <th scope="col" className="px-3 py-2 w-8">
                       <input type="checkbox" checked={allSelected} onChange={toggleAll}
                         disabled={!bulkSafeIds.length}
                         title="تحديد المعروض — عدا «تسليم مفقود»" />
                     </th>
-                    <th className="px-4 py-2 text-right">الفاتورة</th>
-                    <th className="px-4 py-2 text-right">المورّد</th>
-                    <th className="px-4 py-2 text-right">المركب</th>
-                    <th className="px-4 py-2 text-right">التاريخ</th>
-                    <th className="px-4 py-2 text-left">المبلغ</th>
-                    <th className="px-4 py-2 text-center">الاستلام</th>
-                    <th className="px-4 py-2" />
+                    <th scope="col" className="px-4 py-2 text-right">الفاتورة</th>
+                    <th scope="col" className="px-4 py-2 text-right">المورّد</th>
+                    <th scope="col" className="px-4 py-2 text-right">المركب</th>
+                    <th scope="col" className="px-4 py-2 text-right">التاريخ</th>
+                    <th scope="col" className="px-4 py-2 text-left">المبلغ</th>
+                    <th scope="col" className="px-4 py-2 text-center">الاستلام</th>
+                    <th scope="col" className="px-4 py-2" />
                   </tr>
                 </thead>
                 <tbody className="divide-y">

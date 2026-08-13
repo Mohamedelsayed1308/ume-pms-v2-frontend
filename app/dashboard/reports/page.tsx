@@ -499,12 +499,12 @@ export default function ReportsPage() {
                     <table className="w-full text-sm">
                       <thead className="bg-white text-gray-600 text-right border-b">
                         <tr>
-                          <th className="px-4 py-2">التاريخ</th>
-                          <th className="px-4 py-2">البيان</th>
-                          <th className="px-4 py-2">السفينة</th>
-                          <th className="px-4 py-2">مدين</th>
-                          <th className="px-4 py-2">دائن</th>
-                          <th className="px-4 py-2">الرصيد ({L.currency})</th>
+                          <th scope="col" className="px-4 py-2">التاريخ</th>
+                          <th scope="col" className="px-4 py-2">البيان</th>
+                          <th scope="col" className="px-4 py-2">السفينة</th>
+                          <th scope="col" className="px-4 py-2">مدين</th>
+                          <th scope="col" className="px-4 py-2">دائن</th>
+                          <th scope="col" className="px-4 py-2">الرصيد ({L.currency})</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -574,14 +574,14 @@ export default function ReportsPage() {
                   <table className="w-full text-sm">
                     <thead className="bg-gray-50 text-gray-600 text-right">
                       <tr>
-                        <th className="px-4 py-2">رقم الفاتورة</th>
-                        <th className="px-4 py-2">السفينة</th>
-                        <th className="px-4 py-2">المبلغ</th>
-                        <th className="px-4 py-2">المدفوع</th>
-                        <th className="px-4 py-2">المتبقي</th>
-                        <th className="px-4 py-2">الاستحقاق</th>
-                        <th className="px-4 py-2">الحالة</th>
-                        <th className="px-4 py-2">المرفقات</th>
+                        <th scope="col" className="px-4 py-2">رقم الفاتورة</th>
+                        <th scope="col" className="px-4 py-2">السفينة</th>
+                        <th scope="col" className="px-4 py-2">المبلغ</th>
+                        <th scope="col" className="px-4 py-2">المدفوع</th>
+                        <th scope="col" className="px-4 py-2">المتبقي</th>
+                        <th scope="col" className="px-4 py-2">الاستحقاق</th>
+                        <th scope="col" className="px-4 py-2">الحالة</th>
+                        <th scope="col" className="px-4 py-2">المرفقات</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -634,14 +634,14 @@ export default function ReportsPage() {
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 text-gray-600 text-right">
                   <tr>
-                    <th className="px-4 py-2">رقم الفاتورة</th>
-                    <th className="px-4 py-2">المورد</th>
-                    <th className="px-4 py-2">السفينة</th>
-                    <th className="px-4 py-2">المبلغ</th>
-                    <th className="px-4 py-2">المتبقي</th>
-                    <th className="px-4 py-2">تاريخ الاستحقاق</th>
-                    <th className="px-4 py-2">الحالة</th>
-                    <th className="px-4 py-2">المرفقات</th>
+                    <th scope="col" className="px-4 py-2">رقم الفاتورة</th>
+                    <th scope="col" className="px-4 py-2">المورد</th>
+                    <th scope="col" className="px-4 py-2">السفينة</th>
+                    <th scope="col" className="px-4 py-2">المبلغ</th>
+                    <th scope="col" className="px-4 py-2">المتبقي</th>
+                    <th scope="col" className="px-4 py-2">تاريخ الاستحقاق</th>
+                    <th scope="col" className="px-4 py-2">الحالة</th>
+                    <th scope="col" className="px-4 py-2">المرفقات</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -699,14 +699,14 @@ export default function ReportsPage() {
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 text-gray-600 text-right">
                   <tr>
-                    <th className="px-4 py-2">رقم الفاتورة</th>
-                    <th className="px-4 py-2">المورد</th>
-                    <th className="px-4 py-2">المبلغ</th>
-                    <th className="px-4 py-2">المدفوع</th>
-                    <th className="px-4 py-2">المتبقي</th>
-                    <th className="px-4 py-2">الاستحقاق</th>
-                    <th className="px-4 py-2">الحالة</th>
-                    <th className="px-4 py-2">المرفقات</th>
+                    <th scope="col" className="px-4 py-2">رقم الفاتورة</th>
+                    <th scope="col" className="px-4 py-2">المورد</th>
+                    <th scope="col" className="px-4 py-2">المبلغ</th>
+                    <th scope="col" className="px-4 py-2">المدفوع</th>
+                    <th scope="col" className="px-4 py-2">المتبقي</th>
+                    <th scope="col" className="px-4 py-2">الاستحقاق</th>
+                    <th scope="col" className="px-4 py-2">الحالة</th>
+                    <th scope="col" className="px-4 py-2">المرفقات</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -752,12 +752,12 @@ export default function ReportsPage() {
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 text-gray-600 text-right">
                   <tr>
-                    <th className="px-4 py-2">المورد</th>
-                    <th className="px-4 py-2">العملة</th>
-                    <th className="px-4 py-2">عدد الفواتير</th>
-                    <th className="px-4 py-2">إجمالي الفواتير</th>
-                    <th className="px-4 py-2">المدفوع</th>
-                    <th className="px-4 py-2">المتبقي</th>
+                    <th scope="col" className="px-4 py-2">المورد</th>
+                    <th scope="col" className="px-4 py-2">العملة</th>
+                    <th scope="col" className="px-4 py-2">عدد الفواتير</th>
+                    <th scope="col" className="px-4 py-2">إجمالي الفواتير</th>
+                    <th scope="col" className="px-4 py-2">المدفوع</th>
+                    <th scope="col" className="px-4 py-2">المتبقي</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -811,15 +811,15 @@ export default function ReportsPage() {
                 <table className="w-full text-sm">
                   <thead className="bg-gray-50 text-gray-600 text-right">
                     <tr>
-                      <th className="px-4 py-2">رقم الفاتورة</th>
-                      <th className="px-4 py-2">المورد</th>
-                      <th className="px-4 py-2">السفينة</th>
-                      <th className="px-4 py-2">المبلغ</th>
-                      <th className="px-4 py-2">الحالة</th>
-                      <th className="px-4 py-2">تاريخ الحالة</th>
-                      <th className="px-4 py-2 text-center">أيام التأخر</th>
-                      <th className="px-4 py-2">القسم المسؤول</th>
-                      <th className="px-4 py-2">المرفقات</th>
+                      <th scope="col" className="px-4 py-2">رقم الفاتورة</th>
+                      <th scope="col" className="px-4 py-2">المورد</th>
+                      <th scope="col" className="px-4 py-2">السفينة</th>
+                      <th scope="col" className="px-4 py-2">المبلغ</th>
+                      <th scope="col" className="px-4 py-2">الحالة</th>
+                      <th scope="col" className="px-4 py-2">تاريخ الحالة</th>
+                      <th scope="col" className="px-4 py-2 text-center">أيام التأخر</th>
+                      <th scope="col" className="px-4 py-2">القسم المسؤول</th>
+                      <th scope="col" className="px-4 py-2">المرفقات</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -884,10 +884,10 @@ export default function ReportsPage() {
                   <table className="w-full text-sm">
                     <thead className="bg-gray-50 text-gray-600 text-right">
                       <tr>
-                        <th className="px-4 py-2">المستخدم</th>
-                        <th className="px-4 py-2 text-center">عدد الفواتير</th>
-                        <th className="px-4 py-2">نسبة المشاركة</th>
-                        <th className="px-4 py-2">السفن</th>
+                        <th scope="col" className="px-4 py-2">المستخدم</th>
+                        <th scope="col" className="px-4 py-2 text-center">عدد الفواتير</th>
+                        <th scope="col" className="px-4 py-2">نسبة المشاركة</th>
+                        <th scope="col" className="px-4 py-2">السفن</th>
                       </tr>
                     </thead>
                     <tbody>

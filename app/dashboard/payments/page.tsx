@@ -308,11 +308,11 @@ export default function PaymentsPage() {
       <Card className="hidden lg:block overflow-x-auto">
         <table className="w-full text-sm whitespace-nowrap">
           <thead className="text-gray-500 text-xs border-b border-gray-100"><tr>
-            <th className="text-start py-3 px-3">{t('pay.date')}</th><th className="text-start py-3 px-3">{t('pay.reference')}</th>
-            <th className="text-start py-3 px-3">{t('pay.invoice')}</th><th className="text-start py-3 px-3">{t('pay.supplier')}</th>
-            <th className="text-start py-3 px-3">{t('pay.vessel')}</th><th className="text-start py-3 px-3">{t('pay.amount')}</th>
-            <th className="text-start py-3 px-3">{t('pay.method')}</th><th className="text-start py-3 px-3">{t('pay.invoiceStatus')}</th>
-            <th className="text-start py-3 px-3">{t('pay.actions')}</th>
+            <th scope="col" className="text-start py-3 px-3">{t('pay.date')}</th><th scope="col" className="text-start py-3 px-3">{t('pay.reference')}</th>
+            <th scope="col" className="text-start py-3 px-3">{t('pay.invoice')}</th><th scope="col" className="text-start py-3 px-3">{t('pay.supplier')}</th>
+            <th scope="col" className="text-start py-3 px-3">{t('pay.vessel')}</th><th scope="col" className="text-start py-3 px-3">{t('pay.amount')}</th>
+            <th scope="col" className="text-start py-3 px-3">{t('pay.method')}</th><th scope="col" className="text-start py-3 px-3">{t('pay.invoiceStatus')}</th>
+            <th scope="col" className="text-start py-3 px-3">{t('pay.actions')}</th>
           </tr></thead>
           <tbody>
             {sorted.map((p) => (
@@ -464,19 +464,19 @@ export default function PaymentsPage() {
                       <table className="w-full text-sm">
                         <thead className="bg-gray-50 text-gray-500 text-right">
                           <tr>
-                            <th className="px-3 py-2 w-8">
+                            <th scope="col" className="px-3 py-2 w-8">
                               <input type="checkbox"
                                 checked={invoiceRows.length > 0 && invoiceRows.every(r => r.checked)}
                                 onChange={(e) => setInvoiceRows(rows => rows.map(r => ({ ...r, checked: e.target.checked })))}
                                 className="w-4 h-4 cursor-pointer" />
                             </th>
-                            <th className="px-3 py-2">رقم الفاتورة</th>
-                            <th className="px-3 py-2">السفينة</th>
-                            <th className="px-3 py-2">إجمالي الفاتورة</th>
-                            <th className="px-3 py-2">المدفوع</th>
-                            <th className="px-3 py-2 text-red-500">المتبقي</th>
-                            <th className="px-3 py-2 text-blue-600">المبلغ المراد دفعه</th>
-                            <th className="px-3 py-2 text-blue-600">العملة</th>
+                            <th scope="col" className="px-3 py-2">رقم الفاتورة</th>
+                            <th scope="col" className="px-3 py-2">السفينة</th>
+                            <th scope="col" className="px-3 py-2">إجمالي الفاتورة</th>
+                            <th scope="col" className="px-3 py-2">المدفوع</th>
+                            <th scope="col" className="px-3 py-2 text-red-500">المتبقي</th>
+                            <th scope="col" className="px-3 py-2 text-blue-600">المبلغ المراد دفعه</th>
+                            <th scope="col" className="px-3 py-2 text-blue-600">العملة</th>
                           </tr>
                         </thead>
                         <tbody>

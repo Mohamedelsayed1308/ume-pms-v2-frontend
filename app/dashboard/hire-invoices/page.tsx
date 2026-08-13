@@ -480,16 +480,16 @@ export default function HireInvoicesPage() {
         <table className="w-full text-sm">
           <thead className="bg-gray-50 text-gray-600 text-right">
             <tr>
-              <th className="px-4 py-3">رقم المستند</th>
-              <th className="px-4 py-3">النوع</th>
-              <th className="px-4 py-3">التاريخ</th>
-              <th className="px-4 py-3">العميل</th>
-              <th className="px-4 py-3">السفينة</th>
-              <th className="px-4 py-3">فترة التأجير</th>
-              <th className="px-4 py-3">المبلغ</th>
-              <th className="px-4 py-3">المسدد / المتبقّي</th>
-              <th className="px-4 py-3">الحالة</th>
-              <th className="px-4 py-3">إجراءات</th>
+              <th scope="col" className="px-4 py-3">رقم المستند</th>
+              <th scope="col" className="px-4 py-3">النوع</th>
+              <th scope="col" className="px-4 py-3">التاريخ</th>
+              <th scope="col" className="px-4 py-3">العميل</th>
+              <th scope="col" className="px-4 py-3">السفينة</th>
+              <th scope="col" className="px-4 py-3">فترة التأجير</th>
+              <th scope="col" className="px-4 py-3">المبلغ</th>
+              <th scope="col" className="px-4 py-3">المسدد / المتبقّي</th>
+              <th scope="col" className="px-4 py-3">الحالة</th>
+              <th scope="col" className="px-4 py-3">إجراءات</th>
             </tr>
           </thead>
           <tbody>
@@ -769,8 +769,8 @@ export default function HireInvoicesPage() {
                     <table className="border-collapse text-xs ml-auto">
                       <thead>
                         <tr className="bg-gray-50">
-                          <th className="border border-gray-200 px-3 py-1.5 font-semibold text-gray-600">Date</th>
-                          <th className="border border-gray-200 px-3 py-1.5 font-semibold text-gray-600">{DOC_TYPES[previewInv.doc_type || 'invoice']?.pdf || 'Invoice'} #</th>
+                          <th scope="col" className="border border-gray-200 px-3 py-1.5 font-semibold text-gray-600">Date</th>
+                          <th scope="col" className="border border-gray-200 px-3 py-1.5 font-semibold text-gray-600">{DOC_TYPES[previewInv.doc_type || 'invoice']?.pdf || 'Invoice'} #</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -809,7 +809,7 @@ export default function HireInvoicesPage() {
                     <table className="w-full border-collapse text-xs mb-0">
                       <thead>
                         <tr className="bg-gray-50">
-                          {cells.map((c) => <th key={c.h} className="border border-gray-200 px-3 py-2 font-semibold text-gray-600 text-center">{c.h}</th>)}
+                          {cells.map((c) => <th scope="col" key={c.h} className="border border-gray-200 px-3 py-2 font-semibold text-gray-600 text-center">{c.h}</th>)}
                         </tr>
                       </thead>
                       <tbody>
@@ -825,10 +825,10 @@ export default function HireInvoicesPage() {
                 <table className="w-full border-collapse text-xs">
                   <thead>
                     <tr className="bg-gray-50">
-                      <th className="border border-gray-200 px-3 py-2 font-semibold text-gray-600 text-center w-12">Days</th>
-                      <th className="border border-gray-200 px-3 py-2 font-semibold text-gray-600 text-left">Description</th>
-                      <th className="border border-gray-200 px-3 py-2 font-semibold text-gray-600 text-right w-24">Daily Hire</th>
-                      <th className="border border-gray-200 px-3 py-2 font-semibold text-gray-600 text-right w-28">Amount</th>
+                      <th scope="col" className="border border-gray-200 px-3 py-2 font-semibold text-gray-600 text-center w-12">Days</th>
+                      <th scope="col" className="border border-gray-200 px-3 py-2 font-semibold text-gray-600 text-left">Description</th>
+                      <th scope="col" className="border border-gray-200 px-3 py-2 font-semibold text-gray-600 text-right w-24">Daily Hire</th>
+                      <th scope="col" className="border border-gray-200 px-3 py-2 font-semibold text-gray-600 text-right w-28">Amount</th>
                     </tr>
                   </thead>
                   <tbody>

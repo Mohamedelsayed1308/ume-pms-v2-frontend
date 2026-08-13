@@ -74,12 +74,12 @@ export default function CustomersPage() {
         <table className="w-full text-sm">
           <thead className="bg-gray-50 text-gray-600 text-right">
             <tr>
-              <th className="px-4 py-3">اسم العميل</th>
-              <th className="px-4 py-3">الدولة</th>
-              <th className="px-4 py-3">البريد الإلكتروني</th>
-              <th className="px-4 py-3">الهاتف</th>
-              <th className="px-4 py-3">VAT NO</th>
-              <th className="px-4 py-3">إجراءات</th>
+              <th scope="col" className="px-4 py-3">اسم العميل</th>
+              <th scope="col" className="px-4 py-3">الدولة</th>
+              <th scope="col" className="px-4 py-3">البريد الإلكتروني</th>
+              <th scope="col" className="px-4 py-3">الهاتف</th>
+              <th scope="col" className="px-4 py-3">VAT NO</th>
+              <th scope="col" className="px-4 py-3">إجراءات</th>
             </tr>
           </thead>
           <tbody>

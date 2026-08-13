@@ -309,7 +309,7 @@ function QuadrantTable({ q, shownKeys }: { q: any; shownKeys: string[] }) {
   return (
     <div className="overflow-x-auto mt-3">
       <table className="w-full text-xs min-w-[480px]">
-        <thead><tr className="text-gray-500 border-b"><th className="text-right py-1.5">الوكيل</th><th className="text-center">الموضع</th><th className="text-center">الحصة</th><th className="text-center">النمو</th><th className="text-center">تغيّر الحصة</th></tr></thead>
+        <thead><tr className="text-gray-500 border-b"><th scope="col" className="text-right py-1.5">الوكيل</th><th scope="col" className="text-center">الموضع</th><th scope="col" className="text-center">الحصة</th><th scope="col" className="text-center">النمو</th><th scope="col" className="text-center">تغيّر الحصة</th></tr></thead>
         <tbody>
           {rows.map((a: any, i: number) => (
             <tr key={a.key} className={cx('border-b border-gray-50', a.isFocus && 'bg-navy-50/40')}>

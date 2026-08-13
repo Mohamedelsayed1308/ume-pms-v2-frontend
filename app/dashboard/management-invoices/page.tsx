@@ -278,14 +278,14 @@ export default function ManagementInvoicesPage() {
         <table className="w-full text-sm">
           <thead className="bg-gray-50 text-gray-600 text-right">
             <tr>
-              <th className="px-4 py-3">رقم الفاتورة</th>
-              <th className="px-4 py-3">التاريخ</th>
-              <th className="px-4 py-3">المركب</th>
-              <th className="px-4 py-3">الوصف</th>
-              <th className="px-4 py-3">المبلغ</th>
-              <th className="px-4 py-3">المسدد</th>
-              <th className="px-4 py-3">الحالة</th>
-              <th className="px-4 py-3">إجراءات</th>
+              <th scope="col" className="px-4 py-3">رقم الفاتورة</th>
+              <th scope="col" className="px-4 py-3">التاريخ</th>
+              <th scope="col" className="px-4 py-3">المركب</th>
+              <th scope="col" className="px-4 py-3">الوصف</th>
+              <th scope="col" className="px-4 py-3">المبلغ</th>
+              <th scope="col" className="px-4 py-3">المسدد</th>
+              <th scope="col" className="px-4 py-3">الحالة</th>
+              <th scope="col" className="px-4 py-3">إجراءات</th>
             </tr>
           </thead>
           <tbody>
@@ -422,8 +422,8 @@ export default function ManagementInvoicesPage() {
                     <table className="border-collapse text-xs ml-auto">
                       <thead>
                         <tr className="bg-gray-50">
-                          <th className="border border-gray-200 px-3 py-1.5 font-semibold text-gray-600">Date</th>
-                          <th className="border border-gray-200 px-3 py-1.5 font-semibold text-gray-600">Invoice #</th>
+                          <th scope="col" className="border border-gray-200 px-3 py-1.5 font-semibold text-gray-600">Date</th>
+                          <th scope="col" className="border border-gray-200 px-3 py-1.5 font-semibold text-gray-600">Invoice #</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -456,8 +456,8 @@ export default function ManagementInvoicesPage() {
                 <table className="w-full border-collapse text-xs">
                   <thead>
                     <tr className="bg-gray-50">
-                      <th className="border border-gray-200 px-4 py-2.5 font-semibold text-gray-600 text-left">Description</th>
-                      <th className="border border-gray-200 px-4 py-2.5 font-semibold text-gray-600 text-right w-32">Amount</th>
+                      <th scope="col" className="border border-gray-200 px-4 py-2.5 font-semibold text-gray-600 text-left">Description</th>
+                      <th scope="col" className="border border-gray-200 px-4 py-2.5 font-semibold text-gray-600 text-right w-32">Amount</th>
                     </tr>
                   </thead>
                   <tbody>

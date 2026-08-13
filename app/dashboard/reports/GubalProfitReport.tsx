@@ -267,7 +267,7 @@ export default function GubalProfitReport() {
           <div className="bg-white rounded-xl shadow p-4">
             <h3 className="font-bold text-gray-700 mb-3">التكاليف بالتفصيل</h3>
             <table className="w-full text-sm">
-              <thead className="text-gray-500 text-xs"><tr><th className="text-right py-1">المجموعة</th><th className="text-left py-1">المبلغ</th><th className="text-left py-1 w-16">%</th></tr></thead>
+              <thead className="text-gray-500 text-xs"><tr><th scope="col" className="text-right py-1">المجموعة</th><th scope="col" className="text-left py-1">المبلغ</th><th scope="col" className="text-left py-1 w-16">%</th></tr></thead>
               <tbody>
                 {sortedGroups.map((g) => (
                   <Fragment key={g.id}>

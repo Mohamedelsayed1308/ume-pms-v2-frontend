@@ -156,7 +156,7 @@ export default function MarketImportPage() {
         <div className="overflow-x-auto">
           <table className="w-full text-sm whitespace-nowrap">
             <thead><tr className="text-gray-500 text-xs border-b-2 border-gray-100">
-              <th className="text-right py-2 px-2">السفينة</th><th className="text-right py-2 px-2">الوكيل</th><th className="text-right py-2 px-2">من</th><th className="text-right py-2 px-2">إلى</th><th className="py-2 px-2"></th>
+              <th scope="col" className="text-right py-2 px-2">السفينة</th><th scope="col" className="text-right py-2 px-2">الوكيل</th><th scope="col" className="text-right py-2 px-2">من</th><th scope="col" className="text-right py-2 px-2">إلى</th><th scope="col" className="py-2 px-2"></th>
             </tr></thead>
             <tbody>
               {agencies.map((h) => (
@@ -183,7 +183,7 @@ export default function MarketImportPage() {
         <h3 className="font-bold text-gray-800 mb-3">٣. سجل عمليات الاستيراد</h3>
         <table className="w-full text-sm whitespace-nowrap">
           <thead><tr className="text-gray-500 text-xs border-b-2 border-gray-100">
-            <th className="text-right py-2 px-2">الملف</th><th className="text-right py-2 px-2">المستخدم</th><th className="text-right py-2 px-2">الوقت</th><th className="text-left py-2 px-2">مقبول/مرفوض</th><th className="text-right py-2 px-2">hash</th>
+            <th scope="col" className="text-right py-2 px-2">الملف</th><th scope="col" className="text-right py-2 px-2">المستخدم</th><th scope="col" className="text-right py-2 px-2">الوقت</th><th scope="col" className="text-left py-2 px-2">مقبول/مرفوض</th><th scope="col" className="text-right py-2 px-2">hash</th>
           </tr></thead>
           <tbody>
             {logs.map((l) => (

@@ -266,12 +266,12 @@ function AgencyCompareTable({ agencies, focus, metric, view }: { agencies: any[]
   return (
     <table className="w-full text-sm min-w-[520px]">
       <thead><tr className="text-gray-500 text-xs border-b">
-        <th className="text-right py-2">الوكيل</th>
-        {view === 'volume' && <><th className="text-center">2026</th><th className="text-center">2025</th><th className="text-center">الفرق</th></>}
-        {view === 'growth' && <><th className="text-center">2026</th><th className="text-center">2025</th><th className="text-center">النمو</th></>}
-        {view === 'share' && <><th className="text-center">حصة 2026</th><th className="text-center">حصة 2025</th><th className="text-center">التغيّر</th></>}
-        {view === 'shareChange' && <><th className="text-center">تغيّر الحصة (نقاط)</th></>}
-        {view === 'productivity' && <><th className="text-center">شاحنات/رحلة 2026</th><th className="text-center">2025</th></>}
+        <th scope="col" className="text-right py-2">الوكيل</th>
+        {view === 'volume' && <><th scope="col" className="text-center">2026</th><th scope="col" className="text-center">2025</th><th scope="col" className="text-center">الفرق</th></>}
+        {view === 'growth' && <><th scope="col" className="text-center">2026</th><th scope="col" className="text-center">2025</th><th scope="col" className="text-center">النمو</th></>}
+        {view === 'share' && <><th scope="col" className="text-center">حصة 2026</th><th scope="col" className="text-center">حصة 2025</th><th scope="col" className="text-center">التغيّر</th></>}
+        {view === 'shareChange' && <><th scope="col" className="text-center">تغيّر الحصة (نقاط)</th></>}
+        {view === 'productivity' && <><th scope="col" className="text-center">شاحنات/رحلة 2026</th><th scope="col" className="text-center">2025</th></>}
       </tr></thead>
       <tbody>
         {rows.map((a, i) => {
@@ -343,7 +343,7 @@ function RankingCompare({ ranking, metric, focus }: { ranking: any; metric: Metr
   const prevRank: Record<string, number> = {}; prev.forEach((r: any, i: number) => (prevRank[r.key] = i + 1));
   return (
     <table className="w-full text-sm min-w-[420px]">
-      <thead><tr className="text-gray-500 text-xs border-b"><th className="text-right py-2">#</th><th className="text-right">الوكيل</th><th className="text-center">2026</th><th className="text-center">حصة</th><th className="text-center">ترتيب 2025</th><th className="text-center">التغيّر</th></tr></thead>
+      <thead><tr className="text-gray-500 text-xs border-b"><th scope="col" className="text-right py-2">#</th><th scope="col" className="text-right">الوكيل</th><th scope="col" className="text-center">2026</th><th scope="col" className="text-center">حصة</th><th scope="col" className="text-center">ترتيب 2025</th><th scope="col" className="text-center">التغيّر</th></tr></thead>
       <tbody>
         {cur.map((r: any, i: number) => {
           const pr = prevRank[r.key]; const delta = pr ? pr - (i + 1) : null;

@@ -121,11 +121,11 @@ export default function AccountingSetupPage() {
           <table className="w-full text-sm">
             <thead className="bg-gray-50 text-xs text-gray-500">
               <tr>
-                <th className="px-4 py-2 text-right">الحساب</th>
-                <th className="px-4 py-2 text-right">التصنيف</th>
-                <th className="px-4 py-2 text-right">المجموعة</th>
-                <th className="px-4 py-2 text-center">النوع</th>
-                <th className="px-4 py-2 text-right">الدور</th>
+                <th scope="col" className="px-4 py-2 text-right">الحساب</th>
+                <th scope="col" className="px-4 py-2 text-right">التصنيف</th>
+                <th scope="col" className="px-4 py-2 text-right">المجموعة</th>
+                <th scope="col" className="px-4 py-2 text-center">النوع</th>
+                <th scope="col" className="px-4 py-2 text-right">الدور</th>
               </tr>
             </thead>
             <tbody className="divide-y">

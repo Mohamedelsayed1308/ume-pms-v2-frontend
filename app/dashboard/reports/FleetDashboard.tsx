@@ -315,13 +315,13 @@ export default function FleetDashboard() {
         <table className="w-full text-sm whitespace-nowrap">
           <thead>
             <tr className="text-gray-500 text-xs border-b-2 border-gray-100">
-              <th className="text-right py-2.5 px-2 sticky right-0 bg-white">المركب</th>
+              <th scope="col" className="text-right py-2.5 px-2 sticky right-0 bg-white">المركب</th>
               {METRICS.map((m) => (
-                <th key={m.key} onClick={() => setSortKey(m.key)} className={`text-left py-2.5 px-2 cursor-pointer select-none hover:text-indigo-600 ${sortKey === m.key ? 'text-indigo-600 font-bold' : ''}`}>
+                <th scope="col" key={m.key} onClick={() => setSortKey(m.key)} className={`text-left py-2.5 px-2 cursor-pointer select-none hover:text-indigo-600 ${sortKey === m.key ? 'text-indigo-600 font-bold' : ''}`}>
                   {m.label}{sortKey === m.key ? ' ▾' : ''}
                 </th>
               ))}
-              <th className="text-left py-2.5 px-2">متوسط الصافي/رحلة</th>
+              <th scope="col" className="text-left py-2.5 px-2">متوسط الصافي/رحلة</th>
             </tr>
           </thead>
           <tbody>

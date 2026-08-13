@@ -143,8 +143,8 @@ export default function ExchangeRatesCard() {
           <table className="w-full text-sm whitespace-nowrap">
             <thead className="text-gray-500 text-xs">
               <tr>
-                <th className="text-right py-1 px-2">الشهر</th>
-                {CURRENCIES.map((c) => <th key={c.code} className="text-right py-1 px-2">{c.code}</th>)}
+                <th scope="col" className="text-right py-1 px-2">الشهر</th>
+                {CURRENCIES.map((c) => <th scope="col" key={c.code} className="text-right py-1 px-2">{c.code}</th>)}
               </tr>
             </thead>
             <tbody>

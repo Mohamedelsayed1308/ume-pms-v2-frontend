@@ -184,10 +184,10 @@ export default function VesselsPage() {
           <Card className="hidden lg:block overflow-x-auto">
             <table className="w-full text-sm whitespace-nowrap">
               <thead className="text-gray-500 text-xs border-b border-gray-100"><tr>
-                <th className="text-start py-3 px-4">{t('ves.title')}</th><th className="text-start py-3 px-4">{t('ves.type')}</th>
-                <th className="text-start py-3 px-4">{t('ves.company')}</th><th className="text-start py-3 px-4">{t('ves.outstandingCosts')}</th>
-                <th className="text-start py-3 px-4">{t('ves.invoices')}</th><th className="text-start py-3 px-4">{t('ves.pos')}</th>
-                <th className="text-start py-3 px-4">{t('ves.lastActivity')}</th><th className="text-start py-3 px-4">{t('ves.status')}</th><th className="text-start py-3 px-4">{t('ves.actions')}</th>
+                <th scope="col" className="text-start py-3 px-4">{t('ves.title')}</th><th scope="col" className="text-start py-3 px-4">{t('ves.type')}</th>
+                <th scope="col" className="text-start py-3 px-4">{t('ves.company')}</th><th scope="col" className="text-start py-3 px-4">{t('ves.outstandingCosts')}</th>
+                <th scope="col" className="text-start py-3 px-4">{t('ves.invoices')}</th><th scope="col" className="text-start py-3 px-4">{t('ves.pos')}</th>
+                <th scope="col" className="text-start py-3 px-4">{t('ves.lastActivity')}</th><th scope="col" className="text-start py-3 px-4">{t('ves.status')}</th><th scope="col" className="text-start py-3 px-4">{t('ves.actions')}</th>
               </tr></thead>
               <tbody>
                 {list.map((v) => { const st = stats[v.id] || emptyStat(); return (

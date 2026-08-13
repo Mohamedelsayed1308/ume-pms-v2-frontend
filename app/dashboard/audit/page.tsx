@@ -155,8 +155,8 @@ export default function AuditPage() {
         <h3 className="font-bold text-gray-800 mb-3">قواعد التدقيق ({data.rules?.length || 0} قاعدة أطلقت ملاحظات)</h3>
         <table className="w-full text-sm min-w-[720px]">
           <thead><tr className="text-gray-500 text-xs border-b">
-            <th className="text-right py-2">القاعدة</th><th className="text-center">العدد</th>
-            <th className="text-right">التعرُّض لكل عملة</th><th className="text-center">الخطورة</th><th className="text-right">الإجراء الموصى به</th>
+            <th scope="col" className="text-right py-2">القاعدة</th><th scope="col" className="text-center">العدد</th>
+            <th scope="col" className="text-right">التعرُّض لكل عملة</th><th scope="col" className="text-center">الخطورة</th><th scope="col" className="text-right">الإجراء الموصى به</th>
           </tr></thead>
           <tbody>
             {(data.rules || []).map((r: any) => (
@@ -186,10 +186,10 @@ export default function AuditPage() {
           <p className="text-[11px] text-gray-400 mb-2">صف واحد لكل فاتورة — التعرُّض غير مكرَّر، وكل القواعد التي أُطلقت معروضة.</p>
           <table className="w-full text-xs min-w-[1040px]">
             <thead><tr className="text-gray-500 border-b">
-              <th className="text-right py-2">#</th><th className="text-right">الفاتورة</th><th className="text-right">المورد</th><th className="text-right">المركب</th>
-              <th className="text-center">العملة</th><th className="text-left">الإجمالي</th><th className="text-left">المخزَّن</th><th className="text-left">الفعلي</th>
-              <th className="text-left">الفرق</th><th className="text-left">المتبقي</th><th className="text-right">القواعد</th>
-              <th className="text-left">التعرُّض الصافي</th><th className="text-center">الخطورة</th>
+              <th scope="col" className="text-right py-2">#</th><th scope="col" className="text-right">الفاتورة</th><th scope="col" className="text-right">المورد</th><th scope="col" className="text-right">المركب</th>
+              <th scope="col" className="text-center">العملة</th><th scope="col" className="text-left">الإجمالي</th><th scope="col" className="text-left">المخزَّن</th><th scope="col" className="text-left">الفعلي</th>
+              <th scope="col" className="text-left">الفرق</th><th scope="col" className="text-left">المتبقي</th><th scope="col" className="text-right">القواعد</th>
+              <th scope="col" className="text-left">التعرُّض الصافي</th><th scope="col" className="text-center">الخطورة</th>
             </tr></thead>
             <tbody>
               {data.topExposures.map((f: any, i: number) => (
@@ -243,10 +243,10 @@ export default function AuditPage() {
         </div>
         <table className="w-full text-xs min-w-[1000px]">
           <thead><tr className="text-gray-500 border-b">
-            <th className="text-right py-2">الفاتورة</th><th className="text-right">المورد</th><th className="text-right">المركب</th>
-            <th className="text-center">العملة</th><th className="text-left">الإجمالي</th><th className="text-left">المخزَّن</th>
-            <th className="text-left">السدادات الفعلية</th><th className="text-left">المتبقي</th><th className="text-center">الحالة</th>
-            <th className="text-right">المشكلة</th><th className="text-center">الخطورة</th>
+            <th scope="col" className="text-right py-2">الفاتورة</th><th scope="col" className="text-right">المورد</th><th scope="col" className="text-right">المركب</th>
+            <th scope="col" className="text-center">العملة</th><th scope="col" className="text-left">الإجمالي</th><th scope="col" className="text-left">المخزَّن</th>
+            <th scope="col" className="text-left">السدادات الفعلية</th><th scope="col" className="text-left">المتبقي</th><th scope="col" className="text-center">الحالة</th>
+            <th scope="col" className="text-right">المشكلة</th><th scope="col" className="text-center">الخطورة</th>
           </tr></thead>
           <tbody>
             {findings.slice(0, 400).map((f: any, i: number) => {
