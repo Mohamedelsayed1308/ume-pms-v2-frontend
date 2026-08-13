@@ -286,7 +286,7 @@ export default function ReportsPage() {
     return (
       <div>
         <div className="mb-6">
-          <h2 className="text-2xl font-bold text-[var(--color-navy,#0f172a)] mb-1">{t('reports.center', locale === 'en' ? 'Analytics Center' : 'مركز التحليلات')}</h2>
+          <h1 className="text-2xl font-bold text-[var(--color-navy,#0f172a)] mb-1">{t('reports.center', locale === 'en' ? 'Analytics Center' : 'مركز التحليلات')}</h1>
           <p className="text-sm text-gray-500">{t('reports.centerSub', locale === 'en' ? 'Answer a business question — pick a report by category or search.' : 'أجب عن سؤال إداري بسرعة — اختر تقريرًا حسب الفئة أو ابحث.')}</p>
         </div>
 
@@ -385,7 +385,7 @@ export default function ReportsPage() {
         </span>
         <div className="min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <h2 className="text-xl font-bold text-gray-800">{meta ? L(meta.title) : ''}</h2>
+            <h1 className="text-xl font-bold text-gray-800">{meta ? L(meta.title) : ''}</h1>
             <span className={`text-[11px] px-2 py-0.5 rounded-full ${cat.soft} ${cat.text} font-medium`}>{L(cat.label)}</span>
           </div>
           <p className="text-sm text-gray-500 mt-0.5">{meta ? L(meta.desc) : ''}</p>

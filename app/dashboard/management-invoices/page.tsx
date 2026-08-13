@@ -260,7 +260,7 @@ export default function ManagementInvoicesPage() {
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <h2 className="text-2xl font-bold text-gray-800">فواتير الإدارة</h2>
+        <h1 className="text-2xl font-bold text-gray-800">فواتير الإدارة</h1>
         <button onClick={openAdd} className="bg-teal-600 text-white px-4 py-2 rounded-lg hover:bg-teal-700">+ فاتورة إدارة جديدة</button>
       </div>
 

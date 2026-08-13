@@ -53,7 +53,7 @@ export default function ItemsPage() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h2 className="text-2xl font-bold text-gray-800">بنود الفواتير</h2>
+          <h1 className="text-2xl font-bold text-gray-800">بنود الفواتير</h1>
           <p className="text-sm text-gray-500 mt-1">الفئات اللي بتختار منها وقت تسجيل الفاتورة (Bunker · Vessel Supplies · Salaries · Provision ...).</p>
         </div>
       </div>
