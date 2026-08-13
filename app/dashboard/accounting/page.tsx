@@ -78,6 +78,13 @@ export default function AccountingPage() {
   async function load(id: string) {
     if (!id) return;
     setLoading(true);
+
+    // اللحاق قبل القراءة: أي شهر مكتمل بلا قيد إهلاك يظهر مسوّدةً الآن.
+    // آمنٌ للتكرار — يُنشئ ما ينقص فقط، ولا يُرحّل شيئاً. وفشله لا يمنع العرض:
+    // شاشة لا تفتح لأن مهمّة خلفية تعثّرت أسوأ من مسوّدة متأخّرة.
+    await api.post('/api/accounting/bridge/depreciation/catch-up', { legal_entity_id: id })
+      .catch(() => { /* يُتجاوَز بصمت — الدفتر يُعرض على كل حال */ });
+
     const r = await Promise.allSettled([
       api.get(`/api/accounting/trial-balance?legal_entity_id=${id}`),
       api.get('/api/accounting/entries'),
