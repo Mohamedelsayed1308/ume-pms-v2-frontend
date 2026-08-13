@@ -4,7 +4,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import api from '@/lib/api';
 import { CURRENCIES } from '@/lib/currencies';
 import { useI18n } from '@/lib/i18n';
-import { Card, Button, Badge, Select as UISelect, Drawer, Icon, cx, TableSkeleton, Callout } from '@/components/ui';
+import { Card, Button, Badge, Select as UISelect, Drawer, Icon, cx, TableSkeleton, Callout, IconButton } from '@/components/ui';
 import SupplierReports, { type SupplierReportKey } from './SupplierReports';
 import PostToLedger from './PostToLedger';
 import { fmtNum, fmtMoney, fmtMoneyC, ccyEntries, n0 } from '@/lib/format';
@@ -928,7 +928,12 @@ function InvoicesContent() {
                     {/* فاتورة بمبلغ سالب = إشعار دائن */}
                     {Number(inv.total_amount) < 0 && <span className="inline-block bg-indigo-100 text-indigo-700 rounded px-1.5 py-0.5 text-[10px] font-semibold ms-1 font-sans">إشعار دائن</span>}
                   </td>
-                  <td className="px-3 py-2.5 text-gray-700" dir="auto">{inv.supplier?.name || '—'}</td>
+                  {/*
+                    * اسم المورد أطول عمود في الجدول، وسطرٌ واحد يمدّه إلى ٥٨٨ بكسل
+                    * فيدفع الأعمدة الأخيرة خارج الشاشة. فيُسمح له بالالتفاف داخل
+                    * حدٍّ أقصى — والالتفاف يُبقي الاسم كاملاً، بخلاف القصّ.
+                    */}
+                  <td className="px-3 py-2.5 text-gray-700 whitespace-normal break-words max-w-[15rem]" dir="auto">{inv.supplier?.name || '—'}</td>
                   <td className="px-3 py-2.5 text-gray-500">{inv.vessel?.name || '—'}</td>
                   <td className="px-3 py-2.5 font-medium tabular-nums">{fmtMoney(inv.total_amount)} <span className="text-[11px] text-gray-400">{inv.currency}</span></td>
                   <td className="px-3 py-2.5 text-emerald-600 tabular-nums">{fmtMoney(inv.paid_amount)}</td>
@@ -937,14 +942,24 @@ function InvoicesContent() {
                   <td className="px-3 py-2.5"><div className="flex flex-wrap items-center gap-1"><Badge tone={inv.status === 'paid' ? 'success' : inv.status === 'partial' ? 'warning' : inv.status === 'cancelled' ? 'neutral' : 'danger'}>{statusLabel[inv.status]}</Badge><LegacyBadge i={inv} /></div></td>
                   <td className="px-3 py-2.5">{inv.approval_status ? <Badge tone={'info'}>{approvalLabel[inv.approval_status]}</Badge> : <span className="text-gray-300 text-xs">—</span>}</td>
                   <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
-                    <div className="flex gap-2 text-xs">
-                      <button onClick={() => setDetail(inv)} className="text-gray-500 hover:text-brand-600">{t('inv.details')}</button>
-                      {inv.status !== 'paid' && inv.status !== 'cancelled' && <button onClick={() => openSettle(inv)} className="text-emerald-600 hover:underline font-medium">💵 سداد</button>}
-                      {inv.status !== 'paid' && inv.status !== 'cancelled' && <button onClick={() => openPay(inv)} className="text-blue-600 hover:underline font-medium">{t('inv.pay')}</button>}
-                      <button onClick={() => openEdit(inv)} className="text-brand-600 hover:underline">{t('inv.editShort')}</button>
-                      <button onClick={() => openAttachments(inv)} className="text-gray-500 hover:text-gray-800">{t('inv.attachShort')}</button>
+                    {/*
+                      * سبعة أفعال بنصوصها كانت تشغل ٤٠٠ بكسل — عمودٌ أعرض من
+                      * المبلغ والمدفوع والمتبقّي مجتمعة. الأيقونة تختصر العرض ولا
+                      * تُنقص فعلاً: لكلٍّ `aria-label` وتلميحٌ باسمه العربي، فيبقى
+                      * المعنى متاحاً للقارئ وللقارئ الآلي معاً.
+                      */}
+                    <div className="flex gap-0.5">
+                      <IconButton icon="search" label={t('inv.details')} size="sm" onClick={() => setDetail(inv)} />
+                      {inv.status !== 'paid' && inv.status !== 'cancelled' && (
+                        <IconButton icon="coins" label="سداد" size="sm" className="text-emerald-600 hover:bg-emerald-50" onClick={() => openSettle(inv)} />
+                      )}
+                      {inv.status !== 'paid' && inv.status !== 'cancelled' && (
+                        <IconButton icon="card" label={t('inv.pay')} size="sm" className="text-blue-600 hover:bg-blue-50" onClick={() => openPay(inv)} />
+                      )}
+                      <IconButton icon="edit" label={t('inv.editShort')} size="sm" onClick={() => openEdit(inv)} />
+                      <IconButton icon="file" label={t('inv.attachShort')} size="sm" onClick={() => openAttachments(inv)} />
                       <PostToLedger invoice={inv} compact onDone={load} />
-                      <button onClick={() => handleDelete(inv.id, inv.invoice_number)} className="text-red-400 hover:text-red-600">{t('inv.delShort')}</button>
+                      <IconButton icon="trash" label={t('inv.delShort')} size="sm" className="text-red-400 hover:text-red-600 hover:bg-red-50" onClick={() => handleDelete(inv.id, inv.invoice_number)} />
                     </div>
                   </td>
                 </tr>
