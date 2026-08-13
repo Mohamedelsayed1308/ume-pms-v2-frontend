@@ -44,6 +44,11 @@ export default function ReceiptsPage() {
   const [form, setForm] = useState({ receipt_type: 'GOODS_RECEIVED', received_date: today(), reference: '', notes: '' });
   const [saving, setSaving] = useState(false);
   const [formErr, setFormErr] = useState('');
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkForm, setBulkForm] = useState({ receipt_type: 'GOODS_RECEIVED', received_date: today(), reference: '', notes: '' });
+  const [bulkResult, setBulkResult] = useState<{ ok: string[]; failed: { ref: string; msg: string }[] } | null>(null);
+  const [bulkErr, setBulkErr] = useState('');
 
   async function load() {
     setLoading(true);
@@ -84,6 +89,56 @@ export default function ReceiptsPage() {
   }, [invoices, q, onlyMissing]);
 
   const missingCount = summary?.awaiting ?? invoices.filter((i) => (i._receipts ?? 0) === 0).length;
+
+  /*
+   * تحديد الكلّ يتخطّى «تسليم مفقود» عمداً.
+   *
+   * النظام يصرّح على تلك الفواتير بغياب التسليم. شمولها في تحديد جماعي يجعل
+   * نقض ذلك التصريح يمرّ بلا أن ينتبه أحد — وهو أخطر ما في التأكيد الجماعي.
+   * تبقى قابلة للتحديد منفردةً، فالقرار يُتَّخذ لا يُنزلق إليه.
+   */
+  const bulkSafeIds = useMemo(
+    () => shown.filter((i) => (i._receipts ?? 0) === 0 && i.approval_status !== 'delivery_missing').map((i) => i.id),
+    [shown]);
+  const selectedInvoices = useMemo(() => shown.filter((i) => selected.has(i.id)), [shown, selected]);
+  const selectedDeliveryMissing = selectedInvoices.filter((i) => i.approval_status === 'delivery_missing');
+  const allSelected = bulkSafeIds.length > 0 && bulkSafeIds.every((id) => selected.has(id));
+
+  function toggleOne(id: string) {
+    setSelected((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  }
+  function toggleAll() {
+    setSelected((prev) => {
+      const n = new Set(prev);
+      if (allSelected) bulkSafeIds.forEach((id) => n.delete(id));
+      else bulkSafeIds.forEach((id) => n.add(id));
+      return n;
+    });
+  }
+
+  async function doBulk() {
+    if (bulkForm.receipt_type === 'MANAGEMENT_RECEIPT_CONFIRMATION' && !bulkForm.reference.trim()) {
+      setBulkErr('الإقرار الإداري يحتاج مرجعاً صريحاً — لا يُسجَّل بلا سند يُراجَع');
+      return;
+    }
+    setSaving(true); setBulkErr('');
+    const ok: string[] = []; const failed: { ref: string; msg: string }[] = [];
+    for (const i of selectedInvoices) {
+      try {
+        // تاريخ الفاتورة أدقّ من تاريخ موحَّد — والموحَّد يُستخدم حين يُملأ صراحةً.
+        await api.post(`/api/invoices/${i.id}/receipts`, {
+          ...bulkForm,
+          received_date: bulkForm.received_date || i.invoice_date?.slice(0, 10) || today(),
+        });
+        ok.push(i.invoice_number);
+      } catch (e: any) {
+        failed.push({ ref: i.invoice_number, msg: e?.response?.data?.message || 'تعذّر التسجيل' });
+      }
+    }
+    setBulkResult({ ok, failed });
+    setSelected(new Set()); setBulkOpen(false); setSaving(false);
+    await load();
+  }
 
   function open(i: Inv) {
     setTarget(i);
@@ -148,6 +203,15 @@ export default function ReceiptsPage() {
             <input type="checkbox" checked={onlyMissing} onChange={(e) => setOnlyMissing(e.target.checked)} />
             بلا تأكيد فقط
           </label>
+          {selectedInvoices.length > 0 && (
+            <div className="flex items-center gap-2 ms-auto">
+              <span className="text-sm text-gray-600">{selectedInvoices.length} محدَّدة</span>
+              <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>إلغاء التحديد</Button>
+              <Button size="sm" variant="primary" onClick={() => { setBulkErr(''); setBulkOpen(true); }}>
+                تأكيد استلام المحدَّد
+              </Button>
+            </div>
+          )}
         </div>
 
         {loading ? <div className="p-4 space-y-2"><Skeleton className="h-10" /><Skeleton className="h-10" /><Skeleton className="h-10" /></div>
@@ -159,6 +223,11 @@ export default function ReceiptsPage() {
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 text-xs text-gray-500">
                   <tr>
+                    <th className="px-3 py-2 w-8">
+                      <input type="checkbox" checked={allSelected} onChange={toggleAll}
+                        disabled={!bulkSafeIds.length}
+                        title="تحديد المعروض — عدا «تسليم مفقود»" />
+                    </th>
                     <th className="px-4 py-2 text-right">الفاتورة</th>
                     <th className="px-4 py-2 text-right">المورّد</th>
                     <th className="px-4 py-2 text-right">المركب</th>
@@ -170,7 +239,12 @@ export default function ReceiptsPage() {
                 </thead>
                 <tbody className="divide-y">
                   {shown.map((i) => (
-                    <tr key={i.id} className="hover:bg-blue-50/40">
+                    <tr key={i.id} className={cx('hover:bg-blue-50/40', selected.has(i.id) && 'bg-blue-50')}>
+                      <td className="px-3 py-2">
+                        {(i._receipts ?? 0) === 0 && (
+                          <input type="checkbox" checked={selected.has(i.id)} onChange={() => toggleOne(i.id)} />
+                        )}
+                      </td>
                       <td className="px-4 py-2 font-mono text-xs">{i.invoice_number}</td>
                       <td className="px-4 py-2"><div className="max-w-[16rem] truncate">{i.supplier?.name || '—'}</div></td>
                       <td className="px-4 py-2 text-gray-600">{i.vessel?.name || '—'}</td>
@@ -193,6 +267,98 @@ export default function ReceiptsPage() {
             </div>
           )}
       </Card>
+
+      {/* التأكيد الجماعي */}
+      <Modal open={bulkOpen} onClose={() => !saving && setBulkOpen(false)}
+        title={`تأكيد استلام ${selectedInvoices.length} فاتورة`} size="lg">
+        <div className="space-y-4">
+          {selectedDeliveryMissing.length > 0 && (
+            <div className="rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-900">
+              <b>{selectedDeliveryMissing.length}</b> من المحدَّد يصرّح النظام بغياب التسليم عليها
+              ({selectedDeliveryMissing.map((i) => i.invoice_number).join(' · ')}).
+              تأكيدها هنا <b>نقضٌ صريح لذلك التصريح</b> — لا تمرّ بالخطأ.
+            </div>
+          )}
+
+          <div className="max-h-52 overflow-y-auto rounded-lg border">
+            <table className="w-full text-sm">
+              <tbody className="divide-y">
+                {selectedInvoices.map((i) => (
+                  <tr key={i.id}>
+                    <td className="px-3 py-1.5 font-mono text-xs">{i.invoice_number}</td>
+                    <td className="px-3 py-1.5 text-xs"><div className="max-w-[14rem] truncate">{i.supplier?.name}</div></td>
+                    <td className="px-3 py-1.5 text-xs text-gray-500">{dateOnly(i.invoice_date)}</td>
+                    <td className="px-3 py-1.5 text-left tabular-nums text-xs">{money(i.total_amount, i.currency)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <Field label="نوع الواقعة">
+            <Select value={bulkForm.receipt_type} onChange={(e: any) => setBulkForm({ ...bulkForm, receipt_type: e.target.value })}>
+              {TYPES.map((t) => <option key={t.v} value={t.v}>{t.label}</option>)}
+            </Select>
+          </Field>
+          <p className="-mt-2 text-xs text-gray-500">{TYPES.find((t) => t.v === bulkForm.receipt_type)?.hint}</p>
+
+          <Field label="تاريخ الاستلام">
+            <Input type="date" value={bulkForm.received_date}
+              onChange={(e: any) => setBulkForm({ ...bulkForm, received_date: e.target.value })} />
+          </Field>
+          <p className="-mt-2 text-xs text-gray-500">
+            اتركه فارغاً ليأخذ كلٌّ تاريخ فاتورته — أدقّ من تاريخ موحَّد لا يخصّ أيّاً منها.
+          </p>
+
+          <Field label={bulkForm.receipt_type === 'MANAGEMENT_RECEIPT_CONFIRMATION' ? 'المرجع (مطلوب)' : 'المرجع'}>
+            <Input placeholder="رقم إذن الاستلام · إشعار التسليم · سند الإقرار"
+              value={bulkForm.reference} onChange={(e: any) => setBulkForm({ ...bulkForm, reference: e.target.value })} />
+          </Field>
+
+          <Field label="ملاحظات">
+            <Input value={bulkForm.notes} onChange={(e: any) => setBulkForm({ ...bulkForm, notes: e.target.value })} />
+          </Field>
+
+          <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+            الوقائع <b>أدلّة</b> — بعد تسجيلها لا تُعدَّل ولا تُحذف. والتصحيح بتسجيل واقعة جديدة.
+            وتُسجَّل واحدةً تلو الأخرى، فتعثّر إحداها لا يُسقط الباقي.
+          </div>
+
+          {bulkErr && <div className="rounded-md bg-red-50 p-2 text-sm text-red-700">{bulkErr}</div>}
+
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" onClick={() => setBulkOpen(false)} disabled={saving}>إلغاء</Button>
+            <Button variant="primary" onClick={doBulk} loading={saving}>
+              تسجيل {selectedInvoices.length} واقعة
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* النتيجة — تُعرَض ولا تُبتلع في إشعار عابر */}
+      <Modal open={!!bulkResult} onClose={() => setBulkResult(null)} title="نتيجة التأكيد">
+        {bulkResult && (
+          <div className="space-y-3">
+            {bulkResult.ok.length > 0 && (
+              <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3">
+                <div className="text-sm font-medium text-emerald-900">سُجّلت {bulkResult.ok.length} واقعة</div>
+                <div className="mt-1 font-mono text-xs text-emerald-800">{bulkResult.ok.join(' · ')}</div>
+              </div>
+            )}
+            {bulkResult.failed.length > 0 && (
+              <div className="rounded-lg border border-red-200 bg-red-50 p-3">
+                <div className="text-sm font-medium text-red-900">تعذّر {bulkResult.failed.length}</div>
+                <ul className="mt-1 space-y-1 text-xs text-red-800">
+                  {bulkResult.failed.map((f, k) => <li key={k}><b>{f.ref}</b> — {f.msg}</li>)}
+                </ul>
+              </div>
+            )}
+            <div className="flex justify-end">
+              <Button variant="secondary" onClick={() => setBulkResult(null)}>إغلاق</Button>
+            </div>
+          </div>
+        )}
+      </Modal>
 
       <Modal open={!!target} onClose={() => !saving && setTarget(null)}
         title={target ? `تأكيد استلام ${target.invoice_number}` : ''}>
