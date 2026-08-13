@@ -228,9 +228,9 @@ export default function SuppliersPage() {
           <span className="absolute inset-y-0 start-3 flex items-center text-gray-400 pointer-events-none"><Icon name="search" size={16} /></span>
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('sup.search')} className="w-full border border-gray-200 rounded-xl ps-9 pe-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/40" />
         </div>
-        <Select value={status} onChange={(e) => setStatus(e.target.value as any)} className="w-auto"><option value="all">{t('sup.all')}</option><option value="active">{t('sup.active')}</option><option value="inactive">{t('sup.inactive')}</option></Select>
-        <Select value={country} onChange={(e) => setCountry(e.target.value)} className="w-auto"><option value="">{t('sup.allCountries')}</option>{countries.map((c) => <option key={c} value={c}>{c}</option>)}</Select>
-        <Select value={sortBy} onChange={(e) => setSortBy(e.target.value as any)} className="w-auto"><option value="name">{t('sup.sortName')}</option><option value="outstanding">{t('sup.sortOutstanding')}</option><option value="invoices">{t('sup.sortInvoices')}</option></Select>
+        <Select aria-label={t("sup.all")} value={status} onChange={(e) => setStatus(e.target.value as any)} className="w-auto"><option value="all">{t('sup.all')}</option><option value="active">{t('sup.active')}</option><option value="inactive">{t('sup.inactive')}</option></Select>
+        <Select aria-label={t("sup.allCountries")} value={country} onChange={(e) => setCountry(e.target.value)} className="w-auto"><option value="">{t('sup.allCountries')}</option>{countries.map((c) => <option key={c} value={c}>{c}</option>)}</Select>
+        <Select aria-label={t("sup.sortName")} value={sortBy} onChange={(e) => setSortBy(e.target.value as any)} className="w-auto"><option value="name">{t('sup.sortName')}</option><option value="outstanding">{t('sup.sortOutstanding')}</option><option value="invoices">{t('sup.sortInvoices')}</option></Select>
         <label className="flex items-center gap-1.5 text-xs text-gray-600 cursor-pointer"><input type="checkbox" checked={onlyOutstanding} onChange={(e) => setOnlyOutstanding(e.target.checked)} />{t('sup.hasOutstanding')}</label>
         <span className="text-xs text-gray-400 ms-auto">{list.length}/{suppliers.length}</span>
       </Card>

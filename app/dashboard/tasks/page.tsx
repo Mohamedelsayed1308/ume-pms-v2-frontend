@@ -376,24 +376,24 @@ export default function TasksPage() {
 
       {/* Filter row */}
       <div className="flex items-center gap-2 mb-4 flex-wrap text-sm">
-        <select value={fStatus} onChange={(e) => setFStatus(e.target.value)} className="border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-300">
+        <select aria-label={L({ ar: 'كل الحالات', en: 'All statuses' })} value={fStatus} onChange={(e) => setFStatus(e.target.value)} className="border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-300">
           <option value="">{L({ ar: 'كل الحالات', en: 'All statuses' })}</option>
           {STATUSES.map((s) => <option key={s} value={s}>{L(STATUS_LABEL[s])}</option>)}
         </select>
-        <select value={fPriority} onChange={(e) => setFPriority(e.target.value)} className="border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-300">
+        <select aria-label={L({ ar: 'كل الأولويات', en: 'All priorities' })} value={fPriority} onChange={(e) => setFPriority(e.target.value)} className="border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-300">
           <option value="">{L({ ar: 'كل الأولويات', en: 'All priorities' })}</option>
           {PRIORITY.map((p) => <option key={p} value={p}>{L(PRIORITY_LABEL[p])}</option>)}
         </select>
-        <select value={fOwner} onChange={(e) => setFOwner(e.target.value)} className="border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-300">
+        <select aria-label={L({ ar: 'كل المسؤولين', en: 'All owners' })} value={fOwner} onChange={(e) => setFOwner(e.target.value)} className="border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-300">
           <option value="">{L({ ar: 'كل المسؤولين', en: 'All owners' })}</option>
           {OWNERS.map((o) => <option key={o} value={o}>{o}</option>)}
         </select>
-        <select value={fRecur} onChange={(e) => setFRecur(e.target.value)} className="border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-300">
+        <select aria-label={L({ ar: 'كل التكرارات', en: 'All recurrence' })} value={fRecur} onChange={(e) => setFRecur(e.target.value)} className="border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-300">
           <option value="">{L({ ar: 'كل التكرارات', en: 'All recurrence' })}</option>
           {RECURRENCE.map((r) => <option key={r} value={r}>{L(RECUR_LABEL[r])}</option>)}
         </select>
         {view === 'list' && (
-          <select value={sortBy} onChange={(e) => setSortBy(e.target.value as any)} className="border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-300">
+          <select aria-label={L({ ar: 'ترتيب', en: 'Sort' })} value={sortBy} onChange={(e) => setSortBy(e.target.value as any)} className="border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-300">
             <option value="created">{L({ ar: 'ترتيب: الأحدث', en: 'Sort: Newest' })}</option>
             <option value="due">{L({ ar: 'ترتيب: الاستحقاق', en: 'Sort: Due date' })}</option>
             <option value="priority">{L({ ar: 'ترتيب: الأولوية', en: 'Sort: Priority' })}</option>
@@ -649,7 +649,7 @@ export default function TasksPage() {
                   <td className="px-4 py-3"><OwnerChip o={t.owner} /></td>
                   <td className="px-4 py-3"><PriorityBadge p={t.priority} /></td>
                   <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                    <select value={t.status} onChange={(e) => patchTask(t.id, { status: e.target.value })}
+                    <select aria-label={L({ ar: 'حالة المهمة', en: 'Task status' })} value={t.status} onChange={(e) => patchTask(t.id, { status: e.target.value })}
                       className={cx('text-xs px-2 py-1 rounded-full border font-medium appearance-none cursor-pointer', STATUS_STYLE[t.status])}>
                       {STATUSES.map((s) => <option key={s} value={s}>{L(STATUS_LABEL[s])}</option>)}
                     </select>
@@ -713,7 +713,7 @@ export default function TasksPage() {
                       </div>
                       <div className="flex items-center justify-between">
                         <DueCell t={t} />
-                        <select value={t.status} onChange={(e) => patchTask(t.id, { status: e.target.value })} onClick={(e) => e.stopPropagation()}
+                        <select aria-label={L({ ar: 'حالة المهمة', en: 'Task status' })} value={t.status} onChange={(e) => patchTask(t.id, { status: e.target.value })} onClick={(e) => e.stopPropagation()}
                           className="text-[11px] px-1.5 py-0.5 rounded border border-gray-200 bg-white cursor-pointer" title={L({ ar: 'نقل', en: 'Move' })}>
                           {STATUSES.map((x) => <option key={x} value={x}>{L(STATUS_LABEL[x])}</option>)}
                         </select>
