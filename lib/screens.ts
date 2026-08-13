@@ -1,4 +1,4 @@
-export type GroupKey = 'overview' | 'procurement' | 'fleet' | 'revenue' | 'finance' | 'operations' | 'admin';
+export type GroupKey = 'overview' | 'procurement' | 'fleet' | 'revenue' | 'finance' | 'sivamar_qb' | 'operations' | 'admin';
 
 export interface Screen {
   href: string;
@@ -25,6 +25,7 @@ export const GROUPS: { key: GroupKey; i18nKey: string }[] = [
   { key: 'fleet', i18nKey: 'group.fleet' },
   { key: 'revenue', i18nKey: 'group.revenue' },
   { key: 'finance', i18nKey: 'group.finance' },
+  { key: 'sivamar_qb', i18nKey: 'group.sivamar_qb' },
   { key: 'operations', i18nKey: 'group.operations' },
   { key: 'admin', i18nKey: 'group.admin' },
 ];
@@ -64,13 +65,13 @@ export const SCREENS: Screen[] = [
   // صلاحيات بلا صفحات بعد: `journals` و `posting` تحكمان أزراراً داخل الشاشات
   // القائمة، و`periods` و`setup` عبر الـAPI حتى تُبنيا. فتبقى `hidden` — الرابط
   // الذي يؤدي إلى 404 أسوأ من غياب الرابط.
-  { href: '/dashboard/accounting', label: 'المحاسبة', icon: '📒', iconName: 'file', group: 'finance' },
-  { href: '/dashboard/accounting/statements', label: 'القوائم المالية', icon: '📑', iconName: 'chart', group: 'finance' },
-  { href: '/dashboard/receipts', label: 'تأكيد الاستلام', icon: '📦', iconName: 'check', group: 'procurement' },
-  { href: '/dashboard/accounting/journals', label: 'إعداد القيود', icon: '📝', iconName: 'file', group: 'finance', hidden: true },
-  { href: '/dashboard/accounting/posting', label: 'ترحيل القيود', icon: '📮', iconName: 'check', group: 'finance', hidden: true },
-  { href: '/dashboard/accounting/periods', label: 'الفترات المحاسبية', icon: '🗓️', iconName: 'file', group: 'finance', hidden: true },
-  { href: '/dashboard/accounting/setup', label: 'إعداد المحاسبة', icon: '⚙️', iconName: 'file', group: 'finance' },
+  { href: '/dashboard/accounting', label: 'دفتر الأستاذ', icon: '📒', iconName: 'file', group: 'sivamar_qb' },
+  { href: '/dashboard/accounting/statements', label: 'القوائم المالية', icon: '📑', iconName: 'chart', group: 'sivamar_qb' },
+  { href: '/dashboard/receipts', label: 'تأكيد الاستلام', icon: '📦', iconName: 'check', group: 'sivamar_qb' },
+  { href: '/dashboard/accounting/journals', label: 'إعداد القيود', icon: '📝', iconName: 'file', group: 'sivamar_qb', hidden: true },
+  { href: '/dashboard/accounting/posting', label: 'ترحيل القيود', icon: '📮', iconName: 'check', group: 'sivamar_qb', hidden: true },
+  { href: '/dashboard/accounting/periods', label: 'الفترات المحاسبية', icon: '🗓️', iconName: 'file', group: 'sivamar_qb', hidden: true },
+  { href: '/dashboard/accounting/setup', label: 'إعداد المحاسبة', icon: '⚙️', iconName: 'file', group: 'sivamar_qb' },
 ];
 
 // الشاشات التي يمكن منحها/منعها في شاشة الصلاحيات (استبعاد الرئيسية والأدمن-فقط)

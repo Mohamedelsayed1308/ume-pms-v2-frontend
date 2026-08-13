@@ -15,6 +15,7 @@ const DICT: Record<string, { ar: string; en: string }> = {
   'group.fleet': { ar: 'الأسطول', en: 'Fleet' },
   'group.revenue': { ar: 'الإيرادات والعملاء', en: 'Revenue & Customers' },
   'group.finance': { ar: 'المالية والرقابة', en: 'Finance & Control' },
+  'group.sivamar_qb': { ar: 'Sivamar QB', en: 'Sivamar QB' },
   'group.operations': { ar: 'العمليات', en: 'Operations' },
   'group.admin': { ar: 'الإدارة', en: 'Administration' },
 
