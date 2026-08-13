@@ -24,8 +24,18 @@ const PATHS: Record<string, string> = {
   x: 'M6 6l12 12M18 6 6 18',
   plus: 'M12 5v14M5 12h14',
   chevronDown: 'M6 9l6 6 6-6',
+  chevronUp: 'M6 15l6-6 6 6',
   chevronRight: 'M9 6l6 6-6 6',
   chevronLeft: 'M15 6l-6 6 6 6',
+  refresh: 'M21 12a9 9 0 1 1-2.6-6.4M21 4v5h-5',
+  filter: 'M3 5h18l-7 8v6l-4 2v-8L3 5Z',
+  download: 'M12 3v12m0 0 4-4m-4 4-4-4M4 19h16',
+  alert: 'M12 3 2 20h20L12 3ZM12 10v4M12 17h.01',
+  info: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM12 11v5M12 8h.01',
+  calendar: 'M3 6h18v15H3zM3 10h18M8 3v4M16 3v4',
+  edit: 'M4 20h4l10-10-4-4L4 16v4ZM14 6l4 4',
+  trash: 'M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6',
+  more: 'M12 6h.01M12 12h.01M12 18h.01',
   sparkle: 'M12 3l1.8 4.9L18.7 9l-4.9 1.1L12 15l-1.8-4.9L5.3 9l4.9-1.1L12 3ZM19 14l.9 2.3 2.3.7-2.3.9L19 20l-.9-2.1-2.3-.9 2.3-.7L19 14Z',
 };
 

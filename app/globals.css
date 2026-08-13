@@ -63,6 +63,40 @@ body {
 /* Numeric alignment for finance tables */
 .tabular-nums { font-variant-numeric: tabular-nums; }
 
+/*
+ * الأرقام في جدول مالي تُقرأ بالمقارنة العمودية. `tabular-nums` وحده يصفّ
+ * الخانات، و`lining-nums` يمنع الأرقام النازلة في بعض الخطوط العربية من كسر
+ * خطّ الأساس داخل الصفّ.
+ */
+table { font-variant-numeric: tabular-nums lining-nums; }
+
+/*
+ * الجدول لا يُغيّر عرضه كلّما تغيّر محتواه.
+ *
+ * `auto` يُعيد حساب الأعمدة عند كل ترشيح فتقفز الرؤوس أمام القارئ. والثبات هنا
+ * أهم من الاتّساع الأمثل لكل خلية.
+ */
+.ume-table-fixed { table-layout: fixed; }
+
+/* صفّ رأس لاصق — يبقى العنوان مرئياً في الجداول الطويلة. */
+.ume-sticky-head thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: color-mix(in srgb, #f8fafc 92%, transparent);
+  backdrop-filter: blur(4px);
+}
+
+/* الحركة تخدم الفهم لا الزينة — ومن يطلب تقليلها يُستجاب له. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 /* Reusable motion */
 @keyframes ume-fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 @keyframes ume-slide-in-rtl { from { transform: translateX(-100%); } to { transform: none; } }
