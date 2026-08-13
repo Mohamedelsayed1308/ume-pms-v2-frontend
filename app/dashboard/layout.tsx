@@ -116,7 +116,11 @@ function Shell({ children }: { children: React.ReactNode }) {
           <button onClick={() => setMobileOpen(true)} className="md:hidden text-gray-500 hover:text-gray-800 p-1.5 rounded-lg hover:bg-gray-100" aria-label={t('topbar.menu')}>
             <Icon name="menu" size={22} />
           </button>
-          <h1 className="font-bold text-gray-800 truncate">{active?.label || t('app.name')}</h1>
+          {/*
+            * لافتةٌ للموضع لا عنوانٌ للمستند: كل شاشة تحمل `h1` خاصّاً بها، فوجود
+            * `h1` ثانٍ في الشريط يجعل للصفحة عنوانين متنافسين في شجرة الوصول.
+            */}
+          <p className="font-bold text-gray-800 truncate">{active?.label || t('app.name')}</p>
 
           <div className="hidden lg:flex items-center gap-2 mr-4 flex-1 max-w-md">
             <button onClick={palette.open} title={t('topbar.searchHint')}

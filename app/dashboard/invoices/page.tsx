@@ -815,9 +815,18 @@ function InvoicesContent() {
     : isLegacyCredit(i) ? <Badge tone="neutral">إشعار دائن</Badge>
     : null;
 
+  /*
+   * `scope="col"` يربط كل خلية ببيان عمودها، و`aria-sort` يُعلن اتّجاه الفرز.
+   * وقارئ الشاشة كان يقرأ عشرة أعمدة بلا رابط بينها وبين قيمها.
+   */
   const SortTh = ({ k, label }: { k: string; label: string }) => (
-    <th className="px-4 py-3 cursor-pointer select-none hover:text-blue-600 whitespace-nowrap" onClick={() => toggleSort(k)}>
-      {label}<span className="text-blue-500">{sort.key === k ? (sort.dir === 'asc' ? ' ▲' : ' ▼') : ''}</span>
+    <th scope="col"
+      aria-sort={sort.key === k ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}
+      className="px-4 py-3 select-none whitespace-nowrap">
+      <button type="button" onClick={() => toggleSort(k)}
+        className="inline-flex items-center hover:text-blue-600 transition-colors">
+        {label}<span className="text-blue-500">{sort.key === k ? (sort.dir === 'asc' ? ' ▲' : ' ▼') : ''}</span>
+      </button>
     </th>
   );
 
@@ -892,9 +901,10 @@ function InvoicesContent() {
           <span className="absolute inset-y-0 start-3 flex items-center text-gray-400 pointer-events-none"><Icon name="search" size={16} /></span>
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('inv.search')} className="w-full border border-gray-200 rounded-xl ps-9 pe-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/40" />
         </div>
-        <UISelect value={supFilter} onChange={(e) => setSupFilter(e.target.value)} className="w-auto"><option value="">{t('po.allSuppliers')}</option>{suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</UISelect>
-        <UISelect value={vesFilter} onChange={(e) => setVesFilter(e.target.value)} className="w-auto"><option value="">{t('po.allVessels')}</option>{vessels.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}</UISelect>
-        <UISelect value={ccyFilter} onChange={(e) => setCcyFilter(e.target.value)} className="w-auto"><option value="">{t('inv.allCurrencies')}</option>{currencies.map((c) => <option key={c} value={c}>{c}</option>)}</UISelect>
+        {/* الخيار الأوّل يُغني المُبصر عن بيانٍ، ولا يُغني قارئ الشاشة — فلكلٍّ اسمه. */}
+        <UISelect aria-label={t('po.allSuppliers')} value={supFilter} onChange={(e) => setSupFilter(e.target.value)} className="w-auto"><option value="">{t('po.allSuppliers')}</option>{suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</UISelect>
+        <UISelect aria-label={t('po.allVessels')} value={vesFilter} onChange={(e) => setVesFilter(e.target.value)} className="w-auto"><option value="">{t('po.allVessels')}</option>{vessels.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}</UISelect>
+        <UISelect aria-label={t('inv.allCurrencies')} value={ccyFilter} onChange={(e) => setCcyFilter(e.target.value)} className="w-auto"><option value="">{t('inv.allCurrencies')}</option>{currencies.map((c) => <option key={c} value={c}>{c}</option>)}</UISelect>
         <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="border border-gray-200 rounded-xl px-2 py-2 text-xs" title={t('po.fromDate')} />
         <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="border border-gray-200 rounded-xl px-2 py-2 text-xs" title={t('po.toDate')} />
         {activeFilterCount > 0 && <Button variant="ghost" size="sm" onClick={resetFilters}>{t('sup.reset')} ({activeFilterCount})</Button>}
@@ -915,7 +925,7 @@ function InvoicesContent() {
               <SortTh k="due_date" label={t('inv.due')} />
               <SortTh k="status" label={t('inv.payStatus')} />
               <SortTh k="approval_status" label={t('inv.approval')} />
-              <th className="px-3 py-3 text-start">{t('inv.actions')}</th>
+              <th scope="col" className="px-3 py-3 text-start">{t('inv.actions')}</th>
             </tr>
           </thead>
           <tbody>
