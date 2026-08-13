@@ -819,10 +819,10 @@ function InvoicesContent() {
    * `scope="col"` يربط كل خلية ببيان عمودها، و`aria-sort` يُعلن اتّجاه الفرز.
    * وقارئ الشاشة كان يقرأ عشرة أعمدة بلا رابط بينها وبين قيمها.
    */
-  const SortTh = ({ k, label }: { k: string; label: string }) => (
+  const SortTh = ({ k, label, className }: { k: string; label: string; className?: string }) => (
     <th scope="col"
       aria-sort={sort.key === k ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}
-      className="px-4 py-3 select-none whitespace-nowrap">
+      className={cx('px-4 py-3 select-none whitespace-nowrap', className)}>
       <button type="button" onClick={() => toggleSort(k)}
         className="inline-flex items-center hover:text-blue-600 transition-colors">
         {label}<span className="text-blue-500">{sort.key === k ? (sort.dir === 'asc' ? ' ▲' : ' ▼') : ''}</span>
@@ -920,11 +920,18 @@ function InvoicesContent() {
               <SortTh k="supplier" label={t('inv.supplier')} />
               <SortTh k="vessel" label={t('inv.vessel')} />
               <SortTh k="total_amount" label={t('inv.amount')} />
-              <SortTh k="paid_amount" label={t('inv.paid')} />
+              {/*
+                * الجدول ١٤٤٨ بكسل، والمساحة على حاسوب ١٢٨٠ تسع ٩٤٨ — فخمسمئة
+                * تختفي وراء تمرير أفقي. عمودان ثانويان يُطويان دون `xl`:
+                * «المدفوع» يُستنتج من المبلغ والمتبقّي، و«حالة الاعتماد» نصّها
+                * أطول ما في الصفّ. وكلاهما باقٍ كاملاً في لوح التفاصيل، فلا
+                * تُفقد بيانات — يُؤجَّل عرضها حيث لا تتّسع الشاشة.
+                */}
+              <SortTh k="paid_amount" label={t('inv.paid')} className="hidden xl:table-cell" />
               <SortTh k="remaining" label={t('inv.outstanding')} />
               <SortTh k="due_date" label={t('inv.due')} />
               <SortTh k="status" label={t('inv.payStatus')} />
-              <SortTh k="approval_status" label={t('inv.approval')} />
+              <SortTh k="approval_status" label={t('inv.approval')} className="hidden xl:table-cell" />
               <th scope="col" className="px-3 py-3 text-start">{t('inv.actions')}</th>
             </tr>
           </thead>
@@ -946,11 +953,11 @@ function InvoicesContent() {
                   <td className="px-3 py-2.5 text-gray-700 whitespace-normal break-words max-w-[15rem]" dir="auto">{inv.supplier?.name || '—'}</td>
                   <td className="px-3 py-2.5 text-gray-500">{inv.vessel?.name || '—'}</td>
                   <td className="px-3 py-2.5 font-medium tabular-nums">{fmtMoney(inv.total_amount)} <span className="text-[11px] text-gray-400">{inv.currency}</span></td>
-                  <td className="px-3 py-2.5 text-emerald-600 tabular-nums">{fmtMoney(inv.paid_amount)}</td>
+                  <td className="px-3 py-2.5 text-emerald-600 tabular-nums hidden xl:table-cell">{fmtMoney(inv.paid_amount)}</td>
                   <td className={cx('px-3 py-2.5 tabular-nums', remaining > 0.005 ? 'text-red-600 font-medium' : 'text-gray-300')}>{remaining > 0.005 ? fmtMoney(remaining) : '—'}</td>
                   <td className="px-3 py-2.5 text-gray-500 tabular-nums">{inv.due_date?.slice(0, 10) || '—'}</td>
                   <td className="px-3 py-2.5"><div className="flex flex-wrap items-center gap-1"><Badge tone={inv.status === 'paid' ? 'success' : inv.status === 'partial' ? 'warning' : inv.status === 'cancelled' ? 'neutral' : 'danger'}>{statusLabel[inv.status]}</Badge><LegacyBadge i={inv} /></div></td>
-                  <td className="px-3 py-2.5">{inv.approval_status ? <Badge tone={'info'}>{approvalLabel[inv.approval_status]}</Badge> : <span className="text-gray-300 text-xs">—</span>}</td>
+                  <td className="px-3 py-2.5 hidden xl:table-cell">{inv.approval_status ? <Badge tone={'info'}>{approvalLabel[inv.approval_status]}</Badge> : <span className="text-gray-300 text-xs">—</span>}</td>
                   <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
                     {/*
                       * سبعة أفعال بنصوصها كانت تشغل ٤٠٠ بكسل — عمودٌ أعرض من
