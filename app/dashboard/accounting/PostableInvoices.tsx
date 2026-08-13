@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import api from '@/lib/api';
 import { Button, Badge, Input, Select, Field, Skeleton, EmptyState, Modal, useToast, cx } from '@/components/ui';
+import NewAccountModal from './NewAccountModal';
 
 /*
  * الفواتير التي تنتظر قيداً.
@@ -41,6 +42,7 @@ export default function PostableInvoices({ entityId, onDone }: { entityId: strin
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<{ ok: string[]; failed: { ref: string; msg: string }[] } | null>(null);
+  const [newFor, setNewFor] = useState<string | null>(null);
 
   async function load() {
     if (!entityId) return;
@@ -182,10 +184,14 @@ export default function PostableInvoices({ entityId, onDone }: { entityId: strin
                   <td className="px-4 py-2 text-left tabular-nums whitespace-nowrap">{money(r.total_amount, r.currency)}</td>
                   <td className="px-4 py-2">
                     <Select value={chosen}
-                      onChange={(e: any) => setOverride((p) => ({ ...p, [r.id]: { ...p[r.id], account: e.target.value } }))}
+                      onChange={(e: any) => {
+                        if (e.target.value === '__new') { setNewFor(r.id); return; }
+                        setOverride((p) => ({ ...p, [r.id]: { ...p[r.id], account: e.target.value } }));
+                      }}
                       className={cx('text-xs', !chosen && 'border-amber-400')}>
                       <option value="">— بلا حساب —</option>
                       {accounts.map((a) => <option key={a.id} value={a.id}>{label(a)}</option>)}
+                      <option value="__new">＋ حساب جديد…</option>
                     </Select>
                     {isOverridden && <div className="mt-0.5 text-[11px] text-blue-600">مُعدَّل عن افتراضي المورّد</div>}
                   </td>
@@ -212,6 +218,12 @@ export default function PostableInvoices({ entityId, onDone }: { entityId: strin
             description={onlyEligible ? 'كل المؤهَّل دخل الدفتر. أزل «المؤهَّلة فقط» لترى ما ينتظر دليلاً.' : 'لا نتائج بهذا البحث.'} />
         )}
       </div>
+
+      <NewAccountModal open={!!newFor} onClose={() => setNewFor(null)} entityId={entityId} defaultType="expense"
+        onCreated={(a) => {
+          setAccounts((prev) => [...prev, a]);
+          if (newFor) setOverride((p) => ({ ...p, [newFor]: { ...p[newFor], account: a.id } }));
+        }} />
 
       <Modal open={confirmOpen} onClose={() => !busy && setConfirmOpen(false)}
         title={`إنشاء ${selectedRows.length} مسوّدة`} size="lg">

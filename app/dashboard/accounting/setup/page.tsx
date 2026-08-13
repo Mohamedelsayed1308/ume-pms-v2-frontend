@@ -1,7 +1,8 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
 import api from '@/lib/api';
-import { Card, Button, Badge, Input, Select, Field, Skeleton, EmptyState, Modal, useToast, cx } from '@/components/ui';
+import { Card, Button, Badge, Input, Select, Skeleton, EmptyState, cx } from '@/components/ui';
+import NewAccountModal from '../NewAccountModal';
 
 /*
  * إعداد المحاسبة — شجرة الحسابات.
@@ -19,9 +20,6 @@ const TYPES = [
   { v: 'equity', label: 'حقوق ملكية', normal: 'credit' },
 ];
 const TYPE_LABEL: Record<string, string> = Object.fromEntries(TYPES.map((t) => [t.v, t.label]));
-const GROUPS = ['VESSEL_OPEX', 'ADMIN', 'FINANCE', 'REVENUE', 'BANK', 'CASH', 'RECEIVABLES',
-  'PAYABLES', 'ACCRUALS', 'TAX', 'PREPAYMENTS', 'FIXED_ASSETS', 'RELATED_PARTY',
-  'DEFERRED_INCOME', 'EQUITY', 'DRY_DOCK', 'ASSETS'];
 
 interface Acct {
   id: string; code: string; name: string; name_ar: string | null;
@@ -31,7 +29,6 @@ interface Acct {
 }
 
 export default function AccountingSetupPage() {
-  const toast = useToast();
   const [entities, setEntities] = useState<any[]>([]);
   const [entityId, setEntityId] = useState('');
   const [accounts, setAccounts] = useState<Acct[]>([]);
@@ -40,12 +37,6 @@ export default function AccountingSetupPage() {
   const [typeFilter, setTypeFilter] = useState('');
 
   const [showAdd, setShowAdd] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [err, setErr] = useState('');
-  const [form, setForm] = useState({
-    code: '', name: '', name_ar: '', account_type: 'expense', account_group: 'VESSEL_OPEX',
-    parent_id: '', is_postable: true, is_monetary: false, currency_restriction: '',
-  });
 
   useEffect(() => {
     (async () => {
@@ -92,42 +83,6 @@ export default function AccountingSetupPage() {
     });
   }, [tree, q, typeFilter]);
 
-  // الآباء المتاحون: التجميعية من نفس التصنيف وحدها.
-  const parents = useMemo(
-    () => accounts.filter((a) => !a.is_postable && a.account_type === form.account_type),
-    [accounts, form.account_type]);
-
-  function openAdd() {
-    setErr('');
-    setForm({
-      code: '', name: '', name_ar: '', account_type: 'expense', account_group: 'VESSEL_OPEX',
-      parent_id: '', is_postable: true, is_monetary: false, currency_restriction: '',
-    });
-    setShowAdd(true);
-  }
-
-  async function save() {
-    if (!form.code.trim() || !form.name.trim()) { setErr('الرمز والاسم مطلوبان'); return; }
-    setSaving(true); setErr('');
-    try {
-      const normal = TYPES.find((t) => t.v === form.account_type)?.normal ?? 'debit';
-      await api.post('/api/accounting/accounts', {
-        legal_entity_id: entityId,
-        code: form.code.trim(), name: form.name.trim(), name_ar: form.name_ar.trim() || null,
-        account_type: form.account_type, account_group: form.account_group || null,
-        normal_balance: normal,
-        parent_id: form.parent_id || null,
-        is_postable: form.is_postable, is_monetary: form.is_monetary,
-        is_related_party: false, requires_subledger: false,
-        currency_restriction: form.currency_restriction || null,
-      });
-      toast.success(`أُنشئ الحساب ${form.code}`);
-      setShowAdd(false); await load(entityId);
-    } catch (e: any) {
-      setErr(e?.response?.data?.message || 'تعذّر الإنشاء');
-    } finally { setSaving(false); }
-  }
-
   if (loading && !accounts.length) return <div className="p-6 space-y-3"><Skeleton className="h-20" /><Skeleton className="h-64" /></div>;
   if (!entities.length) return <div className="p-6"><EmptyState title="لا كيان محاسبي" /></div>;
 
@@ -144,7 +99,7 @@ export default function AccountingSetupPage() {
               {entities.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
             </Select>
           )}
-          <Button variant="primary" icon="plus" onClick={openAdd}>حساب جديد</Button>
+          <Button variant="primary" icon="plus" onClick={() => setShowAdd(true)}>حساب جديد</Button>
         </div>
       </header>
 
@@ -200,63 +155,9 @@ export default function AccountingSetupPage() {
         </div>
       </Card>
 
-      <Modal open={showAdd} onClose={() => !saving && setShowAdd(false)} title="حساب جديد" size="lg">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <Field label="الرمز *"><Input value={form.code} onChange={(e: any) => setForm({ ...form, code: e.target.value })} dir="ltr" placeholder="5140" /></Field>
-          <Field label="التصنيف">
-            <Select value={form.account_type}
-              onChange={(e: any) => setForm({ ...form, account_type: e.target.value, parent_id: '' })}>
-              {TYPES.map((t) => <option key={t.v} value={t.v}>{t.label}</option>)}
-            </Select>
-          </Field>
-          <Field label="الاسم (إنجليزي) *"><Input value={form.name} onChange={(e: any) => setForm({ ...form, name: e.target.value })} dir="ltr" /></Field>
-          <Field label="الاسم (عربي)"><Input value={form.name_ar} onChange={(e: any) => setForm({ ...form, name_ar: e.target.value })} /></Field>
+      <NewAccountModal open={showAdd} onClose={() => setShowAdd(false)} entityId={entityId}
+        onCreated={() => load(entityId)} />
 
-          <Field label="المجموعة">
-            <Select value={form.account_group} onChange={(e: any) => setForm({ ...form, account_group: e.target.value })}>
-              {GROUPS.map((g) => <option key={g} value={g}>{g}</option>)}
-            </Select>
-          </Field>
-
-          <Field label="الحساب الأب">
-            <Select value={form.parent_id} onChange={(e: any) => setForm({ ...form, parent_id: e.target.value })}>
-              <option value="">— بلا أب (مستوى أول) —</option>
-              {parents.map((p) => <option key={p.id} value={p.id}>{p.code} — {p.name}</option>)}
-            </Select>
-          </Field>
-
-          <div className="sm:col-span-2 rounded-lg border p-3 space-y-2">
-            <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" checked={form.is_postable}
-                onChange={(e) => setForm({ ...form, is_postable: e.target.checked })} />
-              <span><b>فرعي</b> — يُرحَّل إليه مباشرةً</span>
-            </label>
-            <p className="text-xs text-gray-500">
-              أزل العلامة لتجعله <b>تجميعياً</b>: لا يُرحَّل إليه، ويصلح أباً لحسابات تحته.
-              {!form.is_postable && ' — سيظهر في قائمة الآباء لحسابات هذا التصنيف.'}
-            </p>
-          </div>
-
-          {form.account_type === 'asset' && (
-            <Field label="قيد العملة (اختياري)">
-              <Input value={form.currency_restriction} dir="ltr" placeholder="USD"
-                onChange={(e: any) => setForm({ ...form, currency_restriction: e.target.value.toUpperCase() })} />
-            </Field>
-          )}
-        </div>
-
-        {!parents.length && form.account_type && (
-          <p className="mt-3 text-xs text-gray-500">
-            لا حساب تجميعي لتصنيف «{TYPE_LABEL[form.account_type]}» بعد — أنشئ واحداً أولاً إن أردت شجرة.
-          </p>
-        )}
-        {err && <div className="mt-3 rounded-md bg-red-50 p-3 text-sm text-red-700">{err}</div>}
-
-        <div className="mt-4 flex justify-end gap-2">
-          <Button variant="secondary" onClick={() => setShowAdd(false)} disabled={saving}>إلغاء</Button>
-          <Button variant="primary" onClick={save} loading={saving}>إنشاء</Button>
-        </div>
-      </Modal>
     </div>
   );
 }

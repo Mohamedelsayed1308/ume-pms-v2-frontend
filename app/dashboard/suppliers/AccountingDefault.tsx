@@ -1,7 +1,8 @@
 'use client';
 import { useEffect, useState } from 'react';
 import api from '@/lib/api';
-import { Field, Select, Badge, Skeleton } from '@/components/ui';
+import { Field, Select, Badge, Skeleton, Button } from '@/components/ui';
+import NewAccountModal from '@/app/dashboard/accounting/NewAccountModal';
 
 /*
  * افتراضي المورّد المحاسبي — داخل نافذة تعديل المورّد.
@@ -26,6 +27,7 @@ export default function AccountingDefault({ supplierId }: Props) {
   const [entity, setEntity] = useState<any>(null);
   const [accounts, setAccounts] = useState<any[]>([]);
   const [value, setValue] = useState({ debit_account_id: '', accrual_category: 'GOODS' });
+  const [newOpen, setNewOpen] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -103,12 +105,18 @@ export default function AccountingDefault({ supplierId }: Props) {
       ) : (
         <>
           <Field label="حساب المصروف الافتراضي">
-            <Select value={value.debit_account_id}
-              onChange={(e: any) => persist({ ...value, debit_account_id: e.target.value })}>
-              <option value="">— بلا افتراضي —</option>
-              {accounts.map((a) => <option key={a.id} value={a.id}>{label(a)}</option>)}
-            </Select>
+            <div className="flex items-center gap-2">
+              <Select value={value.debit_account_id} className="flex-1"
+                onChange={(e: any) => persist({ ...value, debit_account_id: e.target.value })}>
+                <option value="">— بلا افتراضي —</option>
+                {accounts.map((a) => <option key={a.id} value={a.id}>{label(a)}</option>)}
+              </Select>
+              <Button size="sm" variant="outline" type="button" onClick={() => setNewOpen(true)}>+ حساب</Button>
+            </div>
           </Field>
+          <p className="-mt-2 text-xs text-gray-500">
+            لا تجد الحساب؟ أنشئه هنا — يُضاف إلى <b>شجرة الحسابات</b> نفسها ويُختار فوراً.
+          </p>
 
           <Field label="التصنيف الافتراضي">
             <Select value={value.accrual_category}
@@ -122,6 +130,14 @@ export default function AccountingDefault({ supplierId }: Props) {
             يملأ الحقل عند إنشاء قيد لهذا المورّد — <b>ويبقى قابلاً للتغيير في القيد نفسه</b>.
           </p>
           {err && <div className="rounded bg-red-50 p-2 text-xs text-red-700">{err}</div>}
+
+          <NewAccountModal open={newOpen} onClose={() => setNewOpen(false)} entityId={entity.id}
+            defaultType="expense"
+            onCreated={(a) => {
+              // يُدرَج في القائمة ويُختار ويُحفظ — فلا يُعاد البحث عنه بعد إنشائه.
+              setAccounts((prev) => [...prev, a]);
+              persist({ ...value, debit_account_id: a.id });
+            }} />
         </>
       )}
     </div>
