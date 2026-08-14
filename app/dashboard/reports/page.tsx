@@ -134,11 +134,26 @@ export default function ReportsPage() {
 
   useEffect(() => { setRecents(readRecents()); }, []);
 
+  /*
+   * قوائم الاختيار لها حالتها الخاصّة.
+   *
+   * كان `Promise.all` بلا مُلتقِط: يُخفق النداء فتبقى القائمتان فارغتين بصمت،
+   * فتُعرض «لا يوجد مورد بهذا الاسم» — وهي رسالة بحثٍ لم يُطابِق، لا رسالة
+   * قائمةٍ لم تصل. فيبحث المستخدم عن مورد يعرف أنه موجود ويُقال له إنه ليس
+   * كذلك.
+   */
+  const [pickersLoading, setPickersLoading] = useState(true);
+  const [pickersError, setPickersError] = useState('');
+
   useEffect(() => {
-    Promise.all([api.get('/api/suppliers'), api.get('/api/vessels')]).then(([s, v]) => {
-      setSuppliers(s.data);
-      setVessels(v.data);
-    });
+    Promise.all([api.get('/api/suppliers'), api.get('/api/vessels')])
+      .then(([s, v]) => {
+        setSuppliers(Array.isArray(s.data) ? s.data : []);
+        setVessels(Array.isArray(v.data) ? v.data : []);
+        setPickersError('');
+      })
+      .catch(() => setPickersError('تعذّر تحميل قوائم الموردين والسفن — حدّث الصفحة أو أعد المحاولة.'))
+      .finally(() => setPickersLoading(false));
   }, []);
 
   function openReport(id: ReportType) {
@@ -423,7 +438,9 @@ export default function ReportsPage() {
                   <span>{s.name}</span>
                 </label>
               ))}
-              {filteredSuppliers.length === 0 && <p className="text-xs text-gray-400 py-2 text-center">لا يوجد مورد بهذا الاسم</p>}
+              {pickersLoading && suppliers.length === 0 && <p className="text-xs text-gray-400 py-2 text-center">جارٍ تحميل الموردين…</p>}
+              {!pickersLoading && pickersError && <p className="text-xs text-red-600 py-2 text-center">{pickersError}</p>}
+              {!pickersLoading && !pickersError && filteredSuppliers.length === 0 && <p className="text-xs text-gray-400 py-2 text-center">لا يوجد مورد بهذا الاسم</p>}
             </div>
           </div>
         )}

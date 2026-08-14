@@ -65,6 +65,11 @@ export default function BassamAccountCard({ vesselKey = 'Alcudia', storageKey = 
   const [saving, setSaving] = useState(false);
   const [savedMsg, setSavedMsg] = useState('');
   const [loaded, setLoaded] = useState(false);
+  /*
+   * `loaded` يخصّ نداء الرحلات وحده. وبيانات الحساب المحفوظة تأتي من نداء ثانٍ
+   * مستقلّ، فكانت «لا توجد تحويلات» تُعرض قبل أن يردّ — نفيٌ قبل أن يُسأل.
+   */
+  const [accLoaded, setAccLoaded] = useState(false);
   const [pasteText, setPasteText] = useState('');
   const [showPaste, setShowPaste] = useState(false);
   const [from, setFrom] = useState('');
@@ -99,7 +104,7 @@ export default function BassamAccountCard({ vesselKey = 'Alcudia', storageKey = 
     api.get(`/api/vessel-profit/${storageKey}`).then((res) => {
       const man = res.data?.manual;
       if (man && typeof man === 'object') setAcc({ opening0: man.opening0 || '', add: man.add || {}, bunker: man.bunker || {}, transfers: Array.isArray(man.transfers) ? man.transfers : [] });
-    }).catch(() => {});
+    }).catch(() => {}).finally(() => setAccLoaded(true));
   }, [vesselKey, storageKey]);
 
   // الشهور = اتحاد كل المصادر (سيولة + إضافات + بنكر + تحويلات) عشان أي قيمة مُدخلة تظهر وتأثّر في الرصيد ولا تتبلع بصمت
@@ -312,7 +317,8 @@ export default function BassamAccountCard({ vesselKey = 'Alcudia', storageKey = 
                 <td className="py-1.5 px-2 font-bold text-indigo-800">{fmt(r.closing)}</td>
               </tr>
             ))}
-            {displayedRows.length === 0 && <tr><td colSpan={7} className="text-center py-6 text-gray-400">لا توجد شهور في الفترة</td></tr>}
+            {!loaded && <tr><td colSpan={7} className="text-center py-6 text-gray-400">جارٍ التحميل…</td></tr>}
+            {loaded && displayedRows.length === 0 && <tr><td colSpan={7} className="text-center py-6 text-gray-400">لا توجد شهور في الفترة</td></tr>}
           </tbody>
           {displayedRows.length > 0 && (
             <tfoot className="border-t-2 border-gray-300 font-bold">
@@ -357,7 +363,9 @@ export default function BassamAccountCard({ vesselKey = 'Alcudia', storageKey = 
           </div>
         )}
         {orphanTransfers > 0 && <p className="text-xs text-red-500 mb-2">⚠️ في تحويلات من غير شهر محدّد ({fmt(orphanTransfers)}) — اتخصمت من الرصيد، بس حدّد شهرها عشان تظهر في الكشف الشهري صح.</p>}
-        {acc.transfers.length === 0 ? (
+        {!accLoaded ? (
+          <p className="text-gray-400 text-sm">جارٍ التحميل…</p>
+        ) : acc.transfers.length === 0 ? (
           <p className="text-gray-400 text-sm">لا توجد تحويلات — اضغط «إضافة تحويل».</p>
         ) : (
           <div className="space-y-2">

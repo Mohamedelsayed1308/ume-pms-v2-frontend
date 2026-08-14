@@ -231,6 +231,12 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
 
   // فواتير المشتريات + أسعار الصرف (لو المركب مربوط بالفواتير)
   const [invoices, setInvoices] = useState<any[]>([]);
+  /*
+   * جلب فواتير المركب يُبتلَع خطؤه عمداً كي يعمل التقرير بلا مشتريات. لكن ذلك
+   * جعل الفشل يُقرأ «لا توجد فواتير على المركب» — نفيٌ عن المركب، وصوابه أن
+   * الجلب لم يتمّ. فصارت للتحميل حالته ولا يُقال النفي قبل أن يُحسم.
+   */
+  const [invLoading, setInvLoading] = useState(true);
   const [rates, setRates] = useState<Record<string, Record<string, number>>>({});
 
   const cur = manual[month] || { opening: '', closing: '', salaries: '' };
@@ -299,6 +305,7 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
         if (v) { const inv = await api.get(`/api/invoices/by-vessel/${v.id}`); setInvoices(inv.data || []); }
         else setInvoices([]);
       } catch { /* تجاهل — المركب هيشتغل من غير فواتير */ }
+      finally { setInvLoading(false); }
     })();
   }, [cfg.linkInvoices, cfg.dbVesselName]);
 
@@ -731,7 +738,8 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
                       <tr className="border-t bg-gray-50 font-bold"><td className="py-1" colSpan={6}>إجمالي المشتريات</td><td className="py-1 text-red-700">{fmt(purchases.total)}</td></tr>
                     </tbody>
                   </table>
-                ) : <p className="text-gray-400 text-sm">لا توجد فواتير على المركب في {monthLabel(month)}.</p>}
+                ) : invLoading ? <p className="text-gray-400 text-sm">جارٍ تحميل فواتير المركب…</p>
+                  : <p className="text-gray-400 text-sm">لا توجد فواتير على المركب في {monthLabel(month)}.</p>}
               </div>
             )}
 
