@@ -270,8 +270,48 @@ export default function AccountingPage() {
         {tab === 'postable' ? (
           <PostableInvoices entityId={entityId} onDone={() => load(entityId)} />
         ) : tab === 'tb' ? (
-          <div className="overflow-x-auto">
+          <div>
             {!rows.length ? <EmptyState title="لا حركة بعد" description="لم يُرحَّل قيد على هذا الكيان." /> : (
+              <>
+              {/*
+                * ميزان المراجعة على الجوال: خمسة أعمدة رقمية في شاشة ضيّقة تعني
+                * سحباً أفقياً لقراءة رصيد حسابٍ واحد. والبطاقة تضع الاسم ومداره
+                * ورصيده في نظرة — وهي القراءة التي يُطلب الميزان لأجلها.
+                */}
+              <div className="lg:hidden divide-y divide-gray-100">
+                {rows.map((a) => {
+                  const net = Number(a.debit_eur) - Number(a.credit_eur);
+                  return (
+                    <button key={a.id} type="button" onClick={() => setLedgerFor(a)}
+                      className="w-full text-start p-3 hover:bg-blue-50/40 transition-colors">
+                      <div className="flex items-baseline justify-between gap-2">
+                        <span className="min-w-0">
+                          <span className="font-mono text-xs text-gray-500">{a.code}</span>{' '}
+                          <span className="font-medium text-gray-800">{a.name}</span>
+                        </span>
+                        <span className={cx('tabular-nums font-medium shrink-0', net < 0 && 'text-blue-700')}>
+                          {money(Math.abs(net))} {net < 0 ? 'دائن' : 'مدين'}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-xs text-gray-500 mt-1">
+                        <span>{typeLabel[a.account_type] ?? a.account_type}</span>
+                        <span className="tabular-nums">مدين {money(a.debit_eur)} · دائن {money(a.credit_eur)}</span>
+                      </div>
+                    </button>
+                  );
+                })}
+                <div className="p-3 bg-gray-50 font-semibold flex items-center justify-between text-sm">
+                  <span>
+                    الإجمالي
+                    {tb?.is_balanced
+                      ? <Badge tone="success" className="mr-2">متوازن</Badge>
+                      : <Badge tone="danger" className="mr-2">غير متوازن</Badge>}
+                  </span>
+                  <span className="tabular-nums text-xs">مدين {money(tb?.total_debit_eur)} · دائن {money(tb?.total_credit_eur)}</span>
+                </div>
+              </div>
+
+              <div className="hidden lg:block overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 text-xs text-gray-500">
                   <tr>
@@ -315,6 +355,8 @@ export default function AccountingPage() {
                   </tr>
                 </tfoot>
               </table>
+              </div>
+              </>
             )}
           </div>
         ) : (
@@ -327,7 +369,45 @@ export default function AccountingPage() {
                 {Object.entries(STATUS_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
               </Select>
             </div>
-            <div className="overflow-x-auto">
+            {/*
+              * ثمانية أعمدة في شاشة جوال تعني سحباً أفقياً بين رقم القيد وزرّ
+              * ترحيله. والترحيل فعلٌ لا يُراجَع نصفه ثم يُضغط — فلكلّ قيد بطاقة
+              * تجمع بيانه ومبلغه وحالته وفعله.
+              */}
+            <div className="lg:hidden divide-y divide-gray-100">
+              {filteredEntries.map((e) => (
+                <div key={e.id} className={cx('p-3 space-y-2', selected.has(e.id) && 'bg-blue-50')}>
+                  <div className="flex items-start gap-2">
+                    {canPost && e.status === 'draft' && (
+                      <input type="checkbox" className="mt-1 shrink-0"
+                        aria-label={`تحديد القيد ${e.entry_no || 'مسوّدة'}`}
+                        checked={selected.has(e.id)} onChange={() => toggleOne(e.id)} />
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <p className="font-mono text-xs text-brand-700">
+                        {e.entry_no || <span className="text-gray-400">مسوّدة</span>}
+                        {e.is_backdated && <span className="mr-1 text-amber-600" title="بأثر رجعي">⏱</span>}
+                      </p>
+                      <p className="text-sm text-gray-800 break-words leading-snug">{e.description}</p>
+                      {e.reference && <p className="text-xs text-gray-400">{e.reference}</p>}
+                    </div>
+                    <Badge tone={STATUS_TONE[e.status] as any}>{STATUS_LABEL[e.status] ?? e.status}</Badge>
+                  </div>
+                  <div className="flex items-center justify-between text-xs text-gray-500">
+                    <span className="tabular-nums font-medium text-gray-800">EUR {money(e.total_debit_eur)}</span>
+                    <span>{EVENT_LABEL[e.accounting_event_type] ?? e.accounting_event_type} · {dateOnly(e.accounting_date)}</span>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="outline" className="flex-1" onClick={() => openEntry(e.id)}>تفاصيل</Button>
+                    {e.status === 'draft' && canPost && (
+                      <Button size="sm" variant="primary" className="flex-1" onClick={() => setPosting(e)}>ترحيل</Button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="hidden lg:block overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 text-xs text-gray-500">
                   <tr>

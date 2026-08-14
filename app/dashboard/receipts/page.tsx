@@ -219,7 +219,42 @@ export default function ReceiptsPage() {
             <EmptyState icon="check" title="لا شيء ينتظر"
               description={onlyMissing ? 'كل الفواتير المعلَّقة مؤكَّدة الاستلام.' : 'لا نتائج بهذا البحث.'} />
           ) : (
-            <div className="overflow-x-auto">
+            <>
+            {/*
+              * على الجوال يصير الجدول ٩٠٥ بكسل في حاوية ٤٢٤، فيُقرأ بالسحب
+              * الأفقي: يرى المستخدم رقم الفاتورة ثم يسحب ليرى مبلغها ثم يسحب
+              * ليجد زرّ التأكيد. وهذا إقرارٌ باستلام بضاعة — قرارٌ لا يُتّخذ
+              * وأطرافه مبعثرة على ثلاث سحبات. فلكلّ فاتورة بطاقةٌ تجمعها.
+              */}
+            <div className="lg:hidden divide-y divide-gray-100">
+              {shown.map((i) => (
+                <div key={i.id} className={cx('p-3 space-y-2', selected.has(i.id) && 'bg-blue-50')}>
+                  <div className="flex items-start gap-2">
+                    {(i._receipts ?? 0) === 0 && (
+                      <input type="checkbox" className="mt-1 shrink-0"
+                        aria-label={`تحديد الفاتورة ${i.invoice_number}`}
+                        checked={selected.has(i.id)} onChange={() => toggleOne(i.id)} />
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <p className="font-mono text-xs text-brand-700">{i.invoice_number}</p>
+                      <p className="text-sm text-gray-800 break-words leading-snug" dir="auto">{i.supplier?.name || '—'}</p>
+                    </div>
+                    {(i._receipts ?? 0) > 0
+                      ? <Badge tone="success">{i._receipts} واقعة</Badge>
+                      : i.approval_status === 'delivery_missing'
+                        ? <Badge tone="danger">تسليم مفقود</Badge>
+                        : <Badge tone="warning">بلا تأكيد</Badge>}
+                  </div>
+                  <div className="flex items-center justify-between text-xs text-gray-500">
+                    <span className="tabular-nums font-medium text-gray-800">{money(i.total_amount, i.currency)}</span>
+                    <span>{i.vessel?.name || '—'} · {dateOnly(i.invoice_date)}</span>
+                  </div>
+                  <Button size="sm" variant="primary" className="w-full" onClick={() => open(i)}>تأكيد استلام</Button>
+                </div>
+              ))}
+            </div>
+
+            <div className="hidden lg:block overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 text-xs text-gray-500">
                   <tr>
@@ -274,6 +309,7 @@ export default function ReceiptsPage() {
                 </tbody>
               </table>
             </div>
+            </>
           )}
       </Card>
 
