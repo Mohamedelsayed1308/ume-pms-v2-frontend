@@ -189,27 +189,27 @@ export default function PurchaseOrdersPage() {
           <Card className="hidden lg:block overflow-x-auto">
             <table className="w-full text-sm whitespace-nowrap">
               <thead className="text-gray-500 text-xs border-b border-gray-100"><tr>
-                <th scope="col" className="text-start py-3 px-4">{t('po.number')}</th><th scope="col" className="text-start py-3 px-4">{t('po.date')}</th>
-                <th scope="col" className="text-start py-3 px-4">{t('po.supplier')}</th><th scope="col" className="text-start py-3 px-4">{t('po.vessel')}</th>
-                <th scope="col" className="text-start py-3 px-4 hidden xl:table-cell">{t('po.invoices')}</th><th scope="col" className="text-start py-3 px-4">{t('po.invoicedValue')}</th>
-                <th scope="col" className="text-start py-3 px-4">{t('po.invoiceStatus')}</th><th scope="col" className="text-start py-3 px-4">{t('po.actions')}</th>
+                <th scope="col" className="text-start py-3 px-3">{t('po.number')}</th><th scope="col" className="text-start py-3 px-3">{t('po.date')}</th>
+                <th scope="col" className="text-start py-3 px-3">{t('po.supplier')}</th><th scope="col" className="text-start py-3 px-3">{t('po.vessel')}</th>
+                <th scope="col" className="text-start py-3 px-3 hidden xl:table-cell">{t('po.invoices')}</th><th scope="col" className="text-start py-3 px-3">{t('po.invoicedValue')}</th>
+                <th scope="col" className="text-start py-3 px-3">{t('po.invoiceStatus')}</th><th scope="col" className="text-start py-3 px-3">{t('po.actions')}</th>
               </tr></thead>
               <tbody>
                 {list.map((po) => { const st = stats[po.id] || emptyStat(); const has = st.invCount > 0; return (
                   <tr key={po.id} onClick={() => setDetail(po)} className="border-b border-gray-50 last:border-0 hover:bg-brand-50/40 cursor-pointer">
-                    <td className="py-2.5 px-4 font-mono font-medium text-brand-700">{po.po_number}</td>
-                    <td className="py-2.5 px-4 text-gray-500 tabular-nums">{fmtDate(po.order_date)}</td>
-                    <td className="py-2.5 px-4 text-gray-700 whitespace-normal break-words max-w-[15rem]" dir="auto">{po.supplier?.name || '—'}</td>
-                    <td className="py-2.5 px-4 text-gray-500 whitespace-normal break-words max-w-[15rem]" dir="auto">{po.vessel?.name || '—'}</td>
-                    <td className="py-2.5 px-4 text-gray-600 tabular-nums hidden xl:table-cell">{st.invCount || 0}</td>
-                    <td className="py-2.5 px-4"><ValCell inv={st.invoiced} /></td>
-                    <td className="py-2.5 px-4"><Badge tone={has ? 'success' : 'neutral'}>{has ? t('po.invoiced') : t('po.notInvoiced')}</Badge></td>
+                    <td className="py-2.5 px-3 font-mono font-medium text-brand-700">{po.po_number}</td>
+                    <td className="py-2.5 px-3 text-gray-500 tabular-nums">{fmtDate(po.order_date)}</td>
+                    <td className="py-2.5 px-3 text-gray-700 whitespace-normal break-words max-w-[15rem]" dir="auto">{po.supplier?.name || '—'}</td>
+                    <td className="py-2.5 px-3 text-gray-500 whitespace-normal break-words max-w-[15rem]" dir="auto">{po.vessel?.name || '—'}</td>
+                    <td className="py-2.5 px-3 text-gray-600 tabular-nums hidden xl:table-cell">{st.invCount || 0}</td>
+                    <td className="py-2.5 px-3"><ValCell inv={st.invoiced} /></td>
+                    <td className="py-2.5 px-3"><Badge tone={has ? 'success' : 'neutral'}>{has ? t('po.invoiced') : t('po.notInvoiced')}</Badge></td>
                     {/*
                       * أربعة أفعال بنصوصها تشغل ١٨٨ بكسل في جدولٍ يفيض أصلاً عن
                       * حاويته. الأيقونة تختصر ولا تُنقص فعلاً: لكلٍّ `aria-label`
                       * وتلميحٌ باسمه العربي.
                       */}
-                    <td className="py-2.5 px-4" onClick={(e) => e.stopPropagation()}><div className="flex gap-0.5">
+                    <td className="py-2.5 px-3" onClick={(e) => e.stopPropagation()}><div className="flex gap-0.5">
                       <IconButton icon="search" label={t('po.viewDetails')} size="sm" onClick={() => setDetail(po)} />
                       <IconButton icon="receipt" label={t('po.viewInvoices')} size="sm" className="text-emerald-600 hover:bg-emerald-50" onClick={() => router.push(`/dashboard/invoices?po_id=${po.id}`)} />
                       {canWrite && <IconButton icon="edit" label="تعديل" size="sm" onClick={() => openEdit(po)} />}
