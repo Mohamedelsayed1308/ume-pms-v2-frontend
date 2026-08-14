@@ -263,7 +263,7 @@ export default function SuppliersPage() {
                     const st = stats[s.id] || emptyStat();
                     return (
                       <tr key={s.id} onClick={() => setDetail(s)} className="border-b border-gray-50 last:border-0 hover:bg-brand-50/40 cursor-pointer">
-                        <td className="py-2.5 px-4 font-medium text-gray-800"><span dir="auto">{s.name}</span></td>
+                        <td className="py-2.5 px-4 font-medium text-gray-800 whitespace-normal break-words max-w-[15rem]"><span dir="auto">{s.name}</span></td>
                         <td className="py-2.5 px-4 text-gray-500">{s.contact_person || '—'}</td>
                         <td className="py-2.5 px-4 text-gray-500">{s.country || '—'}</td>
                         <td className="py-2.5 px-4"><OutCell open={st.open} /></td>

@@ -194,7 +194,7 @@ export default function VesselsPage() {
                   <tr key={v.id} onClick={() => setDetail(v)} className="border-b border-gray-50 last:border-0 hover:bg-brand-50/40 cursor-pointer">
                     <td className="py-2.5 px-4 font-medium text-gray-800" dir="auto">{v.name}{v.imo_number ? <span className="block text-[11px] text-gray-400 font-normal">IMO {v.imo_number}</span> : null}</td>
                     <td className="py-2.5 px-4 text-gray-500">{v.vessel_type || '—'}</td>
-                    <td className="py-2.5 px-4 text-gray-500">{v.shipping_company?.name || v.owner_name || '—'}</td>
+                    <td className="py-2.5 px-4 text-gray-500 whitespace-normal break-words max-w-[15rem]" dir="auto">{v.shipping_company?.name || v.owner_name || '—'}</td>
                     <td className="py-2.5 px-4"><OutCell open={st.open} /></td>
                     <td className="py-2.5 px-4 text-gray-600 tabular-nums">{st.count || 0}</td>
                     <td className="py-2.5 px-4 text-gray-600 tabular-nums">{st.pos || 0}</td>

@@ -320,8 +320,8 @@ export default function PaymentsPage() {
                 <td className="px-3 py-2.5 text-gray-500 tabular-nums">{p.payment_date?.slice(0, 10) || '—'}</td>
                 <td className="px-3 py-2.5 text-gray-600 font-mono">{p.reference || '—'}</td>
                 <td className="px-3 py-2.5 font-mono text-brand-700">{p.invoice?.invoice_number || '—'}</td>
-                <td className="px-3 py-2.5 text-gray-700">{p.invoice?.supplier?.name || '—'}</td>
-                <td className="px-3 py-2.5 text-gray-500">{p.invoice?.vessel?.name || '—'}</td>
+                <td className="px-3 py-2.5 text-gray-700 whitespace-normal break-words max-w-[15rem]" dir="auto">{p.invoice?.supplier?.name || '—'}</td>
+                <td className="px-3 py-2.5 text-gray-500 whitespace-normal break-words max-w-[15rem]" dir="auto">{p.invoice?.vessel?.name || '—'}</td>
                 <td className="px-3 py-2.5 font-medium tabular-nums">{fmtMoney(p.amount)} <span className="text-[11px] text-gray-400">{p.currency}</span>{isHigh(p) && <span className="text-[10px] text-amber-600 ms-1">★</span>}{isMismatch(p) && <span className="text-[10px] text-orange-500 ms-1" title={t('pay.ccyMismatch')}>⚠</span>}</td>
                 <td className="px-3 py-2.5 text-gray-600">{methodLabel[p.payment_method]}</td>
                 <td className="px-3 py-2.5"><Badge tone={p.invoice?.status === 'paid' ? 'success' : p.invoice?.status === 'partial' ? 'warning' : p.invoice?.status === 'cancelled' ? 'neutral' : 'danger'}>{statusLabel[p.invoice?.status] || '—'}</Badge></td>

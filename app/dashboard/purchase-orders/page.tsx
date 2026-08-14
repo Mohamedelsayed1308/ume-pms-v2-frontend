@@ -199,8 +199,8 @@ export default function PurchaseOrdersPage() {
                   <tr key={po.id} onClick={() => setDetail(po)} className="border-b border-gray-50 last:border-0 hover:bg-brand-50/40 cursor-pointer">
                     <td className="py-2.5 px-4 font-mono font-medium text-brand-700">{po.po_number}</td>
                     <td className="py-2.5 px-4 text-gray-500 tabular-nums">{fmtDate(po.order_date)}</td>
-                    <td className="py-2.5 px-4 text-gray-700">{po.supplier?.name || '—'}</td>
-                    <td className="py-2.5 px-4 text-gray-500">{po.vessel?.name || '—'}</td>
+                    <td className="py-2.5 px-4 text-gray-700 whitespace-normal break-words max-w-[15rem]" dir="auto">{po.supplier?.name || '—'}</td>
+                    <td className="py-2.5 px-4 text-gray-500 whitespace-normal break-words max-w-[15rem]" dir="auto">{po.vessel?.name || '—'}</td>
                     <td className="py-2.5 px-4 text-gray-600 tabular-nums">{st.invCount || 0}</td>
                     <td className="py-2.5 px-4"><ValCell inv={st.invoiced} /></td>
                     <td className="py-2.5 px-4"><Badge tone={has ? 'success' : 'neutral'}>{has ? t('po.invoiced') : t('po.notInvoiced')}</Badge></td>
