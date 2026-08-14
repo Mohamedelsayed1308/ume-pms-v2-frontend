@@ -6,7 +6,7 @@ import api from '@/lib/api';
 import * as XLSX from 'xlsx';
 import { getUser } from '@/lib/auth';
 import { useI18n } from '@/lib/i18n';
-import { Card, Button, Badge, Input, Field, Select, Modal, Drawer, Skeleton, EmptyState, Icon, useToast, cx } from '@/components/ui';
+import { Card, Button, Badge, Input, Field, Select, Modal, Drawer, Skeleton, EmptyState, Icon, IconButton, useToast, cx } from '@/components/ui';
 import { fmtNum, fmtMoney, fmtMoneyC, ccyEntries, n0 } from '@/lib/format';
 
 interface PO { id: string; po_number: string; description: string; order_date: string; is_active?: boolean; supplier?: { id: string; name: string }; vessel?: { id: string; name: string }; }
@@ -191,7 +191,7 @@ export default function PurchaseOrdersPage() {
               <thead className="text-gray-500 text-xs border-b border-gray-100"><tr>
                 <th scope="col" className="text-start py-3 px-4">{t('po.number')}</th><th scope="col" className="text-start py-3 px-4">{t('po.date')}</th>
                 <th scope="col" className="text-start py-3 px-4">{t('po.supplier')}</th><th scope="col" className="text-start py-3 px-4">{t('po.vessel')}</th>
-                <th scope="col" className="text-start py-3 px-4">{t('po.invoices')}</th><th scope="col" className="text-start py-3 px-4">{t('po.invoicedValue')}</th>
+                <th scope="col" className="text-start py-3 px-4 hidden xl:table-cell">{t('po.invoices')}</th><th scope="col" className="text-start py-3 px-4">{t('po.invoicedValue')}</th>
                 <th scope="col" className="text-start py-3 px-4">{t('po.invoiceStatus')}</th><th scope="col" className="text-start py-3 px-4">{t('po.actions')}</th>
               </tr></thead>
               <tbody>
@@ -201,14 +201,19 @@ export default function PurchaseOrdersPage() {
                     <td className="py-2.5 px-4 text-gray-500 tabular-nums">{fmtDate(po.order_date)}</td>
                     <td className="py-2.5 px-4 text-gray-700 whitespace-normal break-words max-w-[15rem]" dir="auto">{po.supplier?.name || '—'}</td>
                     <td className="py-2.5 px-4 text-gray-500 whitespace-normal break-words max-w-[15rem]" dir="auto">{po.vessel?.name || '—'}</td>
-                    <td className="py-2.5 px-4 text-gray-600 tabular-nums">{st.invCount || 0}</td>
+                    <td className="py-2.5 px-4 text-gray-600 tabular-nums hidden xl:table-cell">{st.invCount || 0}</td>
                     <td className="py-2.5 px-4"><ValCell inv={st.invoiced} /></td>
                     <td className="py-2.5 px-4"><Badge tone={has ? 'success' : 'neutral'}>{has ? t('po.invoiced') : t('po.notInvoiced')}</Badge></td>
-                    <td className="py-2.5 px-4" onClick={(e) => e.stopPropagation()}><div className="flex gap-2 text-xs">
-                      <button onClick={() => setDetail(po)} className="text-gray-500 hover:text-brand-600">{t('po.viewDetails')}</button>
-                      <button onClick={() => router.push(`/dashboard/invoices?po_id=${po.id}`)} className="text-emerald-600 hover:underline">{t('po.viewInvoices')}</button>
-                      {canWrite && <button onClick={() => openEdit(po)} className="text-brand-600 hover:underline">{t('po.edit') && 'تعديل'}</button>}
-                      {canWrite && <button onClick={() => setDelTarget(po)} className="text-red-400 hover:text-red-600">{t('po.delete')}</button>}
+                    {/*
+                      * أربعة أفعال بنصوصها تشغل ١٨٨ بكسل في جدولٍ يفيض أصلاً عن
+                      * حاويته. الأيقونة تختصر ولا تُنقص فعلاً: لكلٍّ `aria-label`
+                      * وتلميحٌ باسمه العربي.
+                      */}
+                    <td className="py-2.5 px-4" onClick={(e) => e.stopPropagation()}><div className="flex gap-0.5">
+                      <IconButton icon="search" label={t('po.viewDetails')} size="sm" onClick={() => setDetail(po)} />
+                      <IconButton icon="receipt" label={t('po.viewInvoices')} size="sm" className="text-emerald-600 hover:bg-emerald-50" onClick={() => router.push(`/dashboard/invoices?po_id=${po.id}`)} />
+                      {canWrite && <IconButton icon="edit" label="تعديل" size="sm" onClick={() => openEdit(po)} />}
+                      {canWrite && <IconButton icon="trash" label={t('po.delete')} size="sm" className="text-red-400 hover:text-red-600 hover:bg-red-50" onClick={() => setDelTarget(po)} />}
                     </div></td>
                   </tr>
                 ); })}

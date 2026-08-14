@@ -186,7 +186,7 @@ export default function VesselsPage() {
               <thead className="text-gray-500 text-xs border-b border-gray-100"><tr>
                 <th scope="col" className="text-start py-3 px-4">{t('ves.title')}</th><th scope="col" className="text-start py-3 px-4">{t('ves.type')}</th>
                 <th scope="col" className="text-start py-3 px-4">{t('ves.company')}</th><th scope="col" className="text-start py-3 px-4">{t('ves.outstandingCosts')}</th>
-                <th scope="col" className="text-start py-3 px-4">{t('ves.invoices')}</th><th scope="col" className="text-start py-3 px-4">{t('ves.pos')}</th>
+                <th scope="col" className="text-start py-3 px-4 hidden xl:table-cell">{t('ves.invoices')}</th><th scope="col" className="text-start py-3 px-4 hidden xl:table-cell">{t('ves.pos')}</th>
                 <th scope="col" className="text-start py-3 px-4">{t('ves.lastActivity')}</th><th scope="col" className="text-start py-3 px-4">{t('ves.status')}</th><th scope="col" className="text-start py-3 px-4">{t('ves.actions')}</th>
               </tr></thead>
               <tbody>
@@ -196,8 +196,8 @@ export default function VesselsPage() {
                     <td className="py-2.5 px-4 text-gray-500">{v.vessel_type || '—'}</td>
                     <td className="py-2.5 px-4 text-gray-500 whitespace-normal break-words max-w-[15rem]" dir="auto">{v.shipping_company?.name || v.owner_name || '—'}</td>
                     <td className="py-2.5 px-4"><OutCell open={st.open} /></td>
-                    <td className="py-2.5 px-4 text-gray-600 tabular-nums">{st.count || 0}</td>
-                    <td className="py-2.5 px-4 text-gray-600 tabular-nums">{st.pos || 0}</td>
+                    <td className="py-2.5 px-4 text-gray-600 tabular-nums hidden xl:table-cell">{st.count || 0}</td>
+                    <td className="py-2.5 px-4 text-gray-600 tabular-nums hidden xl:table-cell">{st.pos || 0}</td>
                     <td className="py-2.5 px-4 text-gray-500 tabular-nums">{fmtDate(st.last)}</td>
                     <td className="py-2.5 px-4"><Badge tone={v.is_active ? 'success' : 'neutral'}>{v.is_active ? t('ves.active') : t('ves.inactive')}</Badge></td>
                     <td className="py-2.5 px-4" onClick={(e) => e.stopPropagation()}><div className="flex gap-2 text-xs">
