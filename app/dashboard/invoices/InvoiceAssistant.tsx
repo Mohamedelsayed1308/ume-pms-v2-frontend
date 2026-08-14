@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
+import { Icon } from '@/components/ui';
 import api from '@/lib/api';
 
 interface Action { tool: string; ok: boolean; detail: string }
@@ -55,7 +56,7 @@ export default function InvoiceAssistant({ onChanged }: { onChanged: () => void 
         className="fixed bottom-6 left-6 z-40 flex items-center gap-2 rounded-full bg-blue-600 hover:bg-blue-700 text-white px-5 py-3 shadow-lg transition"
         title="المساعد المالي الذكي"
       >
-        <span className="text-lg leading-none">🤖</span>
+        <Icon name="sparkle" size={18} />
         <span className="text-sm font-semibold">مساعد ذكي</span>
       </button>
 
@@ -64,7 +65,7 @@ export default function InvoiceAssistant({ onChanged }: { onChanged: () => void 
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b bg-blue-600 text-white rounded-t-2xl">
             <div className="flex items-center gap-2">
-              <span className="text-lg">🤖</span>
+              <Icon name="sparkle" size={18} />
               <div>
                 <p className="text-sm font-bold leading-tight">المساعد المالي</p>
                 <p className="text-[11px] text-blue-200 leading-tight">الفواتير — UME PMS</p>

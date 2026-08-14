@@ -75,15 +75,28 @@ const empty = {
 };
 
 const approvalLabel: Record<string, string> = {
+  booking_waiting_payment: 'حجز — بانتظار الدفع',
+  waiting_approval: 'بانتظار الاعتماد',
+  waiting_po: 'بانتظار أمر الشراء',
+  send_to_pay: 'أُرسلت للصرف',
+  hold: 'معلَّقة',
+  delivery_missing: 'تسليم مفقود',
+  // R3B: القيمة المخزَّنة 'paid' لم تتغيّر (توافق رجعي)، لكنها تعني «معتمد للصرف»
+  // لا «سُدِّد». عرضها كـ Paid كان يخلط الاعتماد الإداري بالسداد الفعلي.
+  paid: 'معتمد للصرف',
+};
+/*
+ * الأصل الإنجليزي محفوظاً: هذه المصطلحات يستعملها الفريق منذ سنين، فتعريبها
+ * وحده يقطع التعرّف. يُعرَض العربي ويبقى الإنجليزي في التلميح.
+ */
+const approvalEn: Record<string, string> = {
   booking_waiting_payment: 'Booking - Waiting Payment',
   waiting_approval: 'Waiting Approval',
   waiting_po: 'Waiting PO',
   send_to_pay: 'Send to Pay',
   hold: 'Hold',
   delivery_missing: 'Delivery Missing',
-  // R3B: القيمة المخزَّنة 'paid' لم تتغيّر (توافق رجعي)، لكنها تعني «معتمد للصرف»
-  // لا «سُدِّد». عرضها كـ Paid كان يخلط الاعتماد الإداري بالسداد الفعلي.
-  paid: 'معتمد للصرف',
+  paid: 'Approved for Payment',
 };
 const approvalColor: Record<string, string> = {
   booking_waiting_payment: 'bg-sky-100 text-sky-700',
@@ -957,7 +970,7 @@ function InvoicesContent() {
                   <td className={cx('px-3 py-2.5 tabular-nums', remaining > 0.005 ? 'text-red-600 font-medium' : 'text-gray-300')}>{remaining > 0.005 ? fmtMoney(remaining) : '—'}</td>
                   <td className="px-3 py-2.5 text-gray-500 tabular-nums">{inv.due_date?.slice(0, 10) || '—'}</td>
                   <td className="px-3 py-2.5"><div className="flex flex-wrap items-center gap-1"><Badge tone={inv.status === 'paid' ? 'success' : inv.status === 'partial' ? 'warning' : inv.status === 'cancelled' ? 'neutral' : 'danger'}>{statusLabel[inv.status]}</Badge><LegacyBadge i={inv} /></div></td>
-                  <td className="px-3 py-2.5 hidden xl:table-cell">{inv.approval_status ? <Badge tone={'info'}>{approvalLabel[inv.approval_status]}</Badge> : <span className="text-gray-300 text-xs">—</span>}</td>
+                  <td className="px-3 py-2.5 hidden xl:table-cell">{inv.approval_status ? <Badge tone={'info'} title={approvalEn[inv.approval_status] || ''}>{approvalLabel[inv.approval_status]}</Badge> : <span className="text-gray-300 text-xs">—</span>}</td>
                   <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
                     {/*
                       * سبعة أفعال بنصوصها كانت تشغل ٤٠٠ بكسل — عمودٌ أعرض من
@@ -1099,12 +1112,12 @@ function InvoicesContent() {
                     onChange={async (e) => { const ns = e.target.value || null; const today = new Date().toISOString().slice(0, 10); await api.put(`/api/invoices/${inv.id}`, { approval_status: ns, approval_status_date: ns ? today : null }); await load(); setDetail((d) => d ? { ...d, approval_status: ns || '', approval_status_date: ns ? today : '' } as any : d); }}
                     className={cx('text-xs border rounded-full px-2 py-1 cursor-pointer focus:outline-none', inv.approval_status ? approvalColor[inv.approval_status] : 'bg-gray-50 text-gray-500')}>
                     <option value="">— {t('sup.none')} —</option>
-                    <option value="booking_waiting_payment">Booking - Waiting Payment</option>
-                    <option value="waiting_approval">Waiting Approval</option>
-                    <option value="waiting_po">Waiting PO</option>
-                    <option value="send_to_pay">Send to Pay</option>
-                    <option value="hold">Hold</option>
-                    <option value="delivery_missing">Delivery Missing</option>
+                    <option value="booking_waiting_payment">حجز — بانتظار الدفع</option>
+                    <option value="waiting_approval">بانتظار الاعتماد</option>
+                    <option value="waiting_po">بانتظار أمر الشراء</option>
+                    <option value="send_to_pay">أُرسلت للصرف</option>
+                    <option value="hold">معلَّقة</option>
+                    <option value="delivery_missing">تسليم مفقود</option>
                     <option value="paid">Paid</option>
                   </select>
                 </div>
@@ -1501,12 +1514,12 @@ function InvoicesContent() {
                 <select value={form.approval_status} onChange={(e) => setForm({ ...form, approval_status: e.target.value, approval_status_date: e.target.value ? (form.approval_status_date || new Date().toISOString().slice(0, 10)) : '' })}
                   className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
                   <option value="">— بدون —</option>
-                  <option value="booking_waiting_payment">Booking - Waiting Payment</option>
-                  <option value="waiting_approval">Waiting Approval</option>
-                  <option value="waiting_po">Waiting PO</option>
-                  <option value="send_to_pay">Send to Pay</option>
-                  <option value="hold">Hold</option>
-                  <option value="delivery_missing">Delivery Missing</option>
+                  <option value="booking_waiting_payment">حجز — بانتظار الدفع</option>
+                  <option value="waiting_approval">بانتظار الاعتماد</option>
+                  <option value="waiting_po">بانتظار أمر الشراء</option>
+                  <option value="send_to_pay">أُرسلت للصرف</option>
+                  <option value="hold">معلَّقة</option>
+                  <option value="delivery_missing">تسليم مفقود</option>
                   <option value="paid">Paid</option>
                 </select>
               </div>
@@ -1739,12 +1752,12 @@ function InvoicesContent() {
                                 ))}
                                 className="w-full border rounded px-2 py-1 text-xs mt-0.5 focus:outline-none focus:ring-1 focus:ring-blue-400">
                                 <option value="">— بدون —</option>
-                                <option value="booking_waiting_payment">Booking - Waiting Payment</option>
-                                <option value="waiting_approval">Waiting Approval</option>
-                                <option value="waiting_po">Waiting PO</option>
-                                <option value="send_to_pay">Send to Pay</option>
-                                <option value="hold">Hold</option>
-                                <option value="delivery_missing">Delivery Missing</option>
+                                <option value="booking_waiting_payment">حجز — بانتظار الدفع</option>
+                                <option value="waiting_approval">بانتظار الاعتماد</option>
+                                <option value="waiting_po">بانتظار أمر الشراء</option>
+                                <option value="send_to_pay">أُرسلت للصرف</option>
+                                <option value="hold">معلَّقة</option>
+                                <option value="delivery_missing">تسليم مفقود</option>
                                 <option value="paid">Paid (مدفوعة)</option>
                               </select>
                             </div>

@@ -156,7 +156,12 @@ function Shell({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        <main className="flex-1 overflow-auto p-4 md:p-6">
+        {/*
+          * الحشو السفلي الزائد ليس فراغاً: أزرار المساعد الذكي `fixed bottom-6`
+          * تطفو فوق المحتوى، فبدونه يبقى آخر صفٍّ في كل جدولٍ مغطّى أبداً — لا
+          * يُقرأ ولا يُضغط مهما نزل المستخدم.
+          */}
+        <main className="flex-1 overflow-auto p-4 md:p-6 pb-24">
           <div className="ume-fade-in">{children}</div>
         </main>
       </div>

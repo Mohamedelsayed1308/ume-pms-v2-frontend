@@ -134,10 +134,11 @@ const DOT: Record<Tone, string> = {
   neutral: 'bg-gray-400', success: 'bg-emerald-500', warning: 'bg-amber-500',
   danger: 'bg-red-500', info: 'bg-sky-500', brand: 'bg-brand-500',
 };
-export function Badge({ tone = 'neutral', children, className, dot }:
-  { tone?: Tone; children: ReactNode; className?: string; dot?: boolean }) {
+export function Badge({ tone = 'neutral', children, className, dot, title }:
+  { tone?: Tone; children: ReactNode; className?: string; dot?: boolean; title?: string }) {
   return (
-    <span className={cx('inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs font-medium ring-1 ring-inset whitespace-nowrap', TONE[tone], className)}>
+    <span title={title}
+      className={cx('inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs font-medium ring-1 ring-inset whitespace-nowrap', TONE[tone], className)}>
       {dot && <span className={cx('w-1.5 h-1.5 rounded-full shrink-0', DOT[tone])} />}
       {children}
     </span>
