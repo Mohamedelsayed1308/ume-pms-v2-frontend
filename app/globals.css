@@ -95,6 +95,41 @@ body {
 table { font-variant-numeric: tabular-nums lining-nums; }
 
 /*
+ * ══ مظهر الجدول المالي ══
+ *
+ * موضعه هنا لا في الشاشات: النظام فيه ثمانيةٌ وعشرون ملفاً تحمل جداول، وتعديلها
+ * واحداً واحداً يعني ثمانية وعشرين فرصةً للانحراف. وهذه القواعد بانتقائية دُنيا
+ * (`:where`) فأي صنف على الشاشة يغلبها — تُعطي أساساً ولا تفرضه.
+ */
+
+/* رأسٌ هادئ يفصله خطّ لا لون. اللون في الرأس يزاحم البيانات على الانتباه. */
+:where(thead) :where(th) {
+  font-weight: 600;
+  color: #667085;
+  border-bottom: 1px solid var(--hairline);
+}
+
+/* خطوط شعرية بين الصفوف — تُتبَّع بالعين ولا تُرى. */
+:where(tbody) :where(tr) { border-bottom: 1px solid #f2f4f7; }
+:where(tbody) :where(tr):last-child { border-bottom: 0; }
+:where(tbody) :where(tr):hover { background-color: #f9fafb; }
+
+/*
+ * الأرقام تُحاذى بمحاذاةٍ واحدة وبخطّ ثابت العرض.
+ *
+ * `tabular-nums` وحده لا يكفي إن اختلفت محاذاة العمود بين صفٍّ وصفّ: المقارنة
+ * العمودية — وهي سبب وجود الجدول المالي — تحتاج خانةَ الآحاد فوق خانة الآحاد.
+ */
+:where(td, th).tabular-nums,
+:where(td, th):has(> .tabular-nums) { font-variant-numeric: tabular-nums lining-nums; }
+
+/* التذييل حاملُ الإجماليات — يُفصَل بحدٍّ أوضح من حدود الصفوف. */
+:where(tfoot) :where(td, th) {
+  border-top: 2px solid var(--hairline);
+  font-weight: 600;
+}
+
+/*
  * ═══ مظهر الجداول المالية ═══
  *
  * يُطبَّق عالمياً بمُحدِّدات منخفضة الأولوية (`:where`) فلا يغلب أي صنف تكتبه

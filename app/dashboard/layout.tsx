@@ -56,16 +56,27 @@ function Shell({ children }: { children: React.ReactNode }) {
         if (!items.length) return null;
         return (
           <div key={g.key}>
-            {!collapsed && <p className="px-2 mb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">{t(g.i18nKey)}</p>}
+            {!collapsed && <p className="px-2 mb-1.5 text-[10px] font-semibold tracking-wide text-slate-500">{t(g.i18nKey)}</p>}
             <div className="space-y-0.5">
               {items.map((item) => {
                 const on = isActive(item.href);
                 return (
+                  /*
+                   * الحالة النشطة: شريط عند حافّة البداية مع تعبئة خافتة.
+                   *
+                   * كانت كتلةً زرقاء صمّاء تسحب العين إليها في كل لقطة وتزاحم
+                   * محتوى الصفحة على الانتباه. والشريط يقول «أنت هنا» بالقدر
+                   * الكافي — والقائمة إشارةُ موضع لا بطلَ الشاشة.
+                   */
                   <Link key={item.href} href={item.href} title={collapsed ? item.label : undefined}
-                    className={cx('flex items-center gap-3 rounded-xl text-sm transition-colors',
+                    aria-current={on ? 'page' : undefined}
+                    className={cx('relative flex items-center gap-3 rounded-lg text-sm transition-colors',
                       collapsed ? 'justify-center px-0 py-2.5' : 'px-3 py-2',
-                      on ? 'bg-brand-600 text-white shadow-sm' : 'text-slate-300 hover:bg-white/10 hover:text-white')}>
-                    <Icon name={item.iconName || 'file'} size={19} strokeWidth={on ? 2 : 1.7} />
+                      on
+                        ? 'bg-brand-500/15 text-white font-medium before:absolute before:inset-y-1.5 before:start-0 before:w-[3px] before:rounded-full before:bg-brand-400'
+                        : 'text-slate-300 hover:bg-white/[.07] hover:text-white')}>
+                    <Icon name={item.iconName || 'file'} size={19} strokeWidth={on ? 2 : 1.7}
+                      className={on ? 'text-brand-300' : undefined} />
                     {!collapsed && <span className="truncate">{item.label}</span>}
                   </Link>
                 );
@@ -78,8 +89,8 @@ function Shell({ children }: { children: React.ReactNode }) {
   );
 
   const Brand = ({ collapsed }: { collapsed: boolean }) => (
-    <div className={cx('flex items-center gap-2.5 px-4 h-16 border-b border-white/10 shrink-0', collapsed && 'justify-center px-0')}>
-      <div className="w-9 h-9 rounded-xl bg-brand-600 text-white flex items-center justify-center font-extrabold shrink-0">U</div>
+    <div className={cx('flex items-center gap-2.5 px-4 h-16 border-b border-white/[.08] shrink-0', collapsed && 'justify-center px-0')}>
+      <div className="w-9 h-9 rounded-lg bg-brand-600 text-white flex items-center justify-center font-extrabold shrink-0">U</div>
       {!collapsed && <div><p className="font-bold text-white leading-tight">{t('app.name')}</p><p className="text-[11px] text-slate-400">PMS</p></div>}
     </div>
   );
@@ -88,11 +99,11 @@ function Shell({ children }: { children: React.ReactNode }) {
     <div className="flex h-screen bg-canvas overflow-hidden">
       {/* ===== Desktop sidebar ===== */}
       <aside className={cx('hidden md:flex flex-col bg-navy-900 text-white transition-[width] duration-200 shrink-0', collapsed ? 'w-[72px]' : 'w-64')}
-        style={{ background: 'linear-gradient(180deg,#0b1531,#070d1c)' }}>
+        style={{ background: 'linear-gradient(180deg,#0c1524,#060b16)' }}>
         <Brand collapsed={collapsed} />
         <NavContent collapsed={collapsed} />
-        <div className="p-2.5 border-t border-white/10">
-          <button onClick={toggleCollapse} className="w-full flex items-center justify-center gap-2 text-slate-300 hover:text-white hover:bg-white/10 rounded-xl py-2 text-xs">
+        <div className="p-2.5 border-t border-white/[.08]">
+          <button onClick={toggleCollapse} className="w-full flex items-center justify-center gap-2 text-slate-300 hover:text-white hover:bg-white/[.07] rounded-lg py-2 text-xs">
             <Icon name={collapsed ? 'chevronLeft' : 'chevronRight'} size={18} />
             {!collapsed && <span>{t('topbar.collapse')}</span>}
           </button>
@@ -102,7 +113,7 @@ function Shell({ children }: { children: React.ReactNode }) {
       {/* ===== Mobile drawer ===== */}
       {mobileOpen && (
         <div className="md:hidden fixed inset-0 z-50 bg-black/50" onClick={() => setMobileOpen(false)}>
-          <aside className="absolute inset-y-0 right-0 w-64 flex flex-col text-white" style={{ background: 'linear-gradient(180deg,#0b1531,#070d1c)', animation: 'ume-slide-in-rtl .2s ease-out' }} onClick={(e) => e.stopPropagation()}>
+          <aside className="absolute inset-y-0 right-0 w-64 flex flex-col text-white" style={{ background: 'linear-gradient(180deg,#0c1524,#060b16)', animation: 'ume-slide-in-rtl .2s ease-out' }} onClick={(e) => e.stopPropagation()}>
             <Brand collapsed={false} />
             <NavContent collapsed={false} />
           </aside>
@@ -112,7 +123,7 @@ function Shell({ children }: { children: React.ReactNode }) {
       {/* ===== Main column ===== */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Topbar */}
-        <header className="h-16 bg-white border-b border-gray-100 flex items-center gap-3 px-4 shrink-0">
+        <header className="h-16 bg-white border-b border-[var(--hairline)] flex items-center gap-3 px-4 shrink-0">
           <button onClick={() => setMobileOpen(true)} className="md:hidden text-gray-500 hover:text-gray-800 p-1.5 rounded-lg hover:bg-gray-100" aria-label={t('topbar.menu')}>
             <Icon name="menu" size={22} />
           </button>
@@ -120,11 +131,11 @@ function Shell({ children }: { children: React.ReactNode }) {
             * لافتةٌ للموضع لا عنوانٌ للمستند: كل شاشة تحمل `h1` خاصّاً بها، فوجود
             * `h1` ثانٍ في الشريط يجعل للصفحة عنوانين متنافسين في شجرة الوصول.
             */}
-          <p className="font-bold text-gray-800 truncate">{active?.label || t('app.name')}</p>
+          <p className="font-semibold text-[15px] text-gray-900 truncate">{active?.label || t('app.name')}</p>
 
           <div className="hidden lg:flex items-center gap-2 mr-4 flex-1 max-w-md">
             <button onClick={palette.open} title={t('topbar.searchHint')}
-              className="w-full flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-400 hover:border-gray-300 hover:bg-gray-100 transition">
+              className="w-full flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-400 hover:border-gray-300 hover:bg-gray-100 transition">
               <Icon name="search" size={16} />
               <span className="flex-1 text-start truncate">{t('topbar.search')}</span>
               <kbd className="text-[10px] border border-gray-200 rounded px-1.5 py-0.5 bg-white">{isMac ? '⌘K' : 'Ctrl K'}</kbd>
@@ -144,7 +155,7 @@ function Shell({ children }: { children: React.ReactNode }) {
               <Icon name="sparkle" size={18} /><span className="hidden sm:inline">Ask UME</span>
             </Link>
             <NotificationBell />
-            <div className="flex items-center gap-2 pr-2 mr-1 border-r border-gray-100">
+            <div className="flex items-center gap-2 pr-2 mr-1 border-r border-[var(--hairline)]">
               <div className="w-8 h-8 rounded-full bg-brand-600 text-white text-xs font-bold flex items-center justify-center uppercase">{initials}</div>
               <div className="hidden sm:block leading-tight">
                 <p className="text-xs font-semibold text-gray-700 max-w-[120px] truncate">{user?.full_name || '—'}</p>
