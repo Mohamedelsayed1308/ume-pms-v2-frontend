@@ -411,6 +411,39 @@ export function Tabs({ tabs, value, onChange, className }:
 
 /* ═══════════ KPI ═══════════ */
 /**
+ * رسمٌ مصغّر — شكل السلسلة لا قيمها.
+ *
+ * الرقم يقول «كم»، وهذا يقول «كيف وصل إليه»: أدفعةٌ واحدة كبيرة أم تدفّقٌ
+ * منتظم؟ وهما حالتان يخفيهما المجموع وتختلف قراءة الإدارة لهما.
+ *
+ * بلا مكتبة رسم: `polyline` واحد في `svg`، فلا اعتمادية جديدة لأجل خطٍّ.
+ * ويُخفى عن قارئ الشاشة لأنه تكرارٌ بصري لرقمٍ منطوقٍ بجواره.
+ */
+export function Sparkline({ data, width = 72, height = 22, className, tone = 'brand' }:
+  { data: number[]; width?: number; height?: number; className?: string; tone?: 'brand' | 'pos' | 'neg' }) {
+  // نقطة واحدة لا تصنع خطاً، ولا شكل لسلسلة ثابتة.
+  if (!data || data.length < 2) return null;
+
+  const max = Math.max(...data);
+  const min = Math.min(...data);
+  const span = max - min || 1;
+  const stepX = width / (data.length - 1);
+  // قلبُ المحور الرأسي: في SVG يزداد y نزولاً، والقيمة الأعلى تُرسَم أعلى.
+  const pts = data.map((v, i) => `${(i * stepX).toFixed(1)},${(height - ((v - min) / span) * height).toFixed(1)}`).join(' ');
+
+  const stroke = tone === 'pos' ? 'var(--color-money-pos)'
+    : tone === 'neg' ? 'var(--color-money-neg)'
+    : 'var(--color-brand-500)';
+
+  return (
+    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} className={className}
+      fill="none" aria-hidden="true" preserveAspectRatio="none">
+      <polyline points={pts} stroke={stroke} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+/**
  * بطاقة مؤشّر — رقم واحد يُقرأ في لمحة.
  *
  * لا تُحشى بأكثر من رقم وسياقه: البطاقة التي تحمل خمسة أرقام لا تُقرأ في لمحة

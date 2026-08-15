@@ -4,7 +4,7 @@ import Link from 'next/link';
 import api from '@/lib/api';
 import { getUser } from '@/lib/auth';
 import { useI18n } from '@/lib/i18n';
-import { Card, Badge, Icon, Skeleton, EmptyState, cx } from '@/components/ui';
+import { Card, Badge, Icon, Skeleton, EmptyState, Sparkline, cx } from '@/components/ui';
 import { fmtNum, fmtMoney, fmtMoneyC, sumByCurrency, ccyEntries, pctChange, n0 } from '@/lib/format';
 import { getRange, prevRange, inRange, PERIOD_KEYS, type PeriodKey } from '@/lib/period';
 import { canHref, deriveProfile, kpiOrder, PROFILE_LABEL } from '@/lib/profile';
@@ -91,6 +91,30 @@ export default function DashboardPage() {
     const paymentsByCcy = sumByCurrency(payThis, (p) => p.amount, (p) => p.currency);
     const payCountDelta = pctChange(payThis.length, payPrev.length);
 
+    /*
+     * سلسلة عدد الدفعات على أيام الفترة.
+     *
+     * العدد لا المبلغ: البيانات متعدّدة العملات، وجمع يورو إلى دولار في خطٍّ
+     * واحد يرسم شكلاً لا يقابله شيء في الواقع. والعدد قابل للجمع بلا تحويل.
+     *
+     * والأيام الخالية تدخل بصفر لا تُحذف — حذفها يطوي الفجوات فيبدو التدفّق
+     * منتظماً وهو متقطّع.
+     */
+    const payDaily = (() => {
+      const byDay = new Map<string, number>();
+      for (const p of payThis) {
+        const k = String(p.payment_date || '').slice(0, 10);
+        if (k) byDay.set(k, (byDay.get(k) ?? 0) + 1);
+      }
+      if (byDay.size < 2) return [];
+      const days: number[] = [];
+      for (const d0 = new Date(range.from); d0 <= range.to; d0.setDate(d0.getDate() + 1)) {
+        days.push(byDay.get(d0.toISOString().slice(0, 10)) ?? 0);
+        if (days.length > 400) break; // حارس: فترة مفتوحة لا ترسم أربعمئة نقطة
+      }
+      return days;
+    })();
+
     const today = new Date(); today.setHours(0, 0, 0, 0);
     const overdueTasks = d.tasks.filter((tk) => tk.due_date && new Date(tk.due_date) < today && !['done', 'cancelled'].includes(tk.status));
 
@@ -126,7 +150,7 @@ export default function DashboardPage() {
     return {
       payables, payablesCount: openInv.length, receivables, receivablesCount: openHire.length, mgmtDue,
       overdueAmt, overdueCount: overdue.length, dueSoonCount: dueSoon.length,
-      paymentsByCcy, payCount: payThis.length, payCountDelta,
+      paymentsByCcy, payCount: payThis.length, payCountDelta, payDaily,
       overdueTasks, statusDist, topSuppliers, fleetRev, fleetExp, fleetNet, fleetHasData,
       recentInv, recentPay,
     };
@@ -177,7 +201,7 @@ export default function DashboardPage() {
               payables: P.inv ? <KpiMoney key="payables" icon="card" color="#e11d48" label={t('kpi.payables')} map={m.payables} sub={`${m.payablesCount} ${t('kpi.openInvoices')}`} href="/dashboard/invoices" /> : null,
               receivables: P.hire ? <KpiMoney key="receivables" icon="coins" color="#059669" label={t('kpi.receivables')} map={m.receivables} sub={`${m.receivablesCount}`} href="/dashboard/hire-invoices" /> : null,
               overdue: P.inv ? <KpiMoney key="overdue" icon="receipt" color="#d97706" label={t('kpi.overdue')} map={m.overdueAmt} sub={`${m.overdueCount} ${t('att.overdueInv')}`} href={reportsHref} tone={m.overdueCount ? 'danger' : undefined} /> : null,
-              payments: P.pay ? <KpiMoney key="payments" icon="chart" color="#2563eb" label={t('kpi.paymentsPeriod')} map={m.paymentsByCcy} delta={m.payCountDelta} deltaGoodUp sub={`${m.payCount}`} href="/dashboard/payments" /> : null,
+              payments: P.pay ? <KpiMoney key="payments" icon="chart" color="#2563eb" label={t('kpi.paymentsPeriod')} map={m.paymentsByCcy} delta={m.payCountDelta} deltaGoodUp series={m.payDaily} sub={`${m.payCount}`} href="/dashboard/payments" /> : null,
             };
             const ordered = kpiOrder(profile).map((k) => kpis[k]).filter(Boolean);
             if (!ordered.length) return null;
@@ -349,8 +373,8 @@ export default function DashboardPage() {
 }
 
 /* ===== sub-components ===== */
-function KpiMoney({ icon, color, label, map, sub, href, delta, deltaGoodUp, tone }:
-  { icon: string; color: string; label: string; map: Record<string, number>; sub?: string; href?: string; delta?: number | null; deltaGoodUp?: boolean; tone?: 'danger' }) {
+function KpiMoney({ icon, color, label, map, sub, href, delta, deltaGoodUp, tone, series }:
+  { icon: string; color: string; label: string; map: Record<string, number>; sub?: string; href?: string; delta?: number | null; deltaGoodUp?: boolean; tone?: 'danger'; series?: number[] }) {
   const entries = ccyEntries(map);
   const body = (
     <Card className={cx('p-4 h-full transition-all hover:shadow-md', tone === 'danger' && entries.length > 0 && 'ring-1 ring-red-200')}>
@@ -384,6 +408,7 @@ function KpiMoney({ icon, color, label, map, sub, href, delta, deltaGoodUp, tone
           </span>
         )}
         {sub && <p className="text-[11px] text-gray-400">{sub}</p>}
+        {series && series.length > 1 && <Sparkline data={series} className="ms-auto shrink-0" />}
       </div>
     </Card>
   );
