@@ -354,21 +354,37 @@ function KpiMoney({ icon, color, label, map, sub, href, delta, deltaGoodUp, tone
   const entries = ccyEntries(map);
   const body = (
     <Card className={cx('p-4 h-full transition-all hover:shadow-md', tone === 'danger' && entries.length > 0 && 'ring-1 ring-red-200')}>
-      <div className="flex items-center justify-between">
-        <span className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: `${color}15`, color }}><Icon name={icon} size={18} /></span>
+      {/*
+        * التسمية أوّلاً ثم الرقم.
+        *
+        * كان الرقم يسبق ما يُفسّره، فتقع العين على مبلغٍ لا تعرف ما هو ثم ترتدّ
+        * إلى أعلى لتقرأ اسمه. والبطاقة تُقرأ مرّة واحدة من فوق إلى تحت.
+        */}
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-[13px] font-medium text-gray-500 leading-tight">{label}</p>
+        <span className="shrink-0 w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: `${color}14`, color }}>
+          <Icon name={icon} size={16} />
+        </span>
+      </div>
+      <div className="mt-2.5 space-y-0.5">
+        {entries.length ? entries.map((e) => (
+          <p key={e.ccy} className="text-[22px] font-bold text-gray-900 tabular-nums leading-tight tracking-tight" dir="ltr">
+            <span className="text-[11px] font-semibold text-gray-400 align-middle me-1">{e.ccy}</span>
+            {fmtMoney(e.value)}
+          </p>
+        )) : <p className="text-[22px] font-bold text-gray-300 leading-tight">0</p>}
+      </div>
+      <div className="mt-2 flex items-center gap-2 flex-wrap">
         {delta != null && (
-          <span className={cx('text-[11px] font-semibold px-2 py-0.5 rounded-full', (delta >= 0) === !!deltaGoodUp ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-500')}>
-            {delta >= 0 ? '▲' : '▼'} {Math.abs(delta).toFixed(1)}%
+          /* السهم أيقونةٌ لا محرف: `▲` يختلف رسمه ووزنه بين الخطوط ولا يرث لون النصّ. */
+          <span className={cx('inline-flex items-center gap-0.5 text-[11px] font-semibold tabular-nums',
+            (delta >= 0) === !!deltaGoodUp ? 'money-pos' : 'money-neg')} dir="ltr">
+            <Icon name={delta >= 0 ? 'chevronUp' : 'chevronDown'} size={12} />
+            {Math.abs(delta).toFixed(1)}%
           </span>
         )}
+        {sub && <p className="text-[11px] text-gray-400">{sub}</p>}
       </div>
-      <p className="text-xs text-gray-500 mt-3">{label}</p>
-      <div className="mt-1 space-y-0.5">
-        {entries.length ? entries.map((e) => (
-          <p key={e.ccy} className="text-lg font-extrabold text-gray-800 tabular-nums leading-tight">{fmtMoney(e.value)} <span className="text-xs font-medium text-gray-400">{e.ccy}</span></p>
-        )) : <p className="text-lg font-extrabold text-gray-300">0</p>}
-      </div>
-      {sub && <p className="text-[11px] text-gray-400 mt-1.5">{sub}</p>}
     </Card>
   );
   return href ? <Link href={href}>{body}</Link> : body;

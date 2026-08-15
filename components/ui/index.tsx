@@ -28,7 +28,7 @@ type Size = 'sm' | 'md' | 'lg';
 const BTN_V: Record<Variant, string> = {
   primary: 'bg-brand-600 text-white hover:bg-brand-700 active:bg-brand-800 shadow-sm',
   secondary: 'bg-navy-800 text-white hover:bg-navy-700 active:bg-navy-900 shadow-sm',
-  outline: 'border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 hover:border-gray-300',
+  outline: 'border border-[var(--hairline)] bg-white text-gray-700 hover:bg-gray-50 hover:border-gray-300',
   ghost: 'text-gray-600 hover:bg-gray-100 hover:text-gray-900',
   danger: 'bg-red-600 text-white hover:bg-red-700 active:bg-red-800 shadow-sm',
   success: 'bg-emerald-600 text-white hover:bg-emerald-700 active:bg-emerald-800 shadow-sm',
@@ -74,8 +74,14 @@ export function IconButton(
 
 /* ═══════════ Surfaces ═══════════ */
 export function Card({ className, children, ...rest }: { className?: string; children: ReactNode } & React.HTMLAttributes<HTMLDivElement>) {
-  // حدٌّ أوضح من ظلّ أثقل: البيانات الكثيفة تحتاج فصلاً لا ارتفاعاً.
-  return <div className={cx('bg-white rounded-xl border border-gray-200/80 shadow-[0_1px_2px_rgba(16,24,40,.05)]', className)} {...rest}>{children}</div>;
+  /*
+   * حدٌّ أوضح من ظلّ أثقل: البيانات الكثيفة تحتاج فصلاً لا ارتفاعاً.
+   *
+   * والحدّ هنا لونه `--hairline` المحايد لا رمادي Tailwind المائل للأزرق —
+   * فحين تصطفّ عشر بطاقات على قماشٍ واحد، انحرافُ حدودها إلى الزرقة يصبغ
+   * الشاشة كلّها بلونٍ لم يقصده أحد.
+   */
+  return <div className={cx('bg-white rounded-xl border border-[var(--hairline)] shadow-[0_1px_2px_rgba(16,24,40,.04)]', className)} {...rest}>{children}</div>;
 }
 export function CardHeader({ title, subtitle, action }: { title: ReactNode; subtitle?: ReactNode; action?: ReactNode }) {
   return (

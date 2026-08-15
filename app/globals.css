@@ -2,41 +2,65 @@
 
 /* ============ UME Design Tokens (Phase 1) ============ */
 @theme {
-  /* Brand — Deep Navy (sidebar / headers) */
-  --color-navy-950: #070d1c;
-  --color-navy-900: #0b1531;
-  --color-navy-800: #12224a;
-  --color-navy-700: #1b3160;
-  --color-navy-600: #274279;
+  /*
+   * الحبر والحدود محايدة لا زرقاء.
+   *
+   * كانت الرماديات كلها مائلة إلى الأزرق (`#e5e9f2`)، فيجتمع على الشاشة زرقان:
+   * زرقة العلامة وزرقة الحياد. والنتيجة سطحٌ مصبوغ لا هادئ. الحياد هنا يجعل
+   * الأزرق يعني شيئاً حين يظهر.
+   */
+  --color-navy-950: #060b16;
+  --color-navy-900: #0c1524;
+  --color-navy-800: #141f33;
+  --color-navy-700: #1d2b44;
+  --color-navy-600: #293a58;
 
-  /* Primary — Professional Blue */
-  --color-brand-50: #eff5ff;
-  --color-brand-100: #dbe8fe;
-  --color-brand-200: #bfd6fe;
-  --color-brand-300: #93b8fd;
-  --color-brand-400: #6091fa;
-  --color-brand-500: #3b6bf5;
-  --color-brand-600: #2551e6;
-  --color-brand-700: #1d40c9;
-  --color-brand-800: #1e37a3;
-  --color-brand-900: #1e3381;
+  /*
+   * الأزرق أعمق وأقلّ إشباعاً.
+   *
+   * `#3b6bf5` لونٌ يصلح لتطبيق استهلاكي؛ وهذه شاشات يقضي أمامها محاسبٌ ساعات،
+   * والإشباع العالي يُتعب ويصرف النظر عن الأرقام — وهي المقصودة.
+   */
+  --color-brand-50: #eef4ff;
+  --color-brand-100: #dbe6fe;
+  --color-brand-200: #bed3fd;
+  --color-brand-300: #91b5fb;
+  --color-brand-400: #5c8df6;
+  --color-brand-500: #3366ea;
+  --color-brand-600: #234ed6;
+  --color-brand-700: #1d3eb0;
+  --color-brand-800: #1c368c;
+  --color-brand-900: #1b3170;
 
-  /* Surfaces */
-  --color-canvas: #f4f6fb;
+  /* أرقام المال — عميقة لا صارخة. الأحمر الفاقع يجعل كل متأخّرة إنذاراً. */
+  --color-money-pos: #027a48;
+  --color-money-neg: #b42318;
+
+  --color-canvas: #f7f8fa;
   --color-surface: #ffffff;
 
-  /* Fonts */
   --font-sans: var(--font-cairo), "Segoe UI", system-ui, sans-serif;
 }
 
 :root {
-  --background: #f4f6fb;
-  --foreground: #0b1531;
+  --background: #f7f8fa;
+  --foreground: #101828;
+  --hairline: #e4e7ec;
 }
 
 * {
-  border-color: #e5e9f2;
+  border-color: var(--hairline);
 }
+
+/*
+ * العناوين أثقل وأضيق تتبّعاً.
+ *
+ * كانت بأوزان مبعثرة تُحدَّد في كل شاشة على حدة، فلا سلّم يجمعها. والسلّم هو ما
+ * يجعل الصفحة تبدو مقصودة لا مركَّبة.
+ */
+h1, h2, h3 { letter-spacing: -0.015em; }
+h1 { font-weight: 700; }
+h2, h3 { font-weight: 600; }
 
 html { -webkit-text-size-adjust: 100%; }
 
@@ -69,6 +93,50 @@ body {
  * خطّ الأساس داخل الصفّ.
  */
 table { font-variant-numeric: tabular-nums lining-nums; }
+
+/*
+ * ═══ مظهر الجداول المالية ═══
+ *
+ * يُطبَّق عالمياً بمُحدِّدات منخفضة الأولوية (`:where`) فلا يغلب أي صنف تكتبه
+ * الشاشة على خليّتها. الغاية أن يتغيّر الجدول في السبعة عشر شاشة دون أن أفتح
+ * ملفاً واحداً منها — والملفات التي لا تُفتح لا تنكسر.
+ */
+
+/* الرأس: أهدأ لوناً، أوضح فصلاً. الخطّ السفلي يفصل أكثر ممّا تفعل خلفية رمادية. */
+:where(thead) :where(th) {
+  color: #667085;
+  font-weight: 600;
+  font-size: 0.75rem;
+  letter-spacing: 0.01em;
+  background: #fcfcfd;
+  border-bottom: 1px solid #d0d5dd;
+}
+
+/* الصفوف: خطّ شعري بدل تباين مُخطَّط — الأخير يشوّش على عين تقرأ أرقاماً. */
+:where(tbody) :where(tr) { border-bottom: 1px solid #f2f4f7; }
+:where(tbody) :where(tr):last-child { border-bottom: 0; }
+:where(tbody) :where(tr) { transition: background-color .12s ease; }
+:where(tbody) :where(tr):hover { background-color: #f9fafb; }
+
+/*
+ * الأرقام تُقرأ بالمقارنة العمودية، فتُحاذى إلى جهة واحدة وتأخذ وزناً أثقل قليلاً.
+ * والمحاذاة هنا يسارية دائماً — حتى في RTL — لأن الرقم لاتيني الاتجاه.
+ */
+:where(td).tabular-nums, :where(td) .tabular-nums {
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: "tnum" 1;
+}
+
+/* المجاميع: أعلى الصفحة وزناً — وهي آخر ما تقع عليه العين وأوّل ما تُطلب. */
+:where(tfoot) :where(td), :where(tfoot) :where(th) {
+  background: #f9fafb;
+  border-top: 1px solid #d0d5dd;
+  font-weight: 600;
+}
+
+/* المال: عمق لا صراخ. */
+.money-pos { color: var(--color-money-pos); }
+.money-neg { color: var(--color-money-neg); }
 
 /*
  * الجدول لا يُغيّر عرضه كلّما تغيّر محتواه.
