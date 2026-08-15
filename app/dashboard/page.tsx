@@ -112,7 +112,24 @@ export default function DashboardPage() {
         days.push(byDay.get(d0.toISOString().slice(0, 10)) ?? 0);
         if (days.length > 400) break; // حارس: فترة مفتوحة لا ترسم أربعمئة نقطة
       }
-      return days;
+
+      /*
+       * التجميع عند الفترات الطويلة.
+       *
+       * سنةٌ كاملة تعني ٢٢٧ نقطة في ٧٢ بكسل — ثلث بكسل للنقطة. الخطّ عندها لا
+       * يُظهر شكلاً بل ضجيجاً، وكلّ يومٍ خالٍ يهبط به إلى القاع فيبدو مشطاً.
+       *
+       * فتُجمَع الأيام في ثلاثين سلّة على الأكثر: الشهر يبقى يومياً، والسنة
+       * تصير أسبوعية. والمجموع محفوظ في الحالتين — يتغيّر التحبيب لا البيانات.
+       */
+      const MAX = 30;
+      if (days.length <= MAX) return days;
+      const size = Math.ceil(days.length / MAX);
+      const buckets: number[] = [];
+      for (let i = 0; i < days.length; i += size) {
+        buckets.push(days.slice(i, i + size).reduce((a, b) => a + b, 0));
+      }
+      return buckets;
     })();
 
     const today = new Date(); today.setHours(0, 0, 0, 0);
