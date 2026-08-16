@@ -1,7 +1,88 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
 import api from '@/lib/api';
-import { Card, Button, Select, Input, Field, Icon, Callout, TableSkeleton, EmptyState, cx } from '@/components/ui';
+import { Card, Button, Select, Input, Field, Icon, Callout, TableSkeleton, EmptyState, Modal, Badge, cx } from '@/components/ui';
+
+/*
+ * فتح القيد كاملاً من أي سطر في أي تقرير.
+ *
+ * التقرير يعرض جانباً واحداً من القيد — جانب الدائنين أو حسابَ الأستاذ الجاري.
+ * والسؤال الذي يتبعه دائماً: «وما الجانب الآخر؟». فالسطر مدخلٌ إلى القيد لا
+ * نهايةُ الطريق.
+ */
+function EntryModal({ id, onClose }: { id: string | null; onClose: () => void }) {
+  const [entry, setEntry] = useState<any>(null);
+  const [err, setErr] = useState('');
+
+  useEffect(() => {
+    if (!id) { setEntry(null); setErr(''); return; }
+    let alive = true;
+    api.get(`/api/accounting/entries/${id}`)
+      .then((r) => { if (alive) setEntry(r.data); })
+      .catch(() => { if (alive) setErr('تعذّر فتح القيد.'); });
+    return () => { alive = false; };
+  }, [id]);
+
+  const lines = entry?.lines || [];
+  const totalDr = lines.reduce((s: number, l: any) => s + Number(l.debit_eur || 0), 0);
+  const totalCr = lines.reduce((s: number, l: any) => s + Number(l.credit_eur || 0), 0);
+
+  return (
+    <Modal open={!!id} onClose={onClose} size="xl"
+      title={entry ? `القيد ${entry.entry_no || '(مسوّدة)'}` : 'القيد'}>
+      {err ? <Callout tone="danger">{err}</Callout>
+        : !entry ? <TableSkeleton rows={5} cols={4} />
+        : (
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-2 text-sm text-gray-600">
+              <Badge tone={entry.status === 'posted' ? 'success' : 'warning'}>{entry.status}</Badge>
+              <span className="tabular-nums">{String(entry.accounting_date).slice(0, 10)}</span>
+              {entry.reference && <span className="text-gray-400">· {entry.reference}</span>}
+            </div>
+            {entry.description && <p className="text-sm text-gray-800">{entry.description}</p>}
+
+            <div className="overflow-x-auto border border-[var(--hairline)] rounded-lg">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr>
+                    <th scope="col" className="px-3 py-2 text-right">الحساب</th>
+                    <th scope="col" className="px-3 py-2 text-right">البيان</th>
+                    <th scope="col" className="px-3 py-2 text-left">مدين</th>
+                    <th scope="col" className="px-3 py-2 text-left">دائن</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {lines.map((l: any) => (
+                    <tr key={l.id}>
+                      <td className="px-3 py-1.5" dir="auto">
+                        <span className="font-mono text-xs text-gray-500">{l.account?.code}</span>{' '}
+                        {l.account?.name}
+                      </td>
+                      <td className="px-3 py-1.5 text-xs text-gray-600" dir="auto">{l.description || '—'}</td>
+                      <td className="px-3 py-1.5 text-left tabular-nums">{side(Number(l.debit_eur || 0))}</td>
+                      <td className="px-3 py-1.5 text-left tabular-nums">{side(Number(l.credit_eur || 0))}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr>
+                    <td className="px-3 py-2" colSpan={2}>الإجمالي</td>
+                    <td className="px-3 py-2 text-left tabular-nums">{money(totalDr)}</td>
+                    <td className="px-3 py-2 text-left tabular-nums">{money(totalCr)}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+
+            {/* التوازن يُقال صراحةً — القيد غير المتوازن عيبٌ لا يُترك للقارئ أن يجمعه بنفسه. */}
+            <p className={cx('text-xs', Math.abs(totalDr - totalCr) < 0.005 ? 'money-pos' : 'money-neg')}>
+              {Math.abs(totalDr - totalCr) < 0.005 ? 'متوازن' : `غير متوازن بفارق ${money(totalDr - totalCr)}`}
+            </p>
+          </div>
+        )}
+    </Modal>
+  );
+}
 
 /*
  * تقارير الأطراف ودفتر الأستاذ.
@@ -44,6 +125,7 @@ export default function AccountingReportsPage() {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [openEntryId, setOpenEntryId] = useState<string | null>(null);
 
   const def = REPORTS.find((r) => r.key === report)!;
 
@@ -113,17 +195,19 @@ export default function AccountingReportsPage() {
 
         {loading ? <div className="p-4"><TableSkeleton rows={10} cols={6} /></div>
           : !data ? <EmptyState title="لا تقرير بعد" description="اختر الكيان والتاريخ ثم حدّث." />
-          : report === 'general_ledger' ? <GeneralLedger data={data} />
-          : report.endsWith('summary') ? <PartySummary data={data} />
-          : <PartyDetail data={data} />}
+          : report === 'general_ledger' ? <GeneralLedger data={data} onOpen={setOpenEntryId} />
+          : report.endsWith('summary') ? <PartySummary data={data} onDrill={(k) => setReport(k)} />
+          : <PartyDetail data={data} onOpen={setOpenEntryId} />}
       </Card>
+
+      <EntryModal id={openEntryId} onClose={() => setOpenEntryId(null)} />
     </div>
   );
 }
 
 // ═════════════════════════ ملخّص أرصدة الأطراف ═════════════════════════
 
-function PartySummary({ data }: { data: any }) {
+function PartySummary({ data, onDrill }: { data: any; onDrill: (k: any) => void }) {
   const rows = data?.summary?.rows || [];
   if (!rows.length) return <EmptyState title="لا أرصدة" description="لا طرف له رصيد قائم في هذا التاريخ." />;
 
@@ -138,7 +222,10 @@ function PartySummary({ data }: { data: any }) {
         </thead>
         <tbody>
           {rows.map((r: any, i: number) => (
-            <tr key={r.party_id ?? `u-${i}`} className={cx(r.unattributed && 'bg-amber-50/60')}>
+            <tr key={r.party_id ?? `u-${i}`}
+              onClick={() => onDrill(data.title?.startsWith('Vendor') ? 'vendor_detail' : 'customer_detail')}
+              title="اضغط لعرض حركات هذا الطرف"
+              className={cx('cursor-pointer hover:bg-brand-50/50', r.unattributed && 'bg-amber-50/60')}>
               <td className="px-4 py-2 font-medium" dir="auto">
                 {r.party_name}
                 {r.unattributed && <span className="ms-2 text-[11px] text-amber-700 font-normal">لا مستند تفصيلي</span>}
@@ -161,7 +248,7 @@ function PartySummary({ data }: { data: any }) {
 
 // ═════════════════════════ تفصيل أرصدة الأطراف ═════════════════════════
 
-function PartyDetail({ data }: { data: any }) {
+function PartyDetail({ data, onOpen }: { data: any; onOpen: (id: string) => void }) {
   const groups = data?.detail?.groups || [];
   if (!groups.length) return <EmptyState title="لا حركة" description="لا حركة على هذا الحساب حتى التاريخ." />;
 
@@ -174,6 +261,7 @@ function PartyDetail({ data }: { data: any }) {
             <th scope="col" className="px-3 py-2 text-right">Date</th>
             <th scope="col" className="px-3 py-2 text-right">Num</th>
             <th scope="col" className="px-3 py-2 text-right">Account</th>
+            <th scope="col" className="px-3 py-2 text-right">Split</th>
             <th scope="col" className="px-3 py-2 text-left">Debit</th>
             <th scope="col" className="px-3 py-2 text-left">Credit</th>
             <th scope="col" className="px-3 py-2 text-left">Amount</th>
@@ -182,12 +270,12 @@ function PartyDetail({ data }: { data: any }) {
         </thead>
         <tbody>
           {groups.map((g: any, gi: number) => (
-            <FragmentGroup key={g.party_id ?? `u-${gi}`} g={g} />
+            <FragmentGroup key={g.party_id ?? `u-${gi}`} g={g} onOpen={onOpen} />
           ))}
         </tbody>
         <tfoot>
           <tr>
-            <td className="px-3 py-2" colSpan={6}>TOTAL</td>
+            <td className="px-3 py-2" colSpan={7}>TOTAL</td>
             <td className="px-3 py-2 text-left tabular-nums">{money(data.detail.grand_total)}</td>
             <td className="px-3 py-2 text-left tabular-nums">{money(data.detail.grand_total)}</td>
           </tr>
@@ -198,21 +286,24 @@ function PartyDetail({ data }: { data: any }) {
   );
 }
 
-function FragmentGroup({ g }: { g: any }) {
+function FragmentGroup({ g, onOpen }: { g: any; onOpen: (id: string) => void }) {
   return (
     <>
       <tr className={cx('bg-gray-50', g.unattributed && 'bg-amber-50')}>
-        <td className="px-3 py-1.5 font-bold" colSpan={8} dir="auto">
+        <td className="px-3 py-1.5 font-bold" colSpan={9} dir="auto">
           {g.party_name}
           {g.unattributed && <span className="ms-2 text-[11px] text-amber-700 font-normal">مرحَّل جملةً من ميزان المراجعة — لا تفصيل بالطرف</span>}
         </td>
       </tr>
       {g.rows.map((r: any, i: number) => (
-        <tr key={i}>
+        <tr key={i} onClick={() => r.entry_id && onOpen(r.entry_id)}
+          className={cx(r.entry_id && 'cursor-pointer hover:bg-brand-50/50')}
+          title="اضغط لفتح القيد كاملاً">
           <td className="px-3 py-1.5">{r.type}</td>
           <td className="px-3 py-1.5 whitespace-nowrap">{r.date}</td>
           <td className="px-3 py-1.5 font-mono text-xs">{r.num}</td>
           <td className="px-3 py-1.5 text-gray-600 text-xs" dir="auto">{r.account}</td>
+          <td className="px-3 py-1.5 text-xs font-medium text-brand-700" dir="auto">{r.split || '—'}</td>
           <td className="px-3 py-1.5 text-left tabular-nums">{side(r.debit)}</td>
           <td className="px-3 py-1.5 text-left tabular-nums">{side(r.credit)}</td>
           <td className={cx('px-3 py-1.5 text-left tabular-nums', r.amount < 0 && 'money-neg')}>{money(r.amount)}</td>
@@ -220,7 +311,7 @@ function FragmentGroup({ g }: { g: any }) {
         </tr>
       ))}
       <tr className="bg-gray-50/70 font-medium border-t border-[var(--hairline)]">
-        <td className="px-3 py-1.5" colSpan={4} dir="auto">Total {g.party_name}</td>
+        <td className="px-3 py-1.5" colSpan={5} dir="auto">Total {g.party_name}</td>
         <td className="px-3 py-1.5 text-left tabular-nums">{money(g.total_debit)}</td>
         <td className="px-3 py-1.5 text-left tabular-nums">{money(g.total_credit)}</td>
         <td className="px-3 py-1.5 text-left tabular-nums">{money(g.total_amount)}</td>
@@ -259,7 +350,7 @@ function Attribution({ detail }: { detail: any }) {
 
 // ═════════════════════════ دفتر الأستاذ العام ═════════════════════════
 
-function GeneralLedger({ data }: { data: any }) {
+function GeneralLedger({ data, onOpen }: { data: any; onOpen: (id: string) => void }) {
   const accounts = data?.report?.accounts || [];
   if (!accounts.length) return <EmptyState title="لا حركة" description="لا حساب بحركة أو رصيد في هذه الفترة." />;
 
@@ -280,7 +371,7 @@ function GeneralLedger({ data }: { data: any }) {
         </thead>
         <tbody>
           {accounts.map((a: any) => (
-            <GlAccountRows key={a.account_id} a={a} />
+            <GlAccountRows key={a.account_id} a={a} onOpen={onOpen} />
           ))}
         </tbody>
       </table>
@@ -293,7 +384,7 @@ function GeneralLedger({ data }: { data: any }) {
   );
 }
 
-function GlAccountRows({ a }: { a: any }) {
+function GlAccountRows({ a, onOpen }: { a: any; onOpen: (id: string) => void }) {
   return (
     <>
       {/* رأس الحساب يحمل رصيده الافتتاحي — كما في التقرير الأصلي. */}
@@ -304,7 +395,9 @@ function GlAccountRows({ a }: { a: any }) {
         <td className="px-3 py-1.5 text-left tabular-nums font-bold">{money(a.opening)}</td>
       </tr>
       {a.rows.map((r: any, i: number) => (
-        <tr key={i}>
+        <tr key={i} onClick={() => r.entry_id && onOpen(r.entry_id)}
+          className={cx(r.entry_id && 'cursor-pointer hover:bg-brand-50/50')}
+          title="اضغط لفتح القيد كاملاً">
           <td className="px-3 py-1.5">{r.type}</td>
           <td className="px-3 py-1.5 whitespace-nowrap">{r.date}</td>
           <td className="px-3 py-1.5 font-mono text-xs">{r.num}</td>
