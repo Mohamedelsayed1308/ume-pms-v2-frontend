@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import api from '@/lib/api';
 import { Card, Button, Badge, Input, Select, Skeleton, EmptyState, useToast, cx } from '@/components/ui';
+import AccountStatement, { type AccountRef } from '../AccountStatement';
 
 /*
  * القوائم المالية.
@@ -23,6 +24,13 @@ export default function StatementsPage() {
   const [entityId, setEntityId] = useState('');
   const [from, setFrom] = useState(firstOfMonth());
   const [to, setTo] = useState(lastOfMonth());
+  /*
+   * الحساب المفتوح كشفُه.
+   *
+   * القائمة تعرض رقماً واحداً لكل حساب، والسؤال الذي يتبعه دائماً: «مِمَّ تكوّن
+   * هذا الرقم؟» — فكل سطر مدخلٌ إلى حركاته.
+   */
+  const [openAccount, setOpenAccount] = useState<AccountRef | null>(null);
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState('');
@@ -114,7 +122,9 @@ export default function StatementsPage() {
                         </td>
                       </tr>
                       {s.lines.map((l: any) => (
-                        <tr key={s.key + l.code} className="border-b last:border-0">
+                        <tr key={s.key + l.code} onClick={() => setOpenAccount({ code: l.code, name: l.name })}
+                          title="اضغط لعرض حركات الحساب"
+                          className="border-b last:border-0 cursor-pointer hover:bg-brand-50/50">
                           <td className="px-6 py-1.5">
                             <span className="font-mono text-xs text-gray-400">{l.code}</span> {l.name}
                           </td>
@@ -162,7 +172,9 @@ export default function StatementsPage() {
                       <td className="px-4 py-2 font-semibold" colSpan={2}>{sec.label}</td>
                     </tr>
                     {sec.lines.map((l: any) => (
-                      <tr key={i + l.code} className="border-b last:border-0">
+                      <tr key={i + l.code} onClick={() => setOpenAccount({ code: l.code, name: l.name })}
+                        title="اضغط لعرض حركات الحساب"
+                        className="border-b last:border-0 cursor-pointer hover:bg-brand-50/50">
                         <td className="px-6 py-1.5">
                           <span className="font-mono text-xs text-gray-400">{l.code}</span> {l.name}
                         </td>
@@ -213,6 +225,15 @@ export default function StatementsPage() {
       {!loading && !data && !err && (
         <EmptyState title="اختر فترة" description="حدّد التاريخين ثم اضغط توليد." />
       )}
+
+      {/*
+        * الكشف يُقرأ منذ نشأة الدفتر لا من بداية الفترة.
+        *
+        * حسابات المركز المالي أرصدةٌ تراكمية، وقصرُ كشفها على الفترة يُظهر رقماً
+        * لا يساوي ما في القائمة. والفترة تخصّ قائمة الدخل وحدها.
+        */}
+      <AccountStatement account={openAccount} entityId={entityId} from={null} to={to}
+        onClose={() => setOpenAccount(null)} />
     </div>
   );
 }

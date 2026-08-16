@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
 import api from '@/lib/api';
+import AccountStatement from './AccountStatement';
 import { getUser } from '@/lib/auth';
 import { Card, Button, Badge, Input, Select, Skeleton, EmptyState, Modal, useToast, cx } from '@/components/ui';
 import PostableInvoices from './PostableInvoices';
@@ -528,13 +529,17 @@ export default function AccountingPage() {
         )}
       </Modal>
 
-      {/* حركة حساب */}
-      <Modal open={!!ledgerFor} onClose={() => setLedgerFor(null)}
-        title={ledgerFor ? `${ledgerFor.code} — ${ledgerFor.name}` : ''} size="lg">
-        {ledgerFor && (
-          <AccountLedger accountId={ledgerFor.id} entries={entries} onOpen={openEntry} />
-        )}
-      </Modal>
+      {/*
+        * كشف الحساب من المكوّن المشترك.
+        *
+        * النسخة السابقة كانت تجلب كل قيد مُرحَّل على حدة ثم تُرشّح في المتصفّح —
+        * نداءٌ لكل قيد ينمو مع الدفتر بلا حدّ. صارت نداءً واحداً مرشَّحاً في
+        * الاستعلام، وهي النقطة نفسها التي يقرأها دفتر الأستاذ.
+        */}
+      <AccountStatement
+        account={ledgerFor ? { code: ledgerFor.code, name: ledgerFor.name } : null}
+        entityId={entityId} from={null} to={new Date().toISOString().slice(0, 10)}
+        onClose={() => setLedgerFor(null)} onOpenEntry={openEntry} />
 
       {/* الترحيل الجماعي */}
       <Modal open={bulkOpen} onClose={() => !busy && setBulkOpen(false)} title="ترحيل جماعي" size="lg">
@@ -622,57 +627,3 @@ export default function AccountingPage() {
 }
 
 /** حركة حساب واحد — تُبنى من القيود المحمَّلة، فلا نداء إضافي لكل نقرة. */
-function AccountLedger({ accountId, entries, onOpen }: { accountId: string; entries: Entry[]; onOpen: (id: string) => void }) {
-  const [lines, setLines] = useState<any[] | null>(null);
-  useEffect(() => {
-    let alive = true;
-    (async () => {
-      const posted = entries.filter((e) => e.status === 'posted' || e.status === 'reversed');
-      const out: any[] = [];
-      for (const e of posted) {
-        try {
-          const { data } = await api.get(`/api/accounting/entries/${e.id}`);
-          for (const l of data.lines || []) {
-            if (l.account_id === accountId) out.push({ ...l, entry: data });
-          }
-        } catch { /* يُتجاوز القيد المتعذّر ولا يسقط العرض كلّه */ }
-      }
-      if (alive) setLines(out.sort((a, b) => a.entry.accounting_date.localeCompare(b.entry.accounting_date)));
-    })();
-    return () => { alive = false; };
-  }, [accountId, entries]);
-
-  if (!lines) return <Skeleton className="h-40" />;
-  if (!lines.length) return <EmptyState title="لا حركة" description="لم يمرّ على هذا الحساب قيد مُرحَّل." />;
-
-  let running = 0;
-  return (
-    <table className="w-full text-sm">
-      <thead className="bg-gray-50 text-xs text-gray-500">
-        <tr>
-          <th scope="col" className="px-3 py-2 text-right">التاريخ</th>
-          <th scope="col" className="px-3 py-2 text-right">القيد</th>
-          <th scope="col" className="px-3 py-2 text-right">البيان</th>
-          <th scope="col" className="px-3 py-2 text-left">مدين</th>
-          <th scope="col" className="px-3 py-2 text-left">دائن</th>
-          <th scope="col" className="px-3 py-2 text-left">الرصيد</th>
-        </tr>
-      </thead>
-      <tbody className="divide-y">
-        {lines.map((l) => {
-          running += Number(l.debit_eur) - Number(l.credit_eur);
-          return (
-            <tr key={l.id} className="hover:bg-blue-50/40 cursor-pointer" onClick={() => onOpen(l.entry.id)}>
-              <td className="px-3 py-2 whitespace-nowrap">{dateOnly(l.entry.accounting_date)}</td>
-              <td className="px-3 py-2 font-mono text-xs">{l.entry.entry_no}</td>
-              <td className="px-3 py-2"><div className="max-w-xs truncate" title={l.description || l.entry.description}>{l.description || l.entry.description}</div></td>
-              <td className="px-3 py-2 text-left tabular-nums">{Number(l.debit_eur) ? money(l.debit_eur) : '—'}</td>
-              <td className="px-3 py-2 text-left tabular-nums">{Number(l.credit_eur) ? money(l.credit_eur) : '—'}</td>
-              <td className="px-3 py-2 text-left tabular-nums font-medium">{money(Math.abs(running))} {running < 0 ? 'دائن' : 'مدين'}</td>
-            </tr>
-          );
-        })}
-      </tbody>
-    </table>
-  );
-}
