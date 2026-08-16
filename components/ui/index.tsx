@@ -163,10 +163,10 @@ export function StatusBadge({ tone = 'neutral', label, className }:
 }
 
 /* ═══════════ Inputs ═══════════ */
-export function Field({ label, error, hint, required, children }:
-  { label?: string; error?: string; hint?: ReactNode; required?: boolean; children: ReactNode }) {
+export function Field({ label, error, hint, required, children, className }:
+  { label?: string; error?: string; hint?: ReactNode; required?: boolean; children: ReactNode; className?: string }) {
   return (
-    <label className="block">
+    <label className={cx('block', className)}>
       {label && (
         <span className="block text-[13px] font-medium text-gray-700 mb-1.5">
           {label}{required && <span className="text-red-500 ms-0.5">*</span>}
@@ -530,8 +530,8 @@ export function ErrorState({ title = 'تعذّر تحميل البيانات', d
 }
 
 /** شريط تنبيه — للسياق الدائم لا للرسائل العابرة. */
-export function Callout({ tone = 'info', children, className }:
-  { tone?: Tone; children: ReactNode; className?: string }) {
+export function Callout({ tone = 'info', children, className, title }:
+  { tone?: Tone; children: ReactNode; className?: string; title?: ReactNode }) {
   const border: Record<Tone, string> = {
     neutral: 'border-gray-200 bg-gray-50 text-gray-700',
     success: 'border-emerald-200 bg-emerald-50 text-emerald-900',
@@ -540,7 +540,12 @@ export function Callout({ tone = 'info', children, className }:
     info: 'border-sky-200 bg-sky-50 text-sky-900',
     brand: 'border-brand-200 bg-brand-50 text-brand-900',
   };
-  return <div className={cx('rounded-lg border px-4 py-2.5 text-sm', border[tone], className)}>{children}</div>;
+  return (
+    <div className={cx('rounded-lg border px-4 py-2.5 text-sm', border[tone], className)}>
+      {title && <p className="font-semibold mb-0.5">{title}</p>}
+      {children}
+    </div>
+  );
 }
 
 /** تلميح — CSS فقط، بلا مكتبة ولا JS. */

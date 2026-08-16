@@ -67,6 +67,7 @@ export const SCREENS: Screen[] = [
   // الذي يؤدي إلى 404 أسوأ من غياب الرابط.
   { href: '/dashboard/accounting', label: 'دفتر الأستاذ', icon: '📒', iconName: 'file', group: 'sivamar_qb' },
   { href: '/dashboard/accounting/statements', label: 'القوائم المالية', icon: '📑', iconName: 'chart', group: 'sivamar_qb' },
+  { href: '/dashboard/accounting/reports', label: 'تقارير الدفتر', icon: '📊', iconName: 'chart', group: 'sivamar_qb' },
   { href: '/dashboard/receipts', label: 'تأكيد الاستلام', icon: '📦', iconName: 'check', group: 'sivamar_qb' },
   { href: '/dashboard/accounting/journals', label: 'إعداد القيود', icon: '📝', iconName: 'file', group: 'sivamar_qb', hidden: true },
   { href: '/dashboard/accounting/posting', label: 'ترحيل القيود', icon: '📮', iconName: 'check', group: 'sivamar_qb', hidden: true },
