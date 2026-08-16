@@ -30,7 +30,13 @@ export default function StatementsPage() {
    * القائمة تعرض رقماً واحداً لكل حساب، والسؤال الذي يتبعه دائماً: «مِمَّ تكوّن
    * هذا الرقم؟» — فكل سطر مدخلٌ إلى حركاته.
    */
-  const [openAccount, setOpenAccount] = useState<AccountRef | null>(null);
+  /*
+   * كشف قائمة الدخل يبدأ من بداية الفترة، وكشف المركز المالي من نشأة الدفتر.
+   *
+   * رقم قائمة الدخل رقمُ فترة، فكشفٌ منذ النشأة يختم بمبلغ تراكمي لا يطابق
+   * السطر المضغوط — والمركز المالي تراكمي فيصحّ له from=null وحده.
+   */
+  const [openAccount, setOpenAccount] = useState<(AccountRef & { from: string | null }) | null>(null);
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState('');
@@ -122,7 +128,7 @@ export default function StatementsPage() {
                         </td>
                       </tr>
                       {s.lines.map((l: any) => (
-                        <tr key={s.key + l.code} onClick={() => setOpenAccount({ code: l.code, name: l.name })}
+                        <tr key={s.key + l.code} onClick={() => setOpenAccount({ code: l.code, name: l.name, from })}
                           title="اضغط لعرض حركات الحساب"
                           className="border-b last:border-0 cursor-pointer hover:bg-brand-50/50">
                           <td className="px-6 py-1.5">
@@ -172,7 +178,7 @@ export default function StatementsPage() {
                       <td className="px-4 py-2 font-semibold" colSpan={2}>{sec.label}</td>
                     </tr>
                     {sec.lines.map((l: any) => (
-                      <tr key={i + l.code} onClick={() => setOpenAccount({ code: l.code, name: l.name })}
+                      <tr key={i + l.code} onClick={() => setOpenAccount({ code: l.code, name: l.name, from: null })}
                         title="اضغط لعرض حركات الحساب"
                         className="border-b last:border-0 cursor-pointer hover:bg-brand-50/50">
                         <td className="px-6 py-1.5">
@@ -232,7 +238,7 @@ export default function StatementsPage() {
         * حسابات المركز المالي أرصدةٌ تراكمية، وقصرُ كشفها على الفترة يُظهر رقماً
         * لا يساوي ما في القائمة. والفترة تخصّ قائمة الدخل وحدها.
         */}
-      <AccountStatement account={openAccount} entityId={entityId} from={null} to={to}
+      <AccountStatement account={openAccount} entityId={entityId} from={openAccount?.from ?? null} to={to}
         onClose={() => setOpenAccount(null)} />
     </div>
   );

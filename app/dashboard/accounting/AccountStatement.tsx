@@ -31,17 +31,25 @@ export function AccountStatement({ account, entityId, from, to, onClose, onOpenE
   const [data, setData] = useState<any>(null);
   const [err, setErr] = useState('');
 
+  /*
+   * الاعتماد على الرمز البدائي لا على كائن `account`.
+   *
+   * المستدعون يبنون `{code, name}` سطرياً، فكل إعادة رسمٍ للصفحة الأمّ تُنتج
+   * كائناً جديد الهوية — وكان الأثر يعيد الجلب ويُومض الهيكل العظمي مع كل
+   * toast أو تحديث عدّادٍ خلف النافذة المفتوحة.
+   */
+  const code = account?.code ?? null;
   useEffect(() => {
-    if (!account || !entityId) { setData(null); setErr(''); return; }
+    if (!code || !entityId) { setData(null); setErr(''); return; }
     let alive = true;
     setData(null); setErr('');
     api.get('/api/accounting/reports/general-ledger', {
-      params: { legal_entity_id: entityId, period_start: from || undefined, period_end: to, account_code: account.code },
+      params: { legal_entity_id: entityId, period_start: from || undefined, period_end: to, account_code: code },
     })
       .then((r) => { if (alive) setData(r.data); })
       .catch((e: any) => { if (alive) setErr(e?.response?.data?.message || 'تعذّر فتح كشف الحساب.'); });
     return () => { alive = false; };
-  }, [account, entityId, from, to]);
+  }, [code, entityId, from, to]);
 
   const acc = data?.report?.accounts?.[0];
 
@@ -53,6 +61,11 @@ export function AccountStatement({ account, entityId, from, to, onClose, onOpenE
         : !acc ? <EmptyState title="لا حركة" description="لم يمرّ على هذا الحساب قيد مُرحَّل في هذه الفترة." />
         : (
           <div className="space-y-3">
+            {data.truncated && (
+              <Callout tone="warning">
+                الكشف مقصوص عند سقف الصفوف — ضيّق الفترة لترى الحركات كاملة.
+              </Callout>
+            )}
             <div className="flex flex-wrap items-center gap-3 text-sm">
               <Badge tone="neutral">{from ? `${from} → ${to}` : `حتى ${to}`}</Badge>
               <span className="text-gray-500">

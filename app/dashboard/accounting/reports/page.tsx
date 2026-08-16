@@ -181,6 +181,11 @@ export default function AccountingReportsPage() {
       </Card>
 
       {error && <Callout tone="danger" title="تعذّر إخراج التقرير">{error}</Callout>}
+      {data?.truncated && (
+        <Callout tone="warning" title="التقرير مقصوص عند سقف الصفوف">
+          ضيّق الفترة أو رشّح بحسابٍ لترى الحركات كاملة — المجاميع هنا لا تشمل المقصوص.
+        </Callout>
+      )}
 
       <Card className="p-0 overflow-hidden">
         {/* ═══ ترويسة على نمط التقرير الأصلي ═══ */}
@@ -228,7 +233,7 @@ function PartySummary({ data, onDrill }: { data: any; onDrill: (k: any) => void 
               className={cx('cursor-pointer hover:bg-brand-50/50', r.unattributed && 'bg-amber-50/60')}>
               <td className="px-4 py-2 font-medium" dir="auto">
                 {r.party_name}
-                {r.unattributed && <span className="ms-2 text-[11px] text-amber-700 font-normal">لا مستند تفصيلي</span>}
+                {r.unattributed && <span className="ms-2 text-[11px] text-amber-700 font-normal">سطور بلا طرف</span>}
               </td>
               <td className={cx('px-4 py-2 text-left tabular-nums', Number(r.balance) < 0 && 'money-neg')}>{money(r.balance)}</td>
             </tr>
@@ -292,7 +297,7 @@ function FragmentGroup({ g, onOpen }: { g: any; onOpen: (id: string) => void }) 
       <tr className={cx('bg-gray-50', g.unattributed && 'bg-amber-50')}>
         <td className="px-3 py-1.5 font-bold" colSpan={9} dir="auto">
           {g.party_name}
-          {g.unattributed && <span className="ms-2 text-[11px] text-amber-700 font-normal">مرحَّل جملةً من ميزان المراجعة — لا تفصيل بالطرف</span>}
+          {g.unattributed && <span className="ms-2 text-[11px] text-amber-700 font-normal">سطور بلا طرف — نوع كل حركة في عمودها</span>}
         </td>
       </tr>
       {g.rows.map((r: any, i: number) => (
@@ -341,8 +346,8 @@ function Attribution({ detail }: { detail: any }) {
         {' · '}غير منسوب <span className="tabular-nums font-medium">{money(detail.unattributed_total)}</span>
       </p>
       <p className="text-gray-500">
-        غير المنسوب رُحِّل جملةً من ميزان المراجعة الافتتاحي بلا كشفٍ تفصيلي، فلا يُنسب إلى طرفٍ بعينه.
-        ينحسر وحده كلّما رُحِّلت حركاتٌ جديدة أو وصل كشفٌ تفصيلي.
+        غير المنسوب سطورٌ بلا طرفٍ على السطر — رصيدٌ افتتاحي مرحَّل جملةً، أو قيدٌ لا يخصّ طرفاً
+        بطبيعته. نوع كل حركة ظاهرٌ في عمودها، وينحسر المجموع كلّما رُحِّلت حركات منسوبة.
       </p>
     </div>
   );

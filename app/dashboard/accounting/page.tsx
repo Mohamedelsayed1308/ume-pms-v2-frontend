@@ -536,9 +536,14 @@ export default function AccountingPage() {
         * نداءٌ لكل قيد ينمو مع الدفتر بلا حدّ. صارت نداءً واحداً مرشَّحاً في
         * الاستعلام، وهي النقطة نفسها التي يقرأها دفتر الأستاذ.
         */}
+      {/*
+        * سقف الكشف بعيدٌ عمداً لا «اليوم»: ميزان المراجعة الذي ضُغط صفُّه بلا
+        * سقف تاريخ، فقصُّ كشفه عند اليوم — وبتوقيت UTC — كان يُسقط القيود
+        * المؤرَّخة مستقبلاً وقيودَ الفجر المحلي، فيظهر فرقٌ يبدو فسادَ بيانات.
+        */}
       <AccountStatement
         account={ledgerFor ? { code: ledgerFor.code, name: ledgerFor.name } : null}
-        entityId={entityId} from={null} to={new Date().toISOString().slice(0, 10)}
+        entityId={entityId} from={null} to="9999-12-31"
         onClose={() => setLedgerFor(null)} onOpenEntry={openEntry} />
 
       {/* الترحيل الجماعي */}
