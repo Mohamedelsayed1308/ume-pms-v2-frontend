@@ -92,13 +92,16 @@ function EntryModal({ id, onClose }: { id: string | null; onClose: () => void })
  * نظامين تفشل حين يختلف ترتيب الأعمدة قبل أن تختلف الأرقام.
  */
 
-type ReportKey = 'vendor_summary' | 'vendor_detail' | 'customer_summary' | 'customer_detail' | 'general_ledger';
+type ReportKey = 'vendor_summary' | 'vendor_detail' | 'customer_summary' | 'customer_detail'
+  | 'related_summary' | 'related_detail' | 'general_ledger';
 
 const REPORTS: { key: ReportKey; label: string; en: string; endpoint: string; party: boolean }[] = [
   { key: 'vendor_summary', label: 'أرصدة الموردين — ملخّص', en: 'Vendor Balance Summary', endpoint: 'vendor-balance', party: true },
   { key: 'vendor_detail', label: 'أرصدة الموردين — تفصيل', en: 'Vendor Balance Detail', endpoint: 'vendor-balance', party: true },
   { key: 'customer_summary', label: 'أرصدة العملاء — ملخّص', en: 'Customer Balance Summary', endpoint: 'customer-balance', party: true },
   { key: 'customer_detail', label: 'أرصدة العملاء — تفصيل', en: 'Customer Balance Detail', endpoint: 'customer-balance', party: true },
+  { key: 'related_summary', label: 'الأطراف المرتبطة — ملخّص', en: 'Related Party Summary', endpoint: 'related-party', party: true },
+  { key: 'related_detail', label: 'الأطراف المرتبطة — تفصيل', en: 'Related Party Statement', endpoint: 'related-party', party: true },
   { key: 'general_ledger', label: 'دفتر الأستاذ العام', en: 'General Ledger', endpoint: 'general-ledger', party: false },
 ];
 
@@ -181,6 +184,9 @@ export default function AccountingReportsPage() {
       </Card>
 
       {error && <Callout tone="danger" title="تعذّر إخراج التقرير">{error}</Callout>}
+      {data?.presentation && (
+        <Callout tone="info" title="قاعدة عرض">{data.presentation}</Callout>
+      )}
       {data?.truncated && (
         <Callout tone="warning" title="التقرير مقصوص عند سقف الصفوف">
           ضيّق الفترة أو رشّح بحسابٍ لترى الحركات كاملة — المجاميع هنا لا تشمل المقصوص.
@@ -201,7 +207,7 @@ export default function AccountingReportsPage() {
         {loading ? <div className="p-4"><TableSkeleton rows={10} cols={6} /></div>
           : !data ? <EmptyState title="لا تقرير بعد" description="اختر الكيان والتاريخ ثم حدّث." />
           : report === 'general_ledger' ? <GeneralLedger data={data} onOpen={setOpenEntryId} />
-          : report.endsWith('summary') ? <PartySummary data={data} onDrill={(k) => setReport(k)} />
+          : report.endsWith('summary') ? <PartySummary data={data} onDrill={(k) => setReport(k)} drillTarget={report.replace('_summary', '_detail')} />
           : <PartyDetail data={data} onOpen={setOpenEntryId} />}
       </Card>
 
@@ -212,7 +218,7 @@ export default function AccountingReportsPage() {
 
 // ═════════════════════════ ملخّص أرصدة الأطراف ═════════════════════════
 
-function PartySummary({ data, onDrill }: { data: any; onDrill: (k: any) => void }) {
+function PartySummary({ data, onDrill, drillTarget }: { data: any; onDrill: (k: any) => void; drillTarget: string }) {
   const rows = data?.summary?.rows || [];
   if (!rows.length) return <EmptyState title="لا أرصدة" description="لا طرف له رصيد قائم في هذا التاريخ." />;
 
@@ -228,7 +234,7 @@ function PartySummary({ data, onDrill }: { data: any; onDrill: (k: any) => void 
         <tbody>
           {rows.map((r: any, i: number) => (
             <tr key={r.party_id ?? `u-${i}`}
-              onClick={() => onDrill(data.title?.startsWith('Vendor') ? 'vendor_detail' : 'customer_detail')}
+              onClick={() => onDrill(drillTarget)}
               title="اضغط لعرض حركات هذا الطرف"
               className={cx('cursor-pointer hover:bg-brand-50/50', r.unattributed && 'bg-amber-50/60')}>
               <td className="px-4 py-2 font-medium" dir="auto">
