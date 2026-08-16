@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import api from '@/lib/api';
 import { Card, Button, Badge, Input, Select, Skeleton, EmptyState, cx } from '@/components/ui';
 import NewAccountModal from '../NewAccountModal';
+import AccountingFxRates from '../AccountingFxRates';
 
 /*
  * إعداد المحاسبة — شجرة الحسابات.
@@ -107,6 +108,8 @@ export default function AccountingSetupPage() {
         الحساب <b>التجميعي</b> يجمع أبناءه ولا يُرحَّل إليه، و<b>الفرعي</b> يُرحَّل إليه ولا يُعلَّق تحته شيء.
         رصيد أبٍ عليه حركة يصير خليطاً من حركته وحركة أبنائه فلا يُقرأ.
       </div>
+
+      <AccountingFxRates entityId={entityId} />
 
       <Card className="p-0 overflow-hidden">
         <div className="flex flex-wrap items-center gap-2 border-b px-4 py-3">
