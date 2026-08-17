@@ -8,7 +8,19 @@ interface MonthRow {
   revenue: number; expenses: number; liquidity: number;
   trucks: number; vehicles: number; passengers: number;
 }
-interface FleetData { vessels: string[]; months: string[]; monthly: MonthRow[]; voyages: any[]; generatedAt: string; }
+interface ColumnMap { field: string; label: string; header: string | null; column: string | null }
+interface TabReport {
+  name: string; role: string; found: boolean;
+  headerRow: number | null; rows: number; columns: ColumnMap[]; missing: string[];
+}
+interface FleetSource {
+  sheetId: string; sheetUrl: string; tabs: TabReport[];
+  cacheMinutes: number; fetchedAt: string; stale: boolean; staleReason: string | null;
+}
+interface FleetData {
+  vessels: string[]; months: string[]; monthly: MonthRow[]; voyages: any[];
+  generatedAt: string; source?: FleetSource;
+}
 
 const MONTH_AR = ['ينا', 'فبر', 'مار', 'أبر', 'ماي', 'يون', 'يول', 'أغس', 'سبت', 'أكت', 'نوف', 'ديس'];
 const monthLabel = (m: string) => { const [y, mm] = m.split('-'); return `${MONTH_AR[+mm - 1]} ${y.slice(2)}`; };
@@ -59,6 +71,9 @@ export default function FleetDashboard() {
   const [metric, setMetric] = useState<MetricKey>('net');
   const [sortKey, setSortKey] = useState<MetricKey>('net');
   const [chartType, setChartType] = useState<ChartType>('line');
+  const [showSource, setShowSource] = useState(false);
+  // عدد الأعمدة التي لم يجد لها المُفسِّر عنواناً — صفرها يعني أن كل رقم مصدره معروف
+  const srcMissing = (data?.source?.tabs || []).reduce((n, t) => n + t.missing.length, 0);
 
   async function load(refresh = false) {
     if (refresh) setRefreshing(true); else setLoading(true);
@@ -170,6 +185,24 @@ export default function FleetDashboard() {
                 مباشر من جوجل شيت
               </span>
               <span className="opacity-75">آخر تحديث: {new Date(data.generatedAt).toLocaleString('ar-EG', { dateStyle: 'medium', timeStyle: 'short' })}</span>
+              {/*
+                مرجعية القراءة تُفتح من الرأس لا من قائمةٍ مدفونة: سؤال «من أين
+                جاء هذا الرقم؟» يُطرح أمام الرقم نفسه.
+              */}
+              <button type="button" onClick={() => setShowSource((v) => !v)}
+                className="inline-flex items-center gap-1 bg-white/15 hover:bg-white/25 px-2 py-0.5 rounded-full transition-colors">
+                📄 مرجعية القراءة
+              </button>
+              {srcMissing > 0 && (
+                <span className="inline-flex items-center gap-1 bg-amber-400/25 text-amber-50 px-2 py-0.5 rounded-full font-semibold">
+                  ⚠ {srcMissing} عمود غير مُطابَق
+                </span>
+              )}
+              {data.source?.stale && (
+                <span className="inline-flex items-center gap-1 bg-rose-500/30 text-rose-50 px-2 py-0.5 rounded-full font-semibold">
+                  ⚠ نسخة قديمة
+                </span>
+              )}
             </div>
           </div>
           <button onClick={() => load(true)} disabled={refreshing}
@@ -212,6 +245,99 @@ export default function FleetDashboard() {
           </div>
         </div>
       </div>
+
+
+      {/* ── مرجعية القراءة ── */}
+      {showSource && data.source && (
+        <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+          <div className="px-5 py-3 border-b border-slate-100 flex items-center justify-between gap-3 flex-wrap">
+            <h3 className="font-bold text-slate-800">📄 مرجعية القراءة — من أين تأتي أرقام هذه اللوحة</h3>
+            <button onClick={() => setShowSource(false)} className="text-slate-400 hover:text-slate-700 text-sm">إغلاق ✕</button>
+          </div>
+
+          <div className="p-5 space-y-4 text-sm">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-xl bg-slate-50 p-3">
+                <div className="text-[11px] text-slate-500 mb-1">المصدر</div>
+                <a href={data.source.sheetUrl} target="_blank" rel="noopener noreferrer"
+                  className="text-indigo-600 hover:underline font-semibold break-all">
+                  جوجل شيت — افتح الملف ↗
+                </a>
+                <div className="text-[11px] text-slate-400 mt-1 font-mono break-all">{data.source.sheetId}</div>
+              </div>
+              <div className="rounded-xl bg-slate-50 p-3">
+                <div className="text-[11px] text-slate-500 mb-1">التحديث</div>
+                <div className="text-slate-700">
+                  يُجلب الملف حيّاً · ذاكرة مؤقّتة {data.source.cacheMinutes} دقائق
+                </div>
+                <div className="text-[11px] text-slate-400 mt-1">
+                  آخر جلب ناجح: {new Date(data.source.fetchedAt).toLocaleString('ar-EG', { dateStyle: 'medium', timeStyle: 'short' })}
+                </div>
+              </div>
+            </div>
+
+            {data.source.stale && (
+              <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-rose-800">
+                <div className="font-bold">⚠ هذه أرقام قديمة، لا حيّة.</div>
+                <div className="mt-1 text-[13px]">
+                  تعذّرت آخر قراءة فعُرضت آخر نسخة ناجحة. السبب: {data.source.staleReason}
+                </div>
+              </div>
+            )}
+
+            {srcMissing > 0 && (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-amber-900">
+                <div className="font-bold">⚠ أعمدة لم يُطابَق عنوانها — قيمتها تُقرأ صفراً.</div>
+                <div className="mt-1 text-[13px]">
+                  التفسير يطابق العناوين العربية لا أرقام الأعمدة، فتغيير عنوانٍ في
+                  الشيت يُسقط عموده بلا خطأ. صحّح العنوان في الشيت ثم اضغط «تحديث».
+                </div>
+              </div>
+            )}
+
+            {data.source.tabs.map((t) => (
+              <div key={t.name} className="rounded-xl border border-slate-200 overflow-hidden">
+                <div className="px-3 py-2 bg-slate-50 border-b border-slate-100 flex items-center gap-2 flex-wrap">
+                  <span className="font-mono font-bold text-slate-800">{t.name}</span>
+                  <span className="text-[12px] text-slate-500">{t.role}</span>
+                  <span className="ms-auto text-[11px] text-slate-500">
+                    {t.found
+                      ? <>صف العناوين {t.headerRow ?? '—'} · {fmt(t.rows)} صفاً مقروءاً</>
+                      : <span className="text-rose-600 font-bold">التبويب غير موجود</span>}
+                  </span>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-[13px]">
+                    <thead className="text-slate-500 bg-white">
+                      <tr className="text-start">
+                        <th className="px-3 py-1.5 font-medium text-start">المؤشّر على الشاشة</th>
+                        <th className="px-3 py-1.5 font-medium text-start">العنوان في الشيت</th>
+                        <th className="px-3 py-1.5 font-medium text-start">العمود</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {t.columns.map((c) => (
+                        <tr key={c.field} className={c.column ? '' : 'bg-amber-50'}>
+                          <td className="px-3 py-1.5 text-slate-700">{c.label}</td>
+                          <td className="px-3 py-1.5 text-slate-600">
+                            {c.header || <span className="text-amber-700 font-semibold">لم يُوجَد</span>}
+                          </td>
+                          <td className="px-3 py-1.5 font-mono text-slate-500">{c.column || '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ))}
+
+            <p className="text-[12px] text-slate-500 leading-relaxed">
+              «متوسّط الصافي للرحلة» يُحسَب هنا قسمةً — صافي الربح على عدد الرحلات — ولا يُقرأ من الشيت.
+              وبقيّة المؤشّرات تُجمَع من صفوف <span className="font-mono">LookerMonthly</span> ضمن الفترة والمراكب المختارة.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* ── بطاقات المؤشرات ── */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
