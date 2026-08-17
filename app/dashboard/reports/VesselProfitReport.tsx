@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import * as XLSX from 'xlsx';
 import api from '@/lib/api';
 import VesselExecReport, { ExecData } from './VesselExecReport';
@@ -220,6 +220,16 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
   }, [cfg]);
 
   const [fileName, setFileName] = useState('');
+  /*
+   * مصدر الرحلات المعروض الآن.
+   *
+   * الشيت الموحّد هو الافتراضي — يُغذّى بسحبٍ يومي فلا يتأخّر. والرفع اليدوي
+   * يبقى خطّة بديلة، لكن **المعروض يجب أن يُعلن عن نفسه**: أرقامٌ من ملفٍّ
+   * رُفع قبل شهر تبدو كأرقام اليوم إن لم يقل أحدٌ إنها ليست كذلك.
+   */
+  const [source, setSource] = useState<'sheet' | 'upload' | 'none'>('none');
+  const [syncedAt, setSyncedAt] = useState('');
+  const [sheetBusy, setSheetBusy] = useState(false);
   const [voyages, setVoyages] = useState<Voyage[]>([]);
   const [month, setMonth] = useState('');
   const [error, setError] = useState('');
@@ -279,20 +289,65 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
     return isBunkerInv(inv) ? Number(inv.total_amount) : 0;
   };
 
-  // reset + load saved when the vessel changes
+  const applyVoyages = useCallback((list: Voyage[]) => {
+    setVoyages(list);
+    const ms = [...new Set(list.map((v) => v.month!))].sort();
+    setMonth((m) => (m && ms.includes(m) ? m : ms[ms.length - 1] || ''));
+  }, []);
+
+  /*
+   * الشيت أولاً، والمحفوظ عند تعذّره.
+   *
+   * القيم اليدوية (الافتتاحي والختامي والمرتبات) تُجلب من المحفوظ **دائماً**
+   * مهما كان مصدر الرحلات: مصدرها الشاشة لا دفتر المركب، وربطُها بمصدر
+   * الرحلات كان يُضيّعها كلّما بُدّل المصدر.
+   */
+  const loadFromSheet = useCallback(async (silent = false) => {
+    if (!silent) setSheetBusy(true);
+    try {
+      const res = await api.get(`/api/vessel-profit/${cfg.vessel}/from-sheet`);
+      const list = (res.data?.voyages || []) as Voyage[];
+      if (!list.length) throw new Error('لا رحلات لهذا المركب في الشيت');
+      applyVoyages(list);
+      setSource('sheet');
+      setSyncedAt(res.data?.fetchedAt || '');
+      setFileName('');
+      setError('');
+      return true;
+    } catch (e: any) {
+      if (!silent) setError(e?.response?.data?.message || e?.message || 'تعذّرت القراءة من الشيت');
+      return false;
+    } finally {
+      setSheetBusy(false);
+    }
+  }, [cfg.vessel, applyVoyages]);
+
+  // reset + الشيت أولاً، فإن تعذّر فالمحفوظ
   useEffect(() => {
-    setVoyages([]); setManual({}); setMonth(''); setFileName(''); setError('');
-    api.get(`/api/vessel-profit/${cfg.vessel}`).then((res) => {
-      const d = res.data;
-      if (d && Array.isArray(d.voyages) && d.voyages.length) {
-        setVoyages(d.voyages as Voyage[]);
-        setManual(d.manual || {});
-        const ms = [...new Set((d.voyages as Voyage[]).map((v) => v.month!))].sort();
-        setMonth(ms[0]);
-        setFileName('محفوظ في السيرفر');
-      }
-    }).catch(() => {});
-  }, [cfg.vessel]);
+    let alive = true;
+    setVoyages([]); setMonth(''); setFileName(''); setError(''); setSource('none'); setSyncedAt('');
+    (async () => {
+      try {
+        const saved = await api.get(`/api/vessel-profit/${cfg.vessel}`);
+        if (alive) setManual(saved.data?.manual || {});
+      } catch { if (alive) setManual({}); }
+
+      const ok = await loadFromSheet(true);
+      if (!alive || ok) return;
+
+      try {
+        const d = (await api.get(`/api/vessel-profit/${cfg.vessel}`)).data;
+        if (!alive) return;
+        if (d && Array.isArray(d.voyages) && d.voyages.length) {
+          applyVoyages(d.voyages as Voyage[]);
+          setSource('upload');
+          setSyncedAt(d.updated_at || '');
+          setFileName('محفوظ في السيرفر');
+        }
+      } catch { /* لا مصدر — الشاشة تعرض حالتها الفارغة */ }
+    })();
+    return () => { alive = false; };
+  }, [cfg.vessel, loadFromSheet, applyVoyages]);
 
   // جلب فواتير المركب + أسعار الصرف
   useEffect(() => {
@@ -318,10 +373,10 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
       const wb = XLSX.read(buf, { type: 'array' });
       const parsed = parseWorkbook(wb, cfg);
       if (parsed.length === 0) { setError('لم يتم العثور على بيانات رحلات في الملف.'); return; }
-      setVoyages(parsed);
+      applyVoyages(parsed);
       setFileName(file.name);
-      const months = [...new Set(parsed.map((v) => v.month!))].sort();
-      setMonth(months[0]);
+      setSource('upload');
+      setSyncedAt('');
     } catch (err: any) {
       setError('تعذّرت قراءة الملف: ' + (err?.message || ''));
     }
@@ -545,11 +600,47 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
   return (
     <div className="space-y-4">
       <div className="bg-white rounded-xl shadow p-4 flex flex-wrap items-end gap-4">
+        {/*
+          مصدر الأرقام يُعلن عن نفسه بجوارها.
+          الشيت يُغذّى بسحبٍ يومي، والرفع اليدوي قد يكون قديماً بأسابيع —
+          والفرق لا يُرى في الأرقام نفسها.
+        */}
+        <div className="min-w-[16rem]">
+          <label className="block text-sm text-gray-600 mb-1">مصدر الرحلات</label>
+          <div className="flex items-center gap-2 flex-wrap">
+            {source === 'sheet' && (
+              <span className="inline-flex items-center gap-1.5 bg-emerald-50 text-emerald-800 border border-emerald-200 px-2.5 py-1 rounded-full text-xs font-semibold">
+                <span className="relative flex h-2 w-2"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" /><span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" /></span>
+                الشيت الموحّد — {voyages.length} رحلة
+              </span>
+            )}
+            {source === 'upload' && (
+              <span className="inline-flex items-center gap-1.5 bg-amber-50 text-amber-900 border border-amber-300 px-2.5 py-1 rounded-full text-xs font-semibold">
+                ⚠ رفع يدوي — {voyages.length} رحلة
+              </span>
+            )}
+            {source === 'none' && <span className="text-xs text-gray-400">لا مصدر بعد</span>}
+            <button type="button" onClick={() => loadFromSheet(false)} disabled={sheetBusy}
+              className="text-xs bg-blue-600 text-white px-2.5 py-1 rounded-lg hover:bg-blue-700 disabled:opacity-50">
+              {sheetBusy ? 'جارٍ…' : '🔄 من الشيت'}
+            </button>
+          </div>
+          {source === 'sheet' && syncedAt && (
+            <p className="text-[11px] text-gray-400 mt-1">
+              قُرئ {new Date(syncedAt).toLocaleString('ar-EG', { dateStyle: 'medium', timeStyle: 'short' })}
+            </p>
+          )}
+          {source === 'upload' && (
+            <p className="text-[11px] text-amber-700 mt-1">
+              📄 {fileName || 'ملف مرفوع'} — قد لا يكون محدَّثاً
+            </p>
+          )}
+        </div>
+
         <div>
-          <label className="block text-sm text-gray-600 mb-1">ملف {cfg.vessel} (Excel)</label>
+          <label className="block text-sm text-gray-600 mb-1">رفع يدوي (خطّة بديلة)</label>
           <input type="file" accept=".xlsx,.xls" onChange={onFile}
-            className="text-sm file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-blue-600 file:text-white file:cursor-pointer hover:file:bg-blue-700" />
-          {fileName && <p className="text-xs text-gray-400 mt-1">📄 {fileName} — {voyages.length} رحلة</p>}
+            className="text-sm file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-gray-200 file:text-gray-700 file:cursor-pointer hover:file:bg-gray-300" />
         </div>
         {cfg.bassamAccount && (
           <button onClick={() => setShowBassam(true)} className="bg-purple-100 text-purple-800 border border-purple-300 text-sm px-3 py-2 rounded-lg hover:bg-purple-200">📒 حساب البسّام</button>
