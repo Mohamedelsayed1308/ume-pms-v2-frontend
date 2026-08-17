@@ -331,10 +331,18 @@ export default function FleetDashboard() {
               </div>
             ))}
 
-            <p className="text-[12px] text-slate-500 leading-relaxed">
-              «متوسّط الصافي للرحلة» يُحسَب هنا قسمةً — صافي الربح على عدد الرحلات — ولا يُقرأ من الشيت.
-              وبقيّة المؤشّرات تُجمَع من صفوف <span className="font-mono">LookerMonthly</span> ضمن الفترة والمراكب المختارة.
-            </p>
+            <div className="rounded-xl bg-slate-50 p-3 text-[12px] text-slate-600 leading-relaxed space-y-1.5">
+              <p>
+                المؤشّرات تُجمَع من صفوف <span className="font-mono">LookerMonthly</span> ضمن الفترة والمراكب المختارة.
+                و«متوسّط الصافي للرحلة» يُحسَب هنا قسمةً — الصافي على عدد الرحلات — ولا يُقرأ من الشيت.
+              </p>
+              <p className="text-amber-800">
+                <span className="font-bold">انتبه:</span> بطاقة «المصروفات» لا تشمل العمولات — العمولات عمودٌ مستقلّ
+                في <span className="font-mono">LookerData</span> ولا يظهر على هذه اللوحة. فالمعادلة القائمة هي
+                <span className="font-mono mx-1 whitespace-nowrap">الإيراد − المصروفات − العمولات = الصافي</span>،
+                ولذلك لا يساوي «الإيراد ناقص المصروفات» صافيَ الربح.
+              </p>
+            </div>
           </div>
         </div>
       )}
