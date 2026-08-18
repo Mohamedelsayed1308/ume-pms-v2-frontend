@@ -113,6 +113,17 @@ export default function ProfitDistributionPage() {
   const [fetching, setFetching] = useState(false);
   const [fetchingSheet, setFetchingSheet] = useState(false);
   const [sheetInfo, setSheetInfo] = useState<any>(null);
+  /*
+   * مدى رقم الرحلة لكل مركب.
+   *
+   * رحلات المراكب لا تتزامن — بوسيدون 60→64 يقع بين 21 يونيو و3 يوليو، ومدىً
+   * تقويميّ يغطّيه يلتقط من أمل رحلاتٍ أخرى. فالفترة تُحدَّد بالرقم لا بالتاريخ.
+   */
+  const [voyRange, setVoyRange] = useState<Record<string, { from: string; to: string }>>({
+    poseidon: { from: '', to: '' }, amal: { from: '', to: '' }, daleela: { from: '', to: '' },
+  });
+  const setRange = (k: string, part: 'from' | 'to', v: string) =>
+    setVoyRange((r) => ({ ...r, [k]: { ...r[k], [part]: v.replace(/[^\d]/g, '') } }));
   const [error, setError] = useState('');
   const [driveId, setDriveId] = useState('1xBNKsoDdlh2q6uEoKNEf49Q3UdIR6cJz');
   const [selected, setSelected] = useState<Period | null>(null);
@@ -201,8 +212,14 @@ export default function ProfitDistributionPage() {
     if (!form.date_from || !form.date_to) { alert('أدخل الفترة الزمنية أولاً'); return; }
     setFetchingSheet(true);
     try {
+      const ranges: Record<string, { from: number; to: number }> = {};
+      for (const k of ['poseidon', 'amal', 'daleela']) {
+        const r = voyRange[k];
+        if (r?.from && r?.to) ranges[k] = { from: Number(r.from), to: Number(r.to) };
+      }
       const res = await api.post('/api/profit-periods/fetch-sheet', {
         date_from: form.date_from, date_to: form.date_to,
+        ...(Object.keys(ranges).length ? { ranges } : {}),
       });
       const d = res.data;
       setForm((prev) => ({
@@ -484,12 +501,46 @@ export default function ProfitDistributionPage() {
                   {fetchingSheet ? 'جاري الجلب...' : '🔄 جلب من الشيت'}
                 </button>
               </div>
-              {sheetInfo && (
-                <p className="text-[11px] text-emerald-800 mt-2 border-t border-emerald-200 pt-1.5">
-                  ✓ {sheetInfo.matched} رحلة
-                  {sheetInfo.firstDate && <> · {sheetInfo.firstDate} → {sheetInfo.lastDate}</>}
-                  {' · '}<span className="text-emerald-700">الكاش المصروف لا يأتي من الشيت — أدخله يدوياً</span>
+              {/*
+                المدى بالرقم يسبق التاريخ.
+                رحلات المراكب لا تتزامن، فمدىً تقويميّ واحد يلتقط من كل مركب
+                ما لا يخصّ الفترة — وهو خطأٌ لا يظهر في الأرقام بل في اختيارها.
+              */}
+              <div className="mt-2 border-t border-emerald-200 pt-2">
+                <p className="text-[11px] font-semibold text-emerald-800 mb-1.5">
+                  حدّد بأرقام الرحلات لكل مركب (الأدقّ) — واتركها فارغة ليُنتقى بالتاريخ
                 </p>
+                <div className="grid gap-1.5 sm:grid-cols-3">
+                  {([['poseidon', 'Poseidon'], ['amal', 'Amal'], ['daleela', 'Daleela']] as const).map(([k, lbl]) => (
+                    <div key={k} className="flex items-center gap-1">
+                      <span className="text-[11px] text-emerald-900 w-16 shrink-0">{lbl}</span>
+                      <input inputMode="numeric" value={voyRange[k].from} onChange={(e) => setRange(k, 'from', e.target.value)}
+                        placeholder="من" className="w-full border border-emerald-300 rounded px-1.5 py-1 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-emerald-400" />
+                      <span className="text-emerald-500 text-[11px]">→</span>
+                      <input inputMode="numeric" value={voyRange[k].to} onChange={(e) => setRange(k, 'to', e.target.value)}
+                        placeholder="إلى" className="w-full border border-emerald-300 rounded px-1.5 py-1 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-emerald-400" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {sheetInfo && (
+                <div className="text-[11px] text-emerald-800 mt-2 border-t border-emerald-200 pt-1.5 space-y-0.5">
+                  {(['poseidon', 'amal', 'daleela'] as const).map((k) => {
+                    const v = sheetInfo[k];
+                    if (!v || (!v.voyages && !v.expected)) return null;
+                    const gap = v.missing && v.missing.length > 0;
+                    return (
+                      <p key={k} className={gap ? 'text-red-700 font-semibold' : ''}>
+                        {gap ? '⚠' : '✓'} {k} — {v.voyages} رحلة
+                        {v.by === 'ref' && v.refs?.length ? <> · REF {v.refs[0]}–{v.refs[v.refs.length - 1]}</> : null}
+                        {v.firstDate && <> · {v.firstDate} → {v.lastDate}</>}
+                        {gap && <> · <span className="text-red-700">غير موجودة: {v.missing.join('، ')}</span></>}
+                      </p>
+                    );
+                  })}
+                  <p className="text-emerald-700 pt-0.5">الكاش المصروف لا يأتي من الشيت — أدخله يدوياً</p>
+                </div>
               )}
             </div>
 
