@@ -145,7 +145,7 @@ interface Side {
   truckC: number; truck: number; vehC: number; veh: number; passC: number; pass: number; houryaC: number; discharge: number;
   exp: Record<string, number>;
 }
-interface Voyage { ref: any; month: string | null; monthAlt: string | null; E: Side; I: Side; bunker: number; net: number; O: number; P: number; bassamLiq: number; }
+interface Voyage { ref: any; month: string | null; monthAlt: string | null; date?: string; E: Side; I: Side; bunker: number; net: number; O: number; P: number; bassamLiq: number; }
 const emptySide = (): Side => ({ truckC: 0, truck: 0, vehC: 0, veh: 0, passC: 0, pass: 0, houryaC: 0, discharge: 0, exp: {} });
 
 function parseWorkbook(wb: XLSX.WorkBook, cfg: VesselConfig): Voyage[] {
@@ -394,6 +394,25 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
   }
 
   const months = useMemo(() => [...new Set(voyages.map((v) => v.month!))].sort(), [voyages]);
+
+  /*
+   * أحدث رحلةٍ في المصدر — لا أحدث رحلةٍ في الشهر المعروض.
+   *
+   * السؤال الذي تُجيبه: «هل وصلت رحلات هذا الأسبوع؟». والشهر المختار لا يُجيبه،
+   * لأن من يتصفّح يناير لا يرى أن أغسطس توقّف عن الوصول.
+   *
+   * والترتيب بالتاريخ لا بالرقم: الأرقام تعود إلى ١ كل سنة.
+   */
+  const latest = useMemo(() => {
+    let best: Voyage | null = null;
+    for (const v of voyages) {
+      const d = v.date || v.month || '';
+      if (!d) continue;
+      const bd = best ? (best.date || best.month || '') : '';
+      if (!best || d > bd) best = v;
+    }
+    return best;
+  }, [voyages]);
   const sel = useMemo(() => voyages.filter((v) => v.month === month), [voyages, month]);
 
   // فواتير البنكر للشهر (بند = Bunker) — بالدولار، تُحمّل كاملة في شهرها (بدون إهلاك)
@@ -622,6 +641,12 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
                   {month ? <>{sel.length} رحلة في {monthLabel(month)}</> : <>{voyages.length} رحلة</>}
                   <span className="font-normal text-emerald-700"> — من الشيت الموحّد</span>
                 </p>
+                {latest && (
+                  <p className="text-[12px] font-semibold text-emerald-800 mt-0.5">
+                    أحدث رحلة في الشيت: <span className="font-mono">#{String(latest.ref)}</span>
+                    {latest.date && <> · {latest.date}</>}
+                  </p>
+                )}
                 <p className="text-[11px] text-emerald-700 mt-0.5">
                   {voyages.length} رحلة محمّلة{months.length ? <> · {monthLabel(months[0])} → {monthLabel(months[months.length - 1])}</> : null}
                   {syncedAt && <>{' · '}قُرئت {new Date(syncedAt).toLocaleString('ar-EG', { dateStyle: 'medium', timeStyle: 'short' })}</>}
@@ -643,6 +668,12 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
                   {month ? <>{sel.length} رحلة في {monthLabel(month)}</> : <>{voyages.length} رحلة</>}
                   <span className="font-normal text-amber-800"> — من ملفٍّ مرفوع يدوياً</span>
                 </p>
+                {latest && (
+                  <p className="text-[12px] font-semibold text-amber-900 mt-0.5">
+                    أحدث رحلة في الملفّ: <span className="font-mono">#{String(latest.ref)}</span>
+                    {latest.date && <> · {latest.date}</>}
+                  </p>
+                )}
                 <p className="text-[11px] text-amber-800 mt-0.5 truncate">
                   {voyages.length} رحلة محمّلة · 📄 {fileName || 'ملف مرفوع'} — قد لا يكون محدَّثاً.
                   المصدر المعتمد هو الشيت الموحّد.
