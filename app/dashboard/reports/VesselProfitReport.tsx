@@ -601,39 +601,64 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
     <div className="space-y-4">
       <div className="bg-white rounded-xl shadow p-4 flex flex-wrap items-end gap-4">
         {/*
-          مصدر الأرقام يُعلن عن نفسه بجوارها.
-          الشيت يُغذّى بسحبٍ يومي، والرفع اليدوي قد يكون قديماً بأسابيع —
-          والفرق لا يُرى في الأرقام نفسها.
+          المصدر شريطٌ عريض لا شارةٌ صغيرة.
+          الأرقام نفسها لا تُفرّق بين شيتٍ حيّ وملفٍّ رُفع قبل شهر، ومن يقرأ
+          التقرير يقرأ الأرقام لا الحواشي — فالإعلان يجب أن يسبقها لا أن يُجاورها.
         */}
-        <div className="min-w-[16rem]">
-          <label className="block text-sm text-gray-600 mb-1">مصدر الرحلات</label>
-          <div className="flex items-center gap-2 flex-wrap">
-            {source === 'sheet' && (
-              <span className="inline-flex items-center gap-1.5 bg-emerald-50 text-emerald-800 border border-emerald-200 px-2.5 py-1 rounded-full text-xs font-semibold">
-                <span className="relative flex h-2 w-2"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" /><span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" /></span>
-                الشيت الموحّد — {voyages.length} رحلة
+        <div className="w-full">
+          {source === 'sheet' && (
+            <div className="flex items-center gap-3 rounded-xl border-2 border-emerald-400 bg-emerald-50 px-4 py-2.5">
+              <span className="relative flex h-3 w-3 shrink-0">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500" />
               </span>
-            )}
-            {source === 'upload' && (
-              <span className="inline-flex items-center gap-1.5 bg-amber-50 text-amber-900 border border-amber-300 px-2.5 py-1 rounded-full text-xs font-semibold">
-                ⚠ رفع يدوي — {voyages.length} رحلة
-              </span>
-            )}
-            {source === 'none' && <span className="text-xs text-gray-400">لا مصدر بعد</span>}
-            <button type="button" onClick={() => loadFromSheet(false)} disabled={sheetBusy}
-              className="text-xs bg-blue-600 text-white px-2.5 py-1 rounded-lg hover:bg-blue-700 disabled:opacity-50">
-              {sheetBusy ? 'جارٍ…' : '🔄 من الشيت'}
-            </button>
-          </div>
-          {source === 'sheet' && syncedAt && (
-            <p className="text-[11px] text-gray-400 mt-1">
-              قُرئ {new Date(syncedAt).toLocaleString('ar-EG', { dateStyle: 'medium', timeStyle: 'short' })}
-            </p>
+              <div className="min-w-0">
+                <p className="font-bold text-emerald-900 leading-tight">
+                  البيانات من الشيت الموحّد
+                  <span className="font-normal text-emerald-700"> — {voyages.length} رحلة</span>
+                </p>
+                {syncedAt && (
+                  <p className="text-[11px] text-emerald-700 mt-0.5">
+                    قُرئت {new Date(syncedAt).toLocaleString('ar-EG', { dateStyle: 'medium', timeStyle: 'short' })}
+                    {' · '}تُحدَّث تلقائياً ثلاث مرّات يومياً
+                  </p>
+                )}
+              </div>
+              <button type="button" onClick={() => loadFromSheet(false)} disabled={sheetBusy}
+                className="ms-auto shrink-0 text-xs bg-emerald-600 text-white px-3 py-1.5 rounded-lg hover:bg-emerald-700 disabled:opacity-50">
+                {sheetBusy ? 'جارٍ…' : '🔄 إعادة القراءة'}
+              </button>
+            </div>
           )}
+
           {source === 'upload' && (
-            <p className="text-[11px] text-amber-700 mt-1">
-              📄 {fileName || 'ملف مرفوع'} — قد لا يكون محدَّثاً
-            </p>
+            <div className="flex items-center gap-3 rounded-xl border-2 border-amber-500 bg-amber-50 px-4 py-2.5">
+              <span className="text-2xl leading-none shrink-0">⚠️</span>
+              <div className="min-w-0">
+                <p className="font-bold text-amber-900 leading-tight">
+                  البيانات من ملفٍّ مرفوع يدوياً
+                  <span className="font-normal text-amber-800"> — {voyages.length} رحلة</span>
+                </p>
+                <p className="text-[11px] text-amber-800 mt-0.5 truncate">
+                  📄 {fileName || 'ملف مرفوع'} — قد لا يكون محدَّثاً. المصدر المعتمد هو الشيت الموحّد.
+                </p>
+              </div>
+              <button type="button" onClick={() => loadFromSheet(false)} disabled={sheetBusy}
+                className="ms-auto shrink-0 text-xs bg-emerald-600 text-white px-3 py-1.5 rounded-lg hover:bg-emerald-700 disabled:opacity-50">
+                {sheetBusy ? 'جارٍ…' : '🔄 التحويل للشيت'}
+              </button>
+            </div>
+          )}
+
+          {source === 'none' && (
+            <div className="flex items-center gap-3 rounded-xl border-2 border-gray-300 bg-gray-50 px-4 py-2.5">
+              <span className="text-xl leading-none shrink-0">⏳</span>
+              <p className="font-semibold text-gray-600">لا مصدر بيانات بعد</p>
+              <button type="button" onClick={() => loadFromSheet(false)} disabled={sheetBusy}
+                className="ms-auto shrink-0 text-xs bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 disabled:opacity-50">
+                {sheetBusy ? 'جارٍ…' : '🔄 من الشيت'}
+              </button>
+            </div>
           )}
         </div>
 
