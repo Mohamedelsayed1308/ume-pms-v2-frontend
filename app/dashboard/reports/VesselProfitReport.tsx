@@ -613,16 +613,20 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
                 <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500" />
               </span>
               <div className="min-w-0">
+                {/*
+                  عدد الشهر أوّلاً لا عدد المحمَّل.
+                  «144 رحلة» عددُ ما حُمِّل من الشيت، والمعروض أمام القارئ شهرٌ
+                  واحد — فتصدير الرقم الكبير يوحي بأن الجداول تحته تخصّه.
+                */}
                 <p className="font-bold text-emerald-900 leading-tight">
-                  البيانات من الشيت الموحّد
-                  <span className="font-normal text-emerald-700"> — {voyages.length} رحلة</span>
+                  {month ? <>{sel.length} رحلة في {monthLabel(month)}</> : <>{voyages.length} رحلة</>}
+                  <span className="font-normal text-emerald-700"> — من الشيت الموحّد</span>
                 </p>
-                {syncedAt && (
-                  <p className="text-[11px] text-emerald-700 mt-0.5">
-                    قُرئت {new Date(syncedAt).toLocaleString('ar-EG', { dateStyle: 'medium', timeStyle: 'short' })}
-                    {' · '}تُحدَّث تلقائياً ثلاث مرّات يومياً
-                  </p>
-                )}
+                <p className="text-[11px] text-emerald-700 mt-0.5">
+                  {voyages.length} رحلة محمّلة{months.length ? <> · {monthLabel(months[0])} → {monthLabel(months[months.length - 1])}</> : null}
+                  {syncedAt && <>{' · '}قُرئت {new Date(syncedAt).toLocaleString('ar-EG', { dateStyle: 'medium', timeStyle: 'short' })}</>}
+                  {' · '}تُحدَّث ثلاث مرّات يومياً
+                </p>
               </div>
               <button type="button" onClick={() => loadFromSheet(false)} disabled={sheetBusy}
                 className="ms-auto shrink-0 text-xs bg-emerald-600 text-white px-3 py-1.5 rounded-lg hover:bg-emerald-700 disabled:opacity-50">
@@ -636,11 +640,12 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
               <span className="text-2xl leading-none shrink-0">⚠️</span>
               <div className="min-w-0">
                 <p className="font-bold text-amber-900 leading-tight">
-                  البيانات من ملفٍّ مرفوع يدوياً
-                  <span className="font-normal text-amber-800"> — {voyages.length} رحلة</span>
+                  {month ? <>{sel.length} رحلة في {monthLabel(month)}</> : <>{voyages.length} رحلة</>}
+                  <span className="font-normal text-amber-800"> — من ملفٍّ مرفوع يدوياً</span>
                 </p>
                 <p className="text-[11px] text-amber-800 mt-0.5 truncate">
-                  📄 {fileName || 'ملف مرفوع'} — قد لا يكون محدَّثاً. المصدر المعتمد هو الشيت الموحّد.
+                  {voyages.length} رحلة محمّلة · 📄 {fileName || 'ملف مرفوع'} — قد لا يكون محدَّثاً.
+                  المصدر المعتمد هو الشيت الموحّد.
                 </p>
               </div>
               <button type="button" onClick={() => loadFromSheet(false)} disabled={sheetBusy}
