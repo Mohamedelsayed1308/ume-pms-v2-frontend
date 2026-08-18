@@ -76,12 +76,12 @@ const CSS = `
   font-size:8.5pt; color:#334155; margin-bottom:10px; display:flex; gap:18px; }
 #vb-doc .strip b { color:${NAVY}; }
 #vb-doc h2 { font-size:11pt; font-weight:800; color:#fff; background:${NAVY};
-  padding:5px 11px; border-radius:3px; margin:0 0 8px; letter-spacing:.2pt; }
+  padding:5px 11px; border-radius:3px; margin:0 0 6px; letter-spacing:.2pt; }
 #vb-doc h2 span { font-weight:600; opacity:.72; font-size:8.5pt; }
 #vb-doc h3 { font-size:9.3pt; font-weight:700; color:${NAVY}; background:#eef2ff;
   padding:3px 9px; border-right:3pt solid ${NAVY}; margin:12px 0 5px; }
 
-#vb-doc .kpis { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px; }
+#vb-doc .kpis { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:7px; }
 #vb-doc .k { flex:1 1 22%; border:.75pt solid #e2e8f0; border-radius:5px; padding:7px 8px; background:#fff; }
 #vb-doc .k .l { font-size:7.2pt; color:#64748b; font-weight:600; letter-spacing:.2pt; display:block; }
 #vb-doc .k .v { font-size:14pt; font-weight:800; color:${NAVY}; line-height:1.25; }
@@ -99,11 +99,11 @@ const CSS = `
 #vb-doc td.neg { color:#b91c1c; font-weight:700; }
 #vb-doc td.pos { color:#047857; font-weight:700; }
 
-#vb-doc .box { border:.75pt solid #e2e8f0; border-radius:5px; padding:8px 10px; margin:8px 0; background:#fff; }
+#vb-doc .box { border:.75pt solid #e2e8f0; border-radius:5px; padding:6px 9px; margin:6px 0; background:#fff; }
 #vb-doc .box .bt { font-size:9pt; font-weight:800; color:${NAVY}; margin-bottom:5px; }
 #vb-doc .li { display:flex; gap:7px; margin-bottom:4px; font-size:8.4pt; line-height:1.5; }
 #vb-doc .li .d { flex-shrink:0; font-weight:800; }
-#vb-doc .att { border-radius:4px; padding:5px 9px; margin-bottom:4px; font-size:8.4pt; line-height:1.5; }
+#vb-doc .att { border-radius:4px; padding:5px 9px; margin-bottom:3px; font-size:8.4pt; line-height:1.5; }
 #vb-doc .att.hi { background:#fef2f2; border-right:3pt solid #b91c1c; }
 #vb-doc .att.mo { background:#fffbeb; border-right:3pt solid #f59e0b; }
 #vb-doc .att.ok { background:#ecfdf5; border-right:3pt solid #047857; }
@@ -227,7 +227,7 @@ export default function VesselBoardReport({
         <div id="vb-doc" dir="rtl" className="p-6 print:p-0">
 
           {/* ══ PAGE 1 · EXECUTIVE SUMMARY ══ */}
-          <Head p="1/5 · Executive Summary" sub="Monthly Vessel Performance" />
+          <Head p="Page 1 · Executive Summary" sub="Monthly Vessel Performance" />
 
           {/*
             * ستّ بطاقات لا تسع.
@@ -352,7 +352,7 @@ export default function VesselBoardReport({
 
           {/* ══ PAGE 2 · REVENUE & OPERATIONS ══ */}
           <div className="vb-page">
-            <Head p="2/5 · Revenue & Operational Performance" sub="Revenue Analysis" />
+            <Head p="Page 2 · Revenue & Operational Performance" sub="Revenue Analysis" />
 
             <h2>Revenue by Business Segment</h2>
             <table>
@@ -433,7 +433,7 @@ export default function VesselBoardReport({
 
           {/* ══ PAGE 3 · COST & PROFITABILITY ══ */}
           <div className="vb-page">
-            <Head p="3/5 · Cost & Profitability Analysis" sub="Cost Drivers" />
+            <Head p="Page 3 · Cost & Profitability Analysis" sub="Cost Drivers" />
 
             <h2>Cost Drivers <span>· مرتَّبة من الأكبر</span></h2>
             <div className="cols">
@@ -526,9 +526,8 @@ export default function VesselBoardReport({
 
           {/* ══ PAGE 4 · PURCHASES & SUPPLIERS ══ */}
           <div className="vb-page">
-            <Head p="4/5 · Purchases & Supplier Analysis" sub="Purchases Summary" />
+            <Head p="Page 4 · Purchases & Supplier Analysis" sub="Purchases Summary" />
 
-            <h2>Purchases Summary</h2>
             <div className="kpis">
               <K l="TOTAL PURCHASES" v={abbr(purTotal)} s={f2(purTotal)} />
               <K l="INVOICES" v={String(pur.count)} s={`${purchases?.byItem.length || 0} categories`} />
@@ -572,8 +571,8 @@ export default function VesselBoardReport({
               </tbody>
             </table>
             <div className="gap">
-              المورّد تصنيفٌ مستقلٌّ عن بند المصروف — الجدولان لا يُجمعان.
-              وإجمالي الموردين = إجمالي المشتريات = <b>{f2(pur.suppliers.reduce((s, x) => s + x.value, 0))}</b>.
+              المورّد تصنيفٌ مستقلٌّ عن بند المصروف فلا يُجمع الجدولان — وإجماليهما واحد:{' '}
+              <b>{f2(pur.suppliers.reduce((s, x) => s + x.value, 0))}</b>.
             </div>
 
             <h2>Management Opportunities</h2>
@@ -634,7 +633,7 @@ export default function VesselBoardReport({
 
           {/* ══ PAGE 5 · APPENDIX ══ */}
           <div className="vb-page">
-            <Head p="5/5 · Detailed Financial Appendix" sub="Supporting Details" />
+            <Head p="Page 5 · Detailed Financial Appendix" sub="Supporting Details" />
 
             <h2>Appendix A · Operating Expenses</h2>
             <div className="cols">
