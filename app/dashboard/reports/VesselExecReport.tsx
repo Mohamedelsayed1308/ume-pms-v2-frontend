@@ -21,7 +21,7 @@ export interface ExecData {
 type Lang = 'ar' | 'en' | 'both';
 type Alloc = 'mixed' | 'revenue' | 'equal';
 
-const BUCKETS = [
+export const BUCKETS = [
   { id: 'fuel', ar: 'الوقود (بنكر)', en: 'Fuel (bunker)', color: '#1e3a5f' },
   { id: 'agent', ar: 'عمولات الوكلاء', en: 'Agent commissions', color: '#5b9e77' },
   { id: 'port', ar: 'ميناء ومناولة', en: 'Port & handling', color: '#9cc3ac' },
@@ -30,6 +30,34 @@ const BUCKETS = [
   { id: 'other', ar: 'أخرى', en: 'Other', color: '#c0c7d0' },
 ];
 const BUCKET_IDS = BUCKETS.map((b) => b.id);
+
+/**
+ * تجميع بنود التكلفة في مجموعات هيكل التكاليف.
+ *
+ * كان محبوساً داخل التقرير الإداري، فلم تستطع شاشة الربحية عرض الحلقة نفسها.
+ * وإخراجه هنا يجعل التعريف واحداً: لو تغيّرت المجموعات تغيّرت في الموضعين معاً،
+ * ولا يظهر رسمان بالأسماء نفسها وأرقامٍ مختلفة.
+ *
+ * وبند التسوية مقصود: `costLines` بنودٌ مفصّلة، و`opExpenses` مأخوذ من الصافي
+ * المعتمد في الدفتر. والفرق بينهما يُضاف إلى «أخرى» فيُغلق المجموع على الإجمالي
+ * — بدله تُظهر الحلقة نسباً من رقمٍ لا يساوي المصروفات المعروضة فوقها.
+ */
+export function costSegments(exec: ExecData, buckets?: Record<string, string>) {
+  const totals: Record<string, number> = {};
+  for (const id of BUCKET_IDS) totals[id] = 0;
+  let opItemized = 0;
+  for (const l of exec.costLines) {
+    const b = (buckets && buckets[l.key]) || exec.defaultBuckets[l.key] || 'other';
+    totals[b] += l.value;
+    if (l.key !== 'purchases') opItemized += l.value;
+  }
+  totals.other += exec.opExpenses - opItemized;
+  const grand = BUCKET_IDS.reduce((s, id) => s + Math.max(0, totals[id]), 0) || 1;
+  return BUCKETS
+    .map((b) => ({ ...b, value: totals[b.id], share: Math.max(0, totals[b.id]) / grand }))
+    .filter((x) => x.value > 0.5)
+    .sort((a, b) => b.value - a.value);
+}
 
 const fmtFull = (n: number) => Math.round(n).toLocaleString('en-US');
 const fmtAbbr = (n: number) => {
@@ -68,24 +96,9 @@ export default function VesselExecReport({
     [exec, alloc]);
 
   // تجميع التكاليف حسب المجموعة (مع بند تسوية داخل "أخرى" ليطابق إجمالي المصروفات)
-  const cost = useMemo(() => {
-    const totals: Record<string, number> = {};
-    for (const id of BUCKET_IDS) totals[id] = 0;
-    let opItemized = 0;
-    for (const l of exec.costLines) {
-      const b = buckets[l.key] || 'other';
-      totals[b] += l.value;
-      if (l.key !== 'purchases') opItemized += l.value;
-    }
-    const reconcile = exec.opExpenses - opItemized; // فرق التسوية (صافي Balance مقابل البنود)
-    totals.other += reconcile;
-    const grand = BUCKET_IDS.reduce((s, id) => s + Math.max(0, totals[id]), 0) || 1;
-    const segs = BUCKETS
-      .map((b) => ({ ...b, value: totals[b.id], share: Math.max(0, totals[b.id]) / grand }))
-      .filter((s) => s.value > 0.5)
-      .sort((a, b) => b.value - a.value);
-    return { segs, total: totalExpenses };
-  }, [buckets, exec, totalExpenses]);
+  const cost = useMemo(
+    () => ({ segs: costSegments(exec, buckets), total: totalExpenses }),
+    [buckets, exec, totalExpenses]);
 
   const bestHalfNote = useMemo(() => {
     const v = allocVoyages;

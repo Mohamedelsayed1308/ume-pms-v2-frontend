@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import * as XLSX from 'xlsx';
 import api from '@/lib/api';
-import VesselExecReport, { ExecData } from './VesselExecReport';
+import VesselExecReport, { ExecData, costSegments } from './VesselExecReport';
 import BassamAccountCard from './BassamAccountCard';
 import { DEFAULT_RATES } from './ExchangeRatesCard';
 
@@ -550,6 +550,16 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
   const allocFinalNet = useMemo(() => allocVoy.reduce((s, v) => s + v.net, 0), [allocVoy]);
   const allocPurchasesTotal = execData?.purchasesTotal ?? 0;
 
+  /*
+   * قطاعات هيكل التكاليف — التعريف نفسه الذي يستعمله التقرير الإداري.
+   *
+   * يُحسب هنا مرّةً ويُعرض على الشاشة وفي الورق معاً، فلا يفترق رسمٌ عن رسم.
+   */
+  const costSegs = useMemo(() => (execData ? costSegments(execData) : []), [execData]);
+  const costSegsTotal = useMemo(
+    () => costSegs.reduce((s, x) => s + Math.max(0, x.value), 0),
+    [costSegs]);
+
   const PRINT_CSS = `@media print {
     @page { size: A4 landscape; margin: 11mm 10mm; }
     body * { visibility: hidden !important; }
@@ -580,6 +590,15 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
     #vp-doc tbody tr:nth-child(even) td { background:#f8fafc; }
     #vp-doc tr.tot td { background:#dbe4ff; color:#0f2c5c; font-weight:800; border-top:1pt solid #94a3b8; border-bottom:none; }
     #vp-doc .cols { display:flex; gap:16px; align-items:flex-start; } #vp-doc .cols > div { flex:1; }
+    #vp-doc .cstr { margin-top:12px; break-inside: avoid; page-break-inside: avoid; }
+    #vp-doc .cstr .dn { display:flex; align-items:center; gap:14px; }
+    #vp-doc .cstr .dn svg { width:150px; height:150px; flex-shrink:0; }
+    #vp-doc .cstr .lg { flex:1; width:100%; border-collapse:collapse; font-size:8.5pt; }
+    #vp-doc .cstr .lg td { padding:2px 6px; border-bottom:.5pt solid #eef2f7; }
+    #vp-doc .cstr .lg td:nth-child(2) { text-align:left; white-space:nowrap; }
+    #vp-doc .cstr .lg .pc { width:38px; text-align:left; color:#64748b; }
+    #vp-doc .cstr .lg tr.tot td { background:#dbe4ff; color:#0f2c5c; font-weight:800; border-top:1pt solid #94a3b8; }
+    #vp-doc .cstr .sw { display:inline-block; width:8px; height:8px; border-radius:50%; margin-left:6px; vertical-align:middle; }
     #vp-doc .foot { margin-top:12px; border-top:.75pt solid #cbd5e1; padding-top:6px; font-size:7.5pt; color:#94a3b8;
       display:flex; justify-content:space-between; }
     #vp-doc table, #vp-doc .cols { page-break-inside: avoid; }
@@ -947,6 +966,27 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
                 </table>
               </div>
             )}
+            {costSegs.length > 0 && (
+              <div className="bg-white rounded-xl shadow p-4">
+                <h3 className="font-bold text-gray-700 mb-1">هيكل التكاليف</h3>
+                <p className="text-xs text-gray-400 mb-3">
+                  توزيع إجمالي المصروفات ({fmt(costSegsTotal)}) — شاملاً البنكر والمرتبات والمشتريات
+                </p>
+                <div className="flex items-center gap-5 flex-wrap">
+                  <CostDonut segs={costSegs} />
+                  <div className="flex-1 min-w-[15rem] space-y-1 text-sm">
+                    {costSegs.map((sg) => (
+                      <div key={sg.id} className="flex items-center gap-2">
+                        <span className="w-3 h-3 rounded-full inline-block shrink-0" style={{ background: sg.color }} />
+                        <span className="flex-1 truncate">{sg.ar}</span>
+                        <span className="font-medium">{fmt(sg.value)}</span>
+                        <span className="text-gray-400 w-10 text-left">{Math.round(sg.share * 100)}%</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* ── print-only document (hidden while the executive report is open) ── */}
@@ -1066,6 +1106,30 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
                 </table>
               </>
             )}
+            {/*
+              الحلقة في الورق أيضاً — والمحتوى المعروض كلّه `print:hidden`، فما
+              لا يُكرَّر هنا لا يصل الورقة. ووسيلة الإيضاح جدولٌ لا ألوانٌ وحدها:
+              التقرير يُطبع أحياناً بالأبيض والأسود فتتشابه الألوان.
+            */}
+            {costSegs.length > 0 && (
+              <div className="cstr">
+                <h3>هيكل التكاليف</h3>
+                <div className="dn">
+                  <CostDonut segs={costSegs} size={150} />
+                  <table className="lg"><tbody>
+                    {costSegs.map((sg) => (
+                      <tr key={sg.id}>
+                        <td><span className="sw" style={{ background: sg.color }} />{sg.ar}</td>
+                        <td>{fmt(sg.value)}</td>
+                        <td className="pc">{Math.round(sg.share * 100)}%</td>
+                      </tr>
+                    ))}
+                    <tr className="tot"><td>الإجمالي</td><td>{fmt(costSegsTotal)}</td><td className="pc">100%</td></tr>
+                  </tbody></table>
+                </div>
+              </div>
+            )}
+
             <div className="foot">
               <span>UME Holding — نظام PMS · تقرير {cfg.vessel} · {monthLabel(month)}</span>
               <span>مستند داخلي — سري · جميع القيم بالدولار الأمريكي</span>
@@ -1090,5 +1154,28 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * حلقة هيكل التكاليف.
+ *
+ * تُرسم `SVG` فتُطبع متّجهةً حادّة عند أي تكبير بلا تحويلٍ إلى صورة، وتخدم
+ * الشاشة والورق بالمكوّن نفسه.
+ */
+function CostDonut({ segs, size = 180 }: { segs: { color: string; share: number }[]; size?: number }) {
+  const sw = size * 0.18, r = (size - sw) / 2, c = size / 2, circ = 2 * Math.PI * r;
+  let acc = 0;
+  return (
+    <svg viewBox={`0 0 ${size} ${size}`} width={size} height={size} className="shrink-0">
+      <g transform={`rotate(-90 ${c} ${c})`}>
+        {segs.map((sg, i) => {
+          const len = sg.share * circ;
+          const el = (<circle key={i} cx={c} cy={c} r={r} fill="none" stroke={sg.color} strokeWidth={sw}
+            strokeDasharray={`${len} ${circ - len}`} strokeDashoffset={-acc} />);
+          acc += len; return el;
+        })}
+      </g>
+    </svg>
   );
 }
