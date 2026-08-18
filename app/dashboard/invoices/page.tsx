@@ -616,20 +616,48 @@ function InvoicesContent() {
 
   // مطابقة اسم سطر مستخرَج ببند موجود — تطابق كلمات كاملة متتالية (أطول اسم بند)
   const wordsOf = (s: string) => (s || '').toLowerCase().split(/[^a-z0-9؀-ۿ]+/).filter(Boolean);
+  const runOf = (needle: string[], hay: string[]) => {
+    for (let i = 0; i + needle.length <= hay.length; i++) if (needle.every((w, j) => w === hay[i + j])) return true;
+    return false;
+  };
+  /*
+   * أسماء بديلة قرّرها المالك — بندٌ أُوقف وله وريث مُسمّى.
+   *
+   * لا تُشتقّ من النصّ: «Service» لا يشبه «Repairs & Maintenance» في حرف. وقرارٌ
+   * كهذا يعيش هنا مكتوباً لا في رأس من أدخل الفاتورة، وإلا اختلف تصنيف الشهر
+   * باختلاف المُدخِل. (قرار 2026-08-18.)
+   */
+  const ITEM_ALIASES: Record<string, string[]> = {
+    'Repairs & Maintenance': ['service', 'maintenance'],
+    'Crew Cost': ['crew services', 'crew service'],
+  };
   const matchItem = (lineName: string) => {
     const lw = wordsOf(lineName);
     if (!lw.length) return '';
+    const live = items.filter((it) => it.is_active !== false && wordsOf(it.name).length);
+    /*
+     * الاتجاه الأول: اسم البند — أو اسمه البديل — داخل اسم السطر.
+     * «Maintenance charges» ← Maintenance ، و«Service charges» ← Repairs & Maintenance.
+     * والأطول يفوز، فسطر «Technical Service» يبقى على بنده ولا يجرّه البديل الأقصر.
+     */
     let best = '', bestLen = 0;
-    for (const it of items) {
-      if (it.is_active === false) continue;
-      const iw = wordsOf(it.name);
-      if (!iw.length) continue;
-      let found = false;
-      for (let i = 0; i + iw.length <= lw.length; i++) { if (iw.every((w, j) => lw[i + j] === w)) { found = true; break; } }
-      const len = iw.join('').length;
-      if (found && len > bestLen) { best = it.id; bestLen = len; }
+    for (const it of live) {
+      for (const nm of [it.name, ...(ITEM_ALIASES[it.name] || [])]) {
+        const iw = wordsOf(nm);
+        const len = iw.join('').length;
+        if (len > bestLen && runOf(iw, lw)) { best = it.id; bestLen = len; }
+      }
     }
-    return best;
+    if (best) return best;
+    /*
+     * الاتجاه العكسي: اسم السطر داخل اسم البند — «Maintenance» ← Repairs & Maintenance.
+     *
+     * يلزم بعد دمج البنود: المورّد يكتب الاسم القديم، والبند المعتمد صار أطول منه.
+     * ولا يُقبل إلا حين يُرشَّح بندٌ واحد — «Fees» تصلح لـ Agency Fees ولـ Legal fees
+     * معاً، وترجيحُ أحدهما بطول الاسم تخمينٌ صامت. فيُترك للإدخال اليدوي.
+     */
+    const cands = live.filter((it) => runOf(lw, wordsOf(it.name)));
+    return cands.length === 1 ? cands[0].id : '';
   };
 
   async function processBulkFile(index: number, file: File, currentSuppliers: any[]) {
