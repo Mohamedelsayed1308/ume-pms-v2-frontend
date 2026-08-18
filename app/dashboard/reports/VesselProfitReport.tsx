@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import * as XLSX from 'xlsx';
 import api from '@/lib/api';
 import VesselExecReport, { ExecData, costSegments } from './VesselExecReport';
+import VesselFinReport from './VesselFinReport';
 import BassamAccountCard from './BassamAccountCard';
 import { DEFAULT_RATES } from './ExchangeRatesCard';
 
@@ -237,6 +238,8 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
   const [saving, setSaving] = useState(false);
   const [savedMsg, setSavedMsg] = useState('');
   const [showExec, setShowExec] = useState(false);
+  // النسخة المالية — نافذة مستقلّة بجوار الأصل، فيُقارَن الشكلان قبل الاستغناء عن أحدهما
+  const [showFin, setShowFin] = useState(false);
   const [showBassam, setShowBassam] = useState(false);
 
   // فواتير المشتريات + أسعار الصرف (لو المركب مربوط بالفواتير)
@@ -751,6 +754,7 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
             <button onClick={save} disabled={saving} className="bg-blue-600 text-white text-sm px-4 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50">{saving ? 'جاري الحفظ...' : '💾 حفظ'}</button>
             <button onClick={exportExcel} className="bg-green-600 text-white text-sm px-4 py-2 rounded-lg hover:bg-green-700">📥 تصدير Excel</button>
             <button onClick={() => setShowExec(true)} className="bg-indigo-600 text-white text-sm px-4 py-2 rounded-lg hover:bg-indigo-700">📊 تقرير إداري</button>
+            <button onClick={() => setShowFin(true)} className="bg-slate-800 text-white text-sm px-4 py-2 rounded-lg hover:bg-slate-900">🧮 تقرير مالي (نسخة ٢)</button>
             <button onClick={printReport} className="bg-gray-700 text-white text-sm px-4 py-2 rounded-lg hover:bg-gray-800">🖨️ طباعة / PDF</button>
           </div>
         )}
@@ -1151,6 +1155,16 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
 
       {showExec && execData && (
         <VesselExecReport cfg={cfg} month={month} monthLabel={monthLabel(month)} exec={execData} onClose={() => setShowExec(false)} />
+      )}
+
+      {showFin && data && execData && (
+        <VesselFinReport
+          cfg={{ vessel: cfg.vessel, agentExport: cfg.agentExport, agentImport: cfg.agentImport }}
+          month={month} monthLabel={monthLabel(month)}
+          data={data as any} purchases={purchases} exec={execData}
+          allocVoy={allocVoy} labelOf={labelOf} revRows={REV_ROWS}
+          onClose={() => setShowFin(false)}
+        />
       )}
 
       {showBassam && (
