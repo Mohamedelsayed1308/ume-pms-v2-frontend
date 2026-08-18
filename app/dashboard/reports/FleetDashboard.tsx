@@ -13,9 +13,11 @@ interface TabReport {
   name: string; role: string; found: boolean;
   headerRow: number | null; rows: number; columns: ColumnMap[]; missing: string[];
 }
+interface LastImport { at: string | null; ageHours: number | null; stale: boolean; status: string | null }
 interface FleetSource {
   sheetId: string; sheetUrl: string; tabs: TabReport[];
   cacheMinutes: number; fetchedAt: string; stale: boolean; staleReason: string | null;
+  lastImport?: LastImport;
 }
 interface FleetData {
   vessels: string[]; months: string[]; monthly: MonthRow[]; voyages: any[];
@@ -203,6 +205,15 @@ export default function FleetDashboard() {
                   ⚠ نسخة قديمة
                 </span>
               )}
+              {/*
+                صمت الأنبوب أخطر من فشله: الفشل يُرسل بريداً، والتوقّف لا يُرسل
+                شيئاً — والأرقام تبقى معروضة كأنها اليوم.
+              */}
+              {data.source?.lastImport?.stale && (
+                <span className="inline-flex items-center gap-1 bg-rose-500/30 text-rose-50 px-2 py-0.5 rounded-full font-semibold">
+                  ⚠ السحب متوقّف
+                </span>
+              )}
             </div>
           </div>
           <button onClick={() => load(true)} disabled={refreshing}
@@ -275,6 +286,32 @@ export default function FleetDashboard() {
                 </div>
               </div>
             </div>
+
+            {/* نبض السحب اليومي */}
+            {data.source.lastImport && (
+              <div className={`rounded-xl border p-3 ${data.source.lastImport.stale
+                ? 'border-rose-300 bg-rose-50 text-rose-900' : 'border-emerald-200 bg-emerald-50 text-emerald-900'}`}>
+                {data.source.lastImport.at ? (
+                  <>
+                    <div className="font-bold">
+                      {data.source.lastImport.stale ? '⚠ السحب اليومي متوقّف' : '✓ السحب اليومي يعمل'}
+                      <span className="font-normal"> — آخر سحبٍ منذ {data.source.lastImport.ageHours} ساعة</span>
+                    </div>
+                    <div className="text-[12px] mt-1">
+                      {new Date(data.source.lastImport.at).toLocaleString('ar-EG', { dateStyle: 'medium', timeStyle: 'short' })}
+                      {data.source.lastImport.status && <> · الحالة: {data.source.lastImport.status}</>}
+                      {data.source.lastImport.stale
+                        ? ' · المفترض ثلاث مرّات يومياً. راجع المشغّلات في محرّر السكربت.'
+                        : ' · ثلاث مرّات يومياً'}
+                    </div>
+                  </>
+                ) : (
+                  <div className="font-bold">
+                    ⚠ لا سجلَّ سحبٍ في الشيت — الدفاتر لا تُحدَّث تلقائياً
+                  </div>
+                )}
+              </div>
+            )}
 
             {data.source.stale && (
               <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-rose-800">
