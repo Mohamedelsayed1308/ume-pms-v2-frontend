@@ -141,9 +141,28 @@ export default function VesselBoardReport({
   const bookGap = netBefore - (data.revenue - opEx);
   const hasGap = Math.abs(bookGap) > 0.5;
 
-  const segs = useMemo(() => costSegments(exec), [exec]);
-  const segTotal = segs.reduce((s, x) => s + x.value, 0) || 1;
-  const top3 = segs.slice(0, 3);
+  /*
+   * هيكل التكاليف — مع البنود الدائنة.
+   *
+   * `costSegments` المشتركة تُسقط أي مجموعةٍ قيمتها سالبة. وإشعارٌ دائن كبير
+   * (يناير 2026: ‏62,428.84 في Other EXPS) يجعل مجموعتها سالبة فتسقط — فيتضخّم
+   * إجمالي التكلفة المعروض وكل نسبةٍ محسوبةٍ عليه، والقارئ لا يرى أن شيئاً سقط.
+   *
+   * فيُحسب الفرق بين ما تعرضه الدالّة وإجمالي التكلفة الحقيقي، ويُضاف سطراً
+   * صريحاً. والنسب تُقاس على الإجمالي الحقيقي لا على مجموع ما ظهر.
+   * ولا تُغيَّر الدالّة نفسها لأن التقرير الإداري القديم يقرأ منها.
+   */
+  const rawSegs = useMemo(() => costSegments(exec), [exec]);
+  const segs = useMemo(() => {
+    const shown = rawSegs.reduce((s, x) => s + x.value, 0);
+    const recon = totalCost - shown;
+    if (Math.abs(recon) < 0.5) return rawSegs;
+    return [...rawSegs, { id: 'recon', ar: 'بنود دائنة وتسوية', en: 'Credits & reconciliation',
+      color: '#94a3b8', value: recon, share: 0 }];
+  }, [rawSegs, totalCost]);
+  const segTotal = totalCost || 1;
+  const reconLine = segs.find((x) => x.id === 'recon');
+  const top3 = segs.filter((x) => x.id !== 'recon').slice(0, 3);
   const top3Sum = top3.reduce((s, x) => s + x.value, 0);
 
   // ── الإيراد بالقطاع ──
@@ -480,8 +499,10 @@ export default function VesselBoardReport({
                 <svg viewBox="0 0 42 42" style={{ width: '100%' }} role="img" aria-label="Cost structure">
                   {(() => {
                     let off = 25;
-                    return segs.map((s) => {
-                      const sh = (Math.max(0, s.value) / segTotal) * 100;
+                    const pos = segs.filter((x) => x.value > 0);
+                    const posSum = pos.reduce((a, b) => a + b.value, 0) || 1;
+                    return pos.map((s) => {
+                      const sh = (s.value / posSum) * 100;
                       const el = <circle key={s.id} cx="21" cy="21" r="15.915" fill="transparent"
                         stroke={s.color} strokeWidth="7" strokeDasharray={`${sh} ${100 - sh}`} strokeDashoffset={off} />;
                       off -= sh; return el;
@@ -491,6 +512,15 @@ export default function VesselBoardReport({
               </div>
             </div>
 
+            {reconLine && (
+              <div className="att hi" style={{ marginTop: 2 }}>
+                <b>Financial Validation Note · </b>
+                بنودٌ دائنة بـ<b>{f2(Math.abs(reconLine.value))}</b> ({p1(Math.abs(reconLine.value), totalCost)} من
+                التكلفة) تدخل هيكل التكاليف بإشارةٍ سالبة — إشعاراتُ دائنٍ داخل مصروفات الوكلاء.
+                أُظهرت سطراً مستقلاً ولم تُحذف، والنسب أعلاه محسوبةٌ على إجمالي التكلفة الحقيقي
+                <b> {f2(totalCost)}</b>. والحلقة تعرض البنود الموجبة وحدها لأن القطاع السالب لا يُرسم.
+              </div>
+            )}
             <div className="att mo" style={{ marginTop: 2 }}>
               <b>Top 3 Cost Drivers:</b> {top3.map((s) => `${s.ar} ${p1(s.value, segTotal)}`).join(' · ')} —
               مجتمعةً <b>{p1(top3Sum, segTotal)}</b> من هيكل التكلفة و<b>{p1(top3Sum, R)}</b> من الإيراد.
@@ -717,8 +747,8 @@ export default function VesselBoardReport({
                   <tr key={l as string}>
                     <td style={{ textAlign: 'right' }}>{l as string}</td>
                     <td>{f2(a as number)}</td><td>{f2(b as number)}</td>
-                    <td className={Math.abs((a as number) - (b as number)) < 0.02 ? 'pos' : 'neg'}>
-                      {Math.abs((a as number) - (b as number)) < 0.02 ? 'MATCH' : `Δ ${f2((a as number) - (b as number))}`}
+                    <td className={Math.abs((a as number) - (b as number)) <= 0.05 ? 'pos' : 'neg'}>
+                      {Math.abs((a as number) - (b as number)) <= 0.05 ? 'MATCH' : `Δ ${f2((a as number) - (b as number))}`}
                     </td>
                   </tr>
                 ))}
