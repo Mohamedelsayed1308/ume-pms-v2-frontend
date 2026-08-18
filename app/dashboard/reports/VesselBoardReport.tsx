@@ -66,14 +66,14 @@ const CSS = `
 }
 #vb-doc { color:#0f172a; font-size:8.8pt; line-height:1.45; background:#fff; }
 #vb-doc .hd { display:flex; align-items:flex-end; justify-content:space-between;
-  border-bottom:3pt solid ${NAVY}; padding-bottom:7px; margin-bottom:9px; }
+  border-bottom:3pt solid ${NAVY}; padding-bottom:6px; margin-bottom:7px; }
 #vb-doc .hd .ttl { font-size:16pt; font-weight:800; color:${NAVY}; line-height:1.15; }
 #vb-doc .hd .ttl small { display:block; font-size:9pt; font-weight:600; color:#64748b; letter-spacing:.6pt; }
 #vb-doc .hd .br { text-align:left; font-size:14pt; font-weight:800; color:${NAVY}; }
 #vb-doc .hd .br span { color:#c8102e; }
 #vb-doc .hd .br small { display:block; font-size:7pt; font-weight:600; color:#94a3b8; letter-spacing:1.4pt; }
 #vb-doc .strip { background:#f1f5f9; border-right:3pt solid ${NAVY}; padding:4px 10px;
-  font-size:8.5pt; color:#334155; margin-bottom:10px; display:flex; gap:18px; }
+  font-size:8.5pt; color:#334155; margin-bottom:8px; display:flex; gap:18px; }
 #vb-doc .strip b { color:${NAVY}; }
 #vb-doc h2 { font-size:11pt; font-weight:800; color:#fff; background:${NAVY};
   padding:5px 11px; border-radius:3px; margin:0 0 6px; letter-spacing:.2pt; }
@@ -101,7 +101,7 @@ const CSS = `
 
 #vb-doc .box { border:.75pt solid #e2e8f0; border-radius:5px; padding:6px 9px; margin:6px 0; background:#fff; }
 #vb-doc .box .bt { font-size:9pt; font-weight:800; color:${NAVY}; margin-bottom:5px; }
-#vb-doc .li { display:flex; gap:7px; margin-bottom:4px; font-size:8.4pt; line-height:1.5; }
+#vb-doc .li { display:flex; gap:7px; margin-bottom:3px; font-size:8.4pt; line-height:1.48; }
 #vb-doc .li .d { flex-shrink:0; font-weight:800; }
 #vb-doc .att { border-radius:4px; padding:5px 9px; margin-bottom:3px; font-size:8.4pt; line-height:1.5; }
 #vb-doc .att.hi { background:#fef2f2; border-right:3pt solid #b91c1c; }
@@ -179,7 +179,7 @@ export default function VesselBoardReport({
 
   // ── شلال الربح ──
   const WF = useMemo(() => {
-    const H = 128, W = 470, pad = 26, bw = 62;
+    const H = 116, W = 470, pad = 26, bw = 62;
     const max = Math.max(data.revenue, 1);
     const y = (v: number) => H - (v / max) * (H - 8);
     const bars = [
