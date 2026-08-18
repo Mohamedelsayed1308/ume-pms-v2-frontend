@@ -51,6 +51,17 @@ interface Props {
   onClose: () => void;
 }
 
+/*
+ * مسمّيات يعتمدها المالك في هذا التقرير وحده.
+ *
+ * لا تُغيَّر في إعداد الشاشة لأن التقرير الأصلي يقرأ منه، والمطلوب إبقاؤه كما هو
+ * بديلاً حتى يُحسم الشكلان.
+ */
+const LABEL_OVERRIDE: Record<string, string> = {
+  egyPort: 'EGP Port Dues',
+  ksaPort: 'KSA Port Dues',
+};
+
 const fmt = (n: number) =>
   Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const pct = (n: number, of: number) => (of ? ((n / of) * 100).toFixed(1) + '%' : '—');
@@ -328,13 +339,10 @@ export default function VesselFinReport({
                     <td>{fmt(r.i / (data.count || 1))}</td>
                   </tr>
                 ))}
-                <tr className="tot">
-                  <td>الإجمالي</td>
-                  <td>{(data.E.truckC + data.E.vehC + data.E.passC).toLocaleString()}</td>
-                  <td>{(data.I.truckC + data.I.vehC + data.I.passC).toLocaleString()}</td>
-                  <td>{(data.E.truckC + data.E.vehC + data.E.passC + data.I.truckC + data.I.vehC + data.I.passC).toLocaleString()}</td>
-                  <td></td><td></td>
-                </tr>
+                {/*
+                  * لا سطر إجمالي هنا — بأمر المالك.
+                  * وجمعُ شاحنةٍ إلى راكبٍ إلى سيارة لا يُنتج كمّيةً ذات معنى أصلاً.
+                  */}
               </tbody>
             </table>
           </div>
@@ -350,7 +358,7 @@ export default function VesselFinReport({
                   <thead><tr><th scope="col">المصروف</th><th scope="col">المبلغ</th><th scope="col">٪</th></tr></thead>
                   <tbody>
                     {Object.entries(data.E.exp as Record<string, number>).map(([k, v]) => (
-                      <tr key={k}><td>{labelOf[k] || k}</td><td>{fmt(v)}</td><td>{pct(v, R)}</td></tr>
+                      <tr key={k}><td>{LABEL_OVERRIDE[k] || labelOf[k] || k}</td><td>{fmt(v)}</td><td>{pct(v, R)}</td></tr>
                     ))}
                     <tr className="tot"><td>الإجمالي</td><td>{fmt(data.expE)}</td><td>{pct(data.expE, R)}</td></tr>
                   </tbody>
@@ -362,7 +370,7 @@ export default function VesselFinReport({
                   <thead><tr><th scope="col">المصروف</th><th scope="col">المبلغ</th><th scope="col">٪</th></tr></thead>
                   <tbody>
                     {Object.entries(data.I.exp as Record<string, number>).map(([k, v]) => (
-                      <tr key={k}><td>{labelOf[k] || k}</td><td>{fmt(v)}</td><td>{pct(v, R)}</td></tr>
+                      <tr key={k}><td>{LABEL_OVERRIDE[k] || labelOf[k] || k}</td><td>{fmt(v)}</td><td>{pct(v, R)}</td></tr>
                     ))}
                     <tr className="tot"><td>الإجمالي</td><td>{fmt(data.expI)}</td><td>{pct(data.expI, R)}</td></tr>
                   </tbody>
@@ -371,11 +379,11 @@ export default function VesselFinReport({
             </div>
 
             <h2 style={{ marginTop: 18 }}>ملحق ٤ · البنكر والمرتبات والسيولة</h2>
-            <h3>البنكر (مخزون)</h3>
+            <h3>البنكر</h3>
             <table>
               <thead><tr>
                 <th scope="col">رصيد أول المدة</th><th scope="col">+ تموينات الشهر</th>
-                <th scope="col">− مخزون آخر المدة</th><th scope="col">= المستهلك</th>
+                <th scope="col">− رصيد آخر المدة</th><th scope="col">= المستهلك</th>
               </tr></thead>
               <tbody><tr>
                 <td>{fmt(data.opening)}</td><td>{fmt(data.supplies)}</td>
@@ -383,7 +391,7 @@ export default function VesselFinReport({
               </tr></tbody>
             </table>
             <div className="note">
-              المُحمَّل على الشهر هو <b>المستهلك</b> لا المُشترى. ومخزون آخر المدة يُرحَّل
+              المُحمَّل على الشهر هو <b>المستهلك</b> لا المُشترى. ورصيد آخر المدة يُرحَّل
               رصيداً افتتاحياً للشهر التالي.
             </div>
 
