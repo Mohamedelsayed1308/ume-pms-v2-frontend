@@ -326,6 +326,40 @@ export default function GubalProfitReport() {
               </tbody></table>
             </div>
           </div>
+          {/*
+            الرسوم في مستند الطباعة أيضاً.
+            المحتوى المعروض كلّه `print:hidden` ومستندُ الطباعة نسخةٌ مستقلّة —
+            فما لا يُكرَّر هنا لا يصل الورق. وهي `SVG` فتُطبع متّجهةً حادّة عند
+            أي تكبير، ولا تحتاج تحويلاً إلى صورة.
+          */}
+          <div className="charts">
+            <div className="cbox">
+              <h3>هيكل التكاليف</h3>
+              <div className="donut">
+                <Donut
+                  segs={sortedGroups.filter((g) => g.total > 0).map((g) => ({ value: g.total, color: grpMeta(g.id).color }))}
+                  total={agg.costTotal}
+                />
+                <table className="lg"><tbody>
+                  {sortedGroups.filter((g) => g.total > 0).map((g) => (
+                    <tr key={g.id}>
+                      <td><span className="sw" style={{ background: grpMeta(g.id).color }} />{grpMeta(g.id).ar}</td>
+                      <td>{fmtAbbr(g.total)}</td>
+                      <td className="pc">{agg.costTotal ? Math.round((g.total / agg.costTotal) * 100) : 0}%</td>
+                    </tr>
+                  ))}
+                </tbody></table>
+              </div>
+            </div>
+
+            {selected.length > 1 && (
+              <div className="cbox">
+                <h3>الصافي الشهري</h3>
+                <TrendBars data={selected.map((m) => ({ label: monthLabel(m.key).split(' ')[0], value: m.net }))} />
+              </div>
+            )}
+          </div>
+
           <div className="foot">UME Holding — نظام PMS · Gubal Trader · {agg.label} · جميع القيم بالدولار</div>
         </div>
       )}
@@ -395,5 +429,16 @@ const PRINT_CSS = `@media print {
   #gubal-doc td { padding:4px 8px; border-bottom:.5pt solid #e5e9f0; }
   #gubal-doc td:last-child { text-align:left; white-space:nowrap; }
   #gubal-doc tr.tot td { background:#dbe4ff; color:#0f2c5c; font-weight:800; border-top:1pt solid #94a3b8; }
+  #gubal-doc .charts { margin-top:14px; }
+  /* الرسم لا يُشطر بين صفحتين — نصفُ مخطّطٍ على ورقةٍ لا يُقرأ */
+  #gubal-doc .cbox { break-inside: avoid; page-break-inside: avoid; margin-bottom:12px; }
+  #gubal-doc .donut { display:flex; align-items:center; gap:14px; }
+  #gubal-doc .donut svg { width:150px; height:150px; flex-shrink:0; }
+  #gubal-doc .lg { flex:1; font-size:8.5pt; }
+  #gubal-doc .lg td { padding:2px 6px; border-bottom:.5pt solid #eef2f7; }
+  #gubal-doc .lg td:last-child { width:38px; }
+  #gubal-doc .lg .pc { color:#64748b; text-align:left; }
+  #gubal-doc .sw { display:inline-block; width:8px; height:8px; border-radius:50%; margin-left:6px; vertical-align:middle; }
+  #gubal-doc .cbox svg { max-width:100%; }
   #gubal-doc .foot { margin-top:14px; border-top:.75pt solid #cbd5e1; padding-top:6px; font-size:7.5pt; color:#94a3b8; text-align:center; }
 }`;
