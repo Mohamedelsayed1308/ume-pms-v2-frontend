@@ -53,6 +53,16 @@ const CSS = `
   #vb-doc, #vb-doc * { visibility: visible !important; }
   #vb-doc { position:absolute; left:0; top:0; width:100%; }
   .vb-page { break-before: page; page-break-before: always; }
+  /*
+   * الخلفيات تُطبع.
+   *
+   * المتصفّح يُسقط ألوان الخلفية افتراضياً عند التوليد إلى PDF، فتخرج ترويسات
+   * الأقسام وبطاقة الصافي وأشرطة التكلفة بيضاء — ويضيع الهرم البصري كلّه
+   * ويصير التقرير جدرانَ نصّ. وهذه القاعدة تُلزمه بطباعتها.
+   */
+  #vb-doc, #vb-doc * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+  #vb-doc tr, #vb-doc .att, #vb-doc .li { break-inside: avoid; page-break-inside: avoid; }
+  #vb-doc h2, #vb-doc h3 { break-after: avoid; page-break-after: avoid; }
 }
 #vb-doc { color:#0f172a; font-size:8.8pt; line-height:1.45; background:#fff; }
 #vb-doc .hd { display:flex; align-items:flex-end; justify-content:space-between;
@@ -219,18 +229,23 @@ export default function VesselBoardReport({
           {/* ══ PAGE 1 · EXECUTIVE SUMMARY ══ */}
           <Head p="1/5 · Executive Summary" sub="Monthly Vessel Performance" />
 
+          {/*
+            * ستّ بطاقات لا تسع.
+            *
+            * كانت تسعاً فصار المدير يمسح تسعة أرقام ليجد رقمه. والستّ تجيب أسئلته
+            * كلّها: كم أُنتج؟ كم بقي؟ ما نسبته؟ كم كلّف؟ وكم للرحلة الواحدة؟
+            * والباقي — صافي قبل المشتريات، المشتريات، إيراد الرحلة — يعيش في
+            * الشلال وفي اقتصاديات الرحلة حيث يُقرأ في سياقه.
+            */}
           <div className="kpis">
-            <K cls="hero" l="FINAL NET PROFIT" v={abbr(netFinal)} s={`${p1(netFinal, R)} من الإيراد · ${f2(netFinal)}`} />
+            <K cls="hero" l="FINAL NET PROFIT" v={abbr(netFinal)} s={`${f2(netFinal)} · ${p1(netFinal, R)} من الإيراد`} />
             <K l="REVENUE" v={abbr(data.revenue)} s={f2(data.revenue)} />
             <K cls="good" l="NET PROFIT MARGIN" v={p1(netFinal, R)} s="Final Net ÷ Revenue" />
           </div>
           <div className="kpis">
-            <K l="NET BEFORE PURCHASES" v={abbr(netBefore)} s={p1(netBefore, R) + ' من الإيراد'} />
             <K l="TOTAL COST" v={abbr(totalCost)} s="Operating + Purchases" />
             <K l="COST-TO-REVENUE" v={p1(totalCost, R)} s="Total Cost ÷ Revenue" />
-            <K l="PURCHASES" v={abbr(purTotal)} s={p1(purTotal, R) + ' من الإيراد'} />
-            <K l="REVENUE / VOYAGE" v={abbr(data.revenue / N)} s={f2(data.revenue / N)} />
-            <K l="NET PROFIT / VOYAGE" v={abbr(netFinal / N)} s={f2(netFinal / N)} />
+            <K l="NET PROFIT / VOYAGE" v={abbr(netFinal / N)} s={`${f2(netFinal / N)} × ${N} voyages`} />
           </div>
 
           <h2>Executive Profit Bridge <span>· من الإيراد إلى صافي الربح النهائي</span></h2>
@@ -256,31 +271,38 @@ export default function VesselBoardReport({
             <line x1="0" y1={WF.H} x2={WF.W} y2={WF.H} stroke="#cbd5e1" strokeWidth="0.7" />
           </svg>
 
+          {/* أكبر ثلاثة عوامل تكلفة — شريطٌ واحد يُغني عن جدولٍ في صفحة القرار */}
+          <h2>Top 3 Cost Drivers <span>· {p1(top3Sum, segTotal)} من هيكل التكلفة</span></h2>
+          <div className="cols" style={{ gap: 8, marginBottom: 8 }}>
+            {top3.map((s) => (
+              <div key={s.id} className="k" style={{ borderRightWidth: 3, borderRightStyle: 'solid', borderRightColor: s.color }}>
+                <span className="l">{s.ar}</span>
+                <div className="v" style={{ fontSize: '12.5pt' }}>{abbr(s.value)}</div>
+                <span className="s">{p1(s.value, segTotal)} من التكلفة · {p1(s.value, R)} من الإيراد</span>
+              </div>
+            ))}
+          </div>
+
+          {/*
+            * ثلاث ملاحظات لا ستّ.
+            *
+            * صفحة القرار تحتمل ما يُقرأ في ثوانٍ. والملاحظات التشغيلية — اتجاه
+            * النشاط واقتصاديات الرحلة — انتقلت إلى صفحتيهما حيث تُقرأ مع أرقامها.
+            */}
           <h2>Executive Financial Commentary</h2>
           <div className="box">
             <div className="li"><span className="d">·</span><span>
-              هامش الصافي النهائي <b>{p1(netFinal, R)}</b> — من كل دولار إيراد يبقى{' '}
-              <b>{(netFinal / R).toFixed(2)}</b> دولاراً بعد كل التكاليف والمشتريات.
+              هامش صافٍ <b>{p1(netFinal, R)}</b> — من كل دولار إيراد يبقى{' '}
+              <b>{(netFinal / R).toFixed(2)}</b> دولار بعد التكاليف والمشتريات كلّها.
             </span></div>
             <div className="li"><span className="d">·</span><span>
-              الإيراد يتركّز في <b>{revTop?.name}</b> بنسبة <b>{p1(revTop?.total || 0, R)}</b> من الإجمالي —
-              فأداء المركب مرهونٌ بهذا القطاع قبل غيره.
+              الإيراد يتركّز في <b>{revTop?.name}</b> بنسبة <b>{p1(revTop?.total || 0, R)}</b>،
+              وأكبر ثلاثة عوامل تكلفة تلتهم <b>{p1(top3Sum, segTotal)}</b> من التكلفة —
+              فالربحية رهنُ طرفين لا أكثر.
             </span></div>
             <div className="li"><span className="d">·</span><span>
-              أكبر عنصر تكلفة <b>{segs[0]?.ar}</b> بـ<b>{f2(segs[0]?.value || 0)}</b> أي{' '}
-              <b>{p1(segs[0]?.value || 0, segTotal)}</b> من هيكل التكلفة و<b>{p1(segs[0]?.value || 0, R)}</b> من الإيراد.
-            </span></div>
-            <div className="li"><span className="d">·</span><span>
-              المشتريات خفضت الصافي من <b>{f2(netBefore)}</b> إلى <b>{f2(netFinal)}</b> —
-              أي <b>{p1(purTotal, R)}</b> من الإيراد و<b>{p1(purTotal, totalCost)}</b> من التكلفة الكلّية.
-            </span></div>
-            <div className="li"><span className="d">·</span><span>
-              اقتصاديات الرحلة: إيراد <b>{f2(data.revenue / N)}</b> مقابل تكلفة <b>{f2(totalCost / N)}</b>،
-              فصافي <b>{f2(netFinal / N)}</b> للرحلة الواحدة على {N} رحلات.
-            </span></div>
-            <div className="li"><span className="d">·</span><span>
-              اتجاه النشاط: الصادر <b>{p1(data.revE, R)}</b> والوارد <b>{p1(data.revI, R)}</b> من الإيراد —
-              {expPct > impPct ? ' فالثقل على الصادر' : ' فالثقل على الوارد'}.
+              المشتريات وحدها خفضت الصافي من <b>{f2(netBefore)}</b> إلى <b>{f2(netFinal)}</b>،
+              أي <b>{p1(purTotal, R)}</b> من الإيراد.
             </span></div>
           </div>
 
@@ -309,33 +331,23 @@ export default function VesselBoardReport({
           <div className="att ok">🟢 <b>الربحية:</b> هامش صافٍ <b>{p1(netFinal, R)}</b> وتكلفة إلى إيراد{' '}
             <b>{p1(totalCost, R)}</b>{losses.length === 0 ? ' — وكل الرحلات رابحة.' : '.'}</div>
 
-          <h2>Questions Management Should Ask</h2>
-          <div className="box">
-            <div className="li"><span className="d">1.</span><span>
-              تكلفة البنكر <b>{f2(data.bunkerCost / N)}</b> للرحلة — هل هي ضمن المعدّل المعتاد للخطّ؟
-            </span></div>
-            <div className="li"><span className="d">2.</span><span>
-              {segs[0]?.ar} يمثّل <b>{p1(segs[0]?.value || 0, segTotal)}</b> من التكلفة — ما المُتاح لخفضه تعاقدياً؟
-            </span></div>
-            <div className="li"><span className="d">3.</span><span>
-              {revTop?.name} يمثّل <b>{p1(revTop?.total || 0, R)}</b> من الإيراد — ما خطّة تنويع مصادر الدخل؟
-            </span></div>
-            {losses.length > 0 && (
-              <div className="li"><span className="d">4.</span><span>
-                ما سبب خسارة الرحلة <b>{losses[0].ref}</b> بينما بقيّة الرحلات بهامش يقارب{' '}
-                <b>{p1(bestV?.net || 0, bestV?.revenue || 1)}</b>؟
-              </span></div>
-            )}
-            <div className="li"><span className="d">{losses.length > 0 ? '5.' : '4.'}</span><span>
-              الوارد يمثّل <b>{p1(data.revI, R)}</b> من الإيراد بينما ركّابه <b>{f0(data.I.passC)}</b> مقابل{' '}
-              <b>{f0(data.E.passC)}</b> صادراً — هل يمكن رفع الاستغلال في الاتجاه الأضعف؟
-            </span></div>
-          </div>
-
-          <div className="gap">
-            <b>Data availability:</b> المقارنة بالشهر السابق · الموازنة (Budget) · Actual vs Budget ·
-            YTD · العام السابق · مقارنة المراكب والخطوط — <b>غير متوفّرة في مصدر البيانات الحالي</b>.
-            وهيكل التقرير يستوعبها متى توفّرت بلا إعادة تصميم.
+          {/*
+            * أكبر خطرٍ واحد.
+            *
+            * سؤال المدير «أين أكبر Risk؟» لا يُجاب بقائمة. فيُرشَّح أشدّها أثراً
+            * بالمال: خسارةٌ محقّقة أوّلاً، ثم فرقُ دفترٍ يُشكّك في الرقم نفسه،
+            * ثم تركّزٌ يجعل النتيجة رهن طرفٍ واحد.
+            */}
+          <div className="att hi" style={{ marginTop: 6 }}>
+            <b>KEY RISK · </b>
+            {losses.length > 0
+              ? <>رحلةٌ خاسرة ({losses.map((v) => v.ref).join(' · ')}) بـ<b>{f2(Math.abs(losses.reduce((s, v) => s + v.net, 0)))}</b>{' '}
+                بينما متوسط هامش بقيّة الرحلات يقارب <b>{p1(bestV?.net || 0, bestV?.revenue || 1)}</b> —
+                خسارةٌ محقّقة داخل شهرٍ رابح، وسببها تشغيليٌّ لا محاسبي.</>
+              : hasGap
+                ? <>فرقٌ في دفتر المركب بـ<b>{f2(Math.abs(bookGap))}</b> يجعل الصافي المعتمد غير مطابقٍ لمكوّناته.</>
+                : <>تركّز الإيراد في <b>{revTop?.name}</b> بنسبة <b>{p1(revTop?.total || 0, R)}</b> —
+                  تراجعٌ في هذا القطاع وحده ينعكس مباشرةً على النتيجة.</>}
           </div>
 
           {/* ══ PAGE 2 · REVENUE & OPERATIONS ══ */}
@@ -410,6 +422,13 @@ export default function VesselBoardReport({
                   <td>{f0(data.E.passC + data.I.passC)}</td><td>{((data.E.passC + data.I.passC) / N).toFixed(1)}</td></tr>
               </tbody>
             </table>
+            <div className="att mo" style={{ marginTop: 2 }}>
+              <b>اتجاه النشاط:</b> الصادر <b>{p1(data.revE, R)}</b> والوارد <b>{p1(data.revI, R)}</b> من الإيراد —
+              {expPct > impPct ? ' فالثقل على الصادر' : ' فالثقل على الوارد'}. والركّاب يميلون للوارد
+              (<b>{f0(data.I.passC)}</b> مقابل <b>{f0(data.E.passC)}</b>) بينما الشاحنات تميل للصادر
+              (<b>{f0(data.E.truckC)}</b> مقابل <b>{f0(data.I.truckC)}</b>) — فالاتجاهان يحملان بضاعتين مختلفتين
+              لا حمولةً واحدة ذهاباً وإياباً.
+            </div>
           </div>
 
           {/* ══ PAGE 3 · COST & PROFITABILITY ══ */}
@@ -588,6 +607,29 @@ export default function VesselBoardReport({
                 </>
               ) : null}
             </div>
+
+            <h2>Questions Management Should Ask</h2>
+            <div className="box">
+              <div className="li"><span className="d">1.</span><span>
+                تكلفة البنكر <b>{f2(data.bunkerCost / N)}</b> للرحلة — أهي ضمن المعدّل المعتاد للخطّ؟
+              </span></div>
+              <div className="li"><span className="d">2.</span><span>
+                {segs[0]?.ar} يمثّل <b>{p1(segs[0]?.value || 0, segTotal)}</b> من التكلفة — ما المُتاح لخفضه تعاقدياً؟
+              </span></div>
+              <div className="li"><span className="d">3.</span><span>
+                {revTop?.name} يمثّل <b>{p1(revTop?.total || 0, R)}</b> من الإيراد — ما خطّة تنويع مصادر الدخل؟
+              </span></div>
+              {losses.length > 0 && (
+                <div className="li"><span className="d">4.</span><span>
+                  ما سبب خسارة الرحلة <b>{losses[0].ref}</b> بينما بقيّة الرحلات بهامش يقارب{' '}
+                  <b>{p1(bestV?.net || 0, bestV?.revenue || 1)}</b>؟
+                </span></div>
+              )}
+              <div className="li"><span className="d">{losses.length > 0 ? '5.' : '4.'}</span><span>
+                الوارد يمثّل <b>{p1(data.revI, R)}</b> من الإيراد بينما ركّابه <b>{f0(data.I.passC)}</b> مقابل{' '}
+                <b>{f0(data.E.passC)}</b> صادراً — أيمكن رفع الاستغلال في الاتجاه الأضعف؟
+              </span></div>
+            </div>
           </div>
 
           {/* ══ PAGE 5 · APPENDIX ══ */}
@@ -686,6 +728,12 @@ export default function VesselBoardReport({
                 ))}
               </tbody>
             </table>
+
+            <div className="gap" style={{ marginTop: 8 }}>
+              <b>Data availability:</b> المقارنة بالشهر السابق · الموازنة (Budget) · Actual vs Budget ·
+              YTD · العام السابق · مقارنة المراكب والخطوط — <b>غير متوفّرة في مصدر البيانات الحالي</b>،
+              ولم تُقدَّر. وهيكل التقرير يستوعبها متى توفّرت بلا إعادة تصميم.
+            </div>
 
             <div className="foot">
               <span>UME Holding · Maritime PMS — {cfg.vessel} · {monthLabel} · Executive Performance Report</span>
