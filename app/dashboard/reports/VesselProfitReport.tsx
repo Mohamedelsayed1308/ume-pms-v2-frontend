@@ -389,7 +389,18 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
       await api.put(`/api/vessel-profit/${cfg.vessel}`, { voyages, manual });
       setSavedMsg('تم الحفظ ✅');
       setTimeout(() => setSavedMsg(''), 2500);
-    } catch { setSavedMsg('فشل الحفظ'); }
+    } catch (e: any) {
+      /*
+       * السبب يُعرض لا يُبتلع.
+       *
+       * «فشل الحفظ» وحدها أخفت 413 — الحمولة تجاوزت حدّ الخادم — فبدا العطل
+       * عابراً وهو دائم ويزداد مع كل رحلة تُضاف.
+       */
+      const st = e?.response?.status;
+      const why = st === 413 ? `الحمولة أكبر من حدّ الخادم (${Math.round(JSON.stringify({ voyages, manual }).length / 1024)} ك.ب)`
+        : e?.response?.data?.message || e?.message || 'سبب غير معروف';
+      setSavedMsg(`فشل الحفظ — ${st ? st + ' · ' : ''}${why}`);
+    }
     finally { setSaving(false); }
   }
 
