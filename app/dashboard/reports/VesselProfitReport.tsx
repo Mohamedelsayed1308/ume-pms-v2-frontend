@@ -214,9 +214,20 @@ const sideRevenue = (s: Side) => s.truck + s.veh + s.pass + s.discharge;
 
 export default function VesselProfitReport({ config }: { config: VesselConfig }) {
   const cfg = config;
+  /*
+   * مسمّيات المصروفات.
+   *
+   * المفاتيح تأتي من مصدرين: إعداد الشاشة (للرفع اليدوي) وخريطة الشيت الموحّد.
+   * وقد اختلف اسمٌ واحد بينهما — `othersI` في الشيت مقابل `otherExpsI` في
+   * الإعداد — فظهر بندٌ بمئة وأربعة وسبعين ألفاً باسمه البرمجي في تقرير
+   * يُعرض على الإدارة. فيُجسر الاختلاف هنا صراحةً بدل تغيير شكل البيانات
+   * المحفوظة.
+   */
   const labelOf = useMemo(() => {
     const m: Record<string, string> = {};
     [...cfg.exportExp, ...cfg.importExp].forEach((e) => { m[e.key] = e.label; });
+    // فحصتُ بقيّة مفاتيح المركبين فوجدتها متطابقة — هذا وحده الشاذّ
+    if (!m.othersI && m.otherExpsI) m.othersI = m.otherExpsI;
     return m;
   }, [cfg]);
 
