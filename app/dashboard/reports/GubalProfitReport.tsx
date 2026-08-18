@@ -3,7 +3,18 @@ import { Fragment, useEffect, useMemo, useState } from 'react';
 import * as XLSX from 'xlsx';
 import api from '@/lib/api';
 
-// ── column map (validated against the sheet's own TOTAL INCOME / TOTAL COST / G.TOTAL) ──
+/*
+ * ── خريطة الأعمدة تُقرأ من الملفّ لا تُثبَّت فيه ──
+ *
+ * الأرقام أدناه احتياطٌ لا مرجع. الملفّ يحمل رؤوس مجموعاته في صفٍّ خاص —
+ * `Crew Cost` و`SPARE PARTS` و`TOTAL COST` — وكل مجموعة تمتدّ من رأسها إلى ما
+ * قبل الرأس التالي. فتُشتقّ الحدود منها في كل رفع.
+ *
+ * ولهذا سببٌ وقع فعلاً: نسخة 2026 حذفت مجموعة «المنهالي» (ستّة أعمدة) وأضافت
+ * ثلاثة موردين إلى «خدمات أخرى»، فانزاح ما بعدهما ثلاثة. والأرقام المثبَّتة
+ * جعلت `TOTAL COST` يُقرأ من عمودٍ فارغ — **صفراً** — بينما الإيراد يُقرأ صحيحاً.
+ * تقريرٌ بتكاليف صفر يبدو كشهرٍ ممتاز، ولا شيء فيه يشي بالخطأ.
+ */
 const INCOME_SPAN: [number, number] = [2, 13];
 const COL = { incomeTotal: 14, costTotal: 197, net: 199 };
 const COST_GROUPS: { id: string; ar: string; en: string; a: number; b: number; color: string }[] = [
@@ -42,9 +53,89 @@ interface GubalMonth {
   costTotal: number; net: number;
 }
 
+/** رأس المجموعة كما يكتبه الملفّ → مُعرّفها عندنا. الأخصّ أولاً. */
+const GROUP_HEADS: [RegExp, string][] = [
+  [/other\s*related/i, 'otherRel'],
+  [/spare\s*parts/i, 'spare'],
+  [/bunker/i, 'bunker'],
+  [/depreciat/i, 'depreciation'],
+  [/crew/i, 'crew'],
+  [/insurance/i, 'insurance'],
+  [/ksa\s*agent/i, 'ksa'],
+  [/sudan\s*agent/i, 'sudan'],
+  [/egypt\s*agent/i, 'egypt'],
+  [/master\s*safe/i, 'masterSafe'],
+  [/malta/i, 'malta'],
+  [/ume\s*shipping/i, 'umeab'],
+  [/menhali/i, 'menhali'],
+  [/^others?$|^others\b/i, 'others'],
+];
+
+export interface SheetMap {
+  income: [number, number];
+  incomeTotal: number; costTotal: number; net: number;
+  ranges: Record<string, [number, number]>;
+  found: string[]; missing: string[]; derived: boolean;
+}
+
+/**
+ * يشتقّ حدود المجموعات من صفّ الرؤوس في الملفّ.
+ *
+ * كل رأسٍ يبدأ مجموعةً تنتهي قبل الرأس التالي — فإدراج عمودٍ أو حذفه لا يُزحزح
+ * شيئاً. وإن خلا الملفّ من الرؤوس رجعنا إلى الأرقام المثبَّتة، ونقول ذلك.
+ */
+export function deriveMap(g: any[][]): SheetMap {
+  const fallback: SheetMap = {
+    income: INCOME_SPAN, incomeTotal: COL.incomeTotal, costTotal: COL.costTotal, net: COL.net,
+    ranges: Object.fromEntries(COST_GROUPS.map((x) => [x.id, [x.a, x.b] as [number, number]])),
+    found: [], missing: [], derived: false,
+  };
+  // صفّ الرؤوس هو الذي يحمل TOTAL COST — يُبحث عنه لا يُفترض موضعه
+  const headRow = g.findIndex((r) => (r || []).some((v) => /total\s*cost/i.test(String(v ?? ''))));
+  if (headRow < 0) return fallback;
+  const row = g[headRow] || [];
+
+  const marks: { c: number; text: string }[] = [];
+  row.forEach((v, c) => {
+    const t = String(v ?? '').replace(/\s+/g, ' ').trim();
+    if (t) marks.push({ c, text: t });
+  });
+  if (!marks.length) return fallback;
+
+  let incomeTotal = -1, costTotal = -1, net = -1;
+  const starts: { id: string; c: number }[] = [];
+  for (const mk of marks) {
+    if (/total\s*income/i.test(mk.text)) { incomeTotal = mk.c; continue; }
+    if (/total\s*cost/i.test(mk.text)) { costTotal = mk.c; continue; }
+    if (/^g\s*\.?\s*t\s*o?\s*t/i.test(mk.text.replace(/\s+/g, ' '))) { net = mk.c; continue; }
+    const hit = GROUP_HEADS.find(([re]) => re.test(mk.text));
+    if (hit) starts.push({ id: hit[1], c: mk.c });
+  }
+  if (costTotal < 0 || !starts.length) return fallback;
+
+  // نهاية كل مجموعة = ما قبل بداية التالية (أو ما قبل TOTAL COST للأخيرة)
+  const bounds = [...starts].sort((a, b) => a.c - b.c);
+  const ranges: Record<string, [number, number]> = {};
+  bounds.forEach((b, i) => {
+    const nextC = i + 1 < bounds.length ? bounds[i + 1].c : costTotal;
+    ranges[b.id] = [b.c, Math.max(b.c, nextC - 1)];
+  });
+
+  const found = bounds.map((b) => b.id);
+  const missing = COST_GROUPS.map((x) => x.id).filter((id) => !ranges[id]);
+  return {
+    income: [INCOME_SPAN[0], (incomeTotal > 0 ? incomeTotal : COL.incomeTotal) - 1],
+    incomeTotal: incomeTotal > 0 ? incomeTotal : COL.incomeTotal,
+    costTotal,
+    net: net > 0 ? net : costTotal + 2,
+    ranges, found, missing, derived: true,
+  };
+}
+
 function parseWorkbook(wb: XLSX.WorkBook): GubalMonth[] {
   const ws = wb.Sheets['Sheet1'] || wb.Sheets[wb.SheetNames[0]];
   const g: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: null });
+  const map = deriveMap(g);
   const hdr = g[2] || []; // row index 2 = line-item headers
   const labelOf = (c: number) => String(hdr[c] ?? `عمود ${c}`).replace(/\s+/g, ' ').trim();
   const out: GubalMonth[] = [];
@@ -57,21 +148,30 @@ function parseWorkbook(wb: XLSX.WorkBook): GubalMonth[] {
     const yy = m[3].length === 2 ? `20${m[3]}` : m[3];
     const key = `${yy}-${mm}`;
     const incomeLines: Line[] = [];
-    for (let c = INCOME_SPAN[0]; c <= INCOME_SPAN[1]; c++) {
+    for (let c = map.income[0]; c <= map.income[1]; c++) {
       const v = num(row[c]); if (Math.abs(v) > 0.005) incomeLines.push({ label: labelOf(c), value: v });
     }
-    const incomeTotal = num(row[COL.incomeTotal]);
+    const incomeTotal = num(row[map.incomeTotal]);
     const groups = COST_GROUPS.map((grp) => {
       const lines: Line[] = [];
       let total = 0;
-      for (let c = grp.a; c <= grp.b; c++) {
+      /*
+       * مجموعةٌ غابت عن رؤوس الملفّ = غير موجودة فيه، لا «تُقرأ بأرقامها القديمة».
+       *
+       * «المنهالي» حُذفت من نسخة 2026 وصارت أعمدتها ضمن «خدمات أخرى». والسقوط
+       * إلى الأرقام المثبَّتة كان يجمعها **مرّتين** — مرّةً في مكانها القديم
+       * ومرّةً ضمن المجموعة التي ابتلعتها.
+       */
+      const fb: [number, number] = map.derived ? [1, 0] : [grp.a, grp.b];
+      const [ga, gb] = map.ranges[grp.id] || fb;
+      for (let c = ga; c <= gb; c++) {
         const v = num(row[c]); total += v;
         if (Math.abs(v) > 0.005) lines.push({ label: labelOf(c), value: v });
       }
       return { id: grp.id, total, lines };
     });
-    const costTotal = num(row[COL.costTotal]);
-    const net = num(row[COL.net]);
+    const costTotal = num(row[map.costTotal]);
+    const net = num(row[map.net]);
     if (incomeTotal === 0 && costTotal === 0) continue; // skip empty months
     out.push({ key, label: lbl.replace(/\s+/g, ' '), incomeLines, incomeTotal, groups, costTotal, net });
   }
