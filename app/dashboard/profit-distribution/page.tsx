@@ -111,6 +111,8 @@ export default function ProfitDistributionPage() {
   const [form, setForm] = useState(emptyForm());
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(false);
+  const [fetchingSheet, setFetchingSheet] = useState(false);
+  const [sheetInfo, setSheetInfo] = useState<any>(null);
   const [error, setError] = useState('');
   const [driveId, setDriveId] = useState('1xBNKsoDdlh2q6uEoKNEf49Q3UdIR6cJz');
   const [selected, setSelected] = useState<Period | null>(null);
@@ -182,6 +184,45 @@ export default function ProfitDistributionPage() {
       alert('خطأ: ' + (e?.response?.data?.message || e?.message));
     } finally {
       setFetchingVoyage(false);
+    }
+  }
+
+  /*
+   * الجلب من الشيت الموحّد.
+   *
+   * المسار الآخر يمرّ عبر Apps Script يقرأ إكسل درايف — وهو المصدر نفسه الذي
+   * يسحبه الشيت ثلاث مرّات يومياً. فالقراءة منه مباشرةً تُسقط وسيطاً وتُصيب
+   * النسخة التي عليها بقيّة النظام.
+   *
+   * و**الكاش المصروف لا يُمسّ**: دفعاتٌ لا إيراد، ولا وجود لها في دفاتر المراكب.
+   * تصفيرها ترفع نتيجة النشاط بمقدارها بلا أن يُنبّه أحد.
+   */
+  async function fetchSheet() {
+    if (!form.date_from || !form.date_to) { alert('أدخل الفترة الزمنية أولاً'); return; }
+    setFetchingSheet(true);
+    try {
+      const res = await api.post('/api/profit-periods/fetch-sheet', {
+        date_from: form.date_from, date_to: form.date_to,
+      });
+      const d = res.data;
+      setForm((prev) => ({
+        ...prev,
+        poseidon_revenue: d.poseidon?.revenue ?? prev.poseidon_revenue,
+        poseidon_voyages: d.poseidon?.voyages ?? prev.poseidon_voyages,
+        amal_revenue:     d.amal?.revenue     ?? prev.amal_revenue,
+        amal_voyages:     d.amal?.voyages     ?? prev.amal_voyages,
+        daleela_revenue:  d.daleela?.revenue  ?? prev.daleela_revenue,
+        daleela_voyages:  d.daleela?.voyages  ?? prev.daleela_voyages,
+        commission_amount:
+          (d.poseidon?.commission ?? 0) + (d.amal?.commission ?? 0) + (d.daleela?.commission ?? 0),
+        bunker_badawi:   d.poseidon?.bunker ?? prev.bunker_badawi,
+        bunker_ittihad:  (d.amal?.bunker ?? 0) + (d.daleela?.bunker ?? 0),
+      }));
+      setSheetInfo(d.source || null);
+    } catch (e: any) {
+      alert('فشل الجلب من الشيت: ' + (e?.response?.data?.message || e?.message));
+    } finally {
+      setFetchingSheet(false);
     }
   }
 
@@ -427,7 +468,32 @@ export default function ProfitDistributionPage() {
               </div>
             </div>
 
-            {/* جلب من Google Drive */}
+            {/* جلب من الشيت الموحّد — المصدر المعتمد */}
+            <div className="bg-emerald-50 border-2 border-emerald-300 rounded-lg p-3 mb-3">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div className="min-w-0">
+                  <p className="text-xs font-bold text-emerald-800">
+                    🟢 جلب من الشيت الموحّد — المصدر المعتمد
+                  </p>
+                  <p className="text-[11px] text-emerald-700 mt-0.5">
+                    إيراد + عمولة + بنكر + عدد الرحلات · يُحدَّث تلقائياً ثلاث مرّات يومياً
+                  </p>
+                </div>
+                <button onClick={fetchSheet} disabled={fetchingSheet}
+                  className="bg-emerald-600 text-white px-3 py-1.5 rounded text-xs hover:bg-emerald-700 disabled:opacity-50 whitespace-nowrap">
+                  {fetchingSheet ? 'جاري الجلب...' : '🔄 جلب من الشيت'}
+                </button>
+              </div>
+              {sheetInfo && (
+                <p className="text-[11px] text-emerald-800 mt-2 border-t border-emerald-200 pt-1.5">
+                  ✓ {sheetInfo.matched} رحلة
+                  {sheetInfo.firstDate && <> · {sheetInfo.firstDate} → {sheetInfo.lastDate}</>}
+                  {' · '}<span className="text-emerald-700">الكاش المصروف لا يأتي من الشيت — أدخله يدوياً</span>
+                </p>
+              )}
+            </div>
+
+            {/* جلب من Google Drive — المسار القديم */}
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
               <p className="text-xs font-semibold text-blue-700 mb-2">جلب البيانات من Google Drive Excel (إيراد + عمولة + كاش + بنكر)</p>
               <div className="flex gap-2">
