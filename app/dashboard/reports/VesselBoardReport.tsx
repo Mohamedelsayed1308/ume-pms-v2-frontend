@@ -118,6 +118,16 @@ const CSS = `
 #vb-doc .foot { margin-top:10px; border-top:.75pt solid #cbd5e1; padding-top:5px;
   font-size:7pt; color:#94a3b8; display:flex; justify-content:space-between; }
 #vb-doc table, #vb-doc .box, #vb-doc .cols, #vb-doc svg { page-break-inside:avoid; break-inside:avoid; }
+/*
+ * الجداول التي يطول صفّها بطول الشهر تُكسَر ويتكرّر عنوانها.
+ *
+ * منعُ الكسر يدفع الجدول كلّه إلى الورقة التالية فتُترك نصف صفحةٍ بيضاء —
+ * والشهر ذو الثلاث عشرة رحلة يفعلها كل مرّة. والصفّ يبقى غير قابلٍ للكسر
+ * فلا ينشطر رقمٌ عن سطره.
+ */
+#vb-doc table.long { page-break-inside:auto; break-inside:auto; }
+#vb-doc table.long thead { display:table-header-group; }
+#vb-doc table.long tr { page-break-inside:avoid; break-inside:avoid; }
 `;
 
 export default function VesselBoardReport({
@@ -542,7 +552,7 @@ export default function VesselBoardReport({
             </table>
 
             <h2>Voyage Profitability</h2>
-            <table>
+            <table className="long">
               <thead><tr>
                 <th scope="col">Voyage</th><th scope="col">Revenue</th><th scope="col">Net after allocation</th>
                 <th scope="col">Margin</th><th scope="col" style={{ width: '32%' }}>Net</th>
@@ -708,7 +718,7 @@ export default function VesselBoardReport({
             </table>
 
             <h2>Appendix B · Purchase Details</h2>
-            <table>
+            <table className="long">
               <thead><tr>
                 <th scope="col">Invoice</th><th scope="col">Date</th><th scope="col">Supplier</th>
                 <th scope="col">Category</th><th scope="col">Original</th>
