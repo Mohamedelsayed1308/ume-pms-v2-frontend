@@ -291,6 +291,16 @@ function InvoicesContent() {
       const m = parseInt(form.depreciation_months);
       if (!m || m < 2) { setError('أدخل عدد شهور الإهلاك (شهرين أو أكثر)'); return; }
     }
+    /*
+     * الفاتورة تُصنَّف أو لا تُحفَظ — والمنع هنا ليراه المستخدم قبل الإرسال.
+     *
+     * والخادم يرفضها أيضاً، فهذا لا يُغني عنه: الاستخراج الآلي والاستيراد
+     * بالدفعات مدخلان لا يمرّان بهذا النموذج.
+     */
+    if (!multiItem && !form.item_id) {
+      setError('اختر بند الفاتورة — أو فعّل «بنود متعددة» وأدخل سطورها');
+      return;
+    }
     if (multiItem) {
       if (!form.line_items.length) { setError('أضف بند واحد على الأقل'); return; }
       if (form.line_items.some((l) => !l.item_id || !(parseFloat(l.amount) > 0))) { setError('كل بند لازم يكون له تصنيف ومبلغ أكبر من صفر'); return; }
@@ -1385,15 +1395,15 @@ function InvoicesContent() {
               </div>
               <div className="col-span-2">
                 <div className="flex items-center justify-between mb-1">
-                  <label className="text-sm text-gray-600">البند</label>
+                  <label className="text-sm text-gray-600">البند <span className="text-red-500">*</span></label>
                   <label className="flex items-center gap-2 text-xs text-gray-500 cursor-pointer">
                     <input type="checkbox" checked={multiItem} onChange={(e) => setMultiItem(e.target.checked)} /> بنود متعددة
                   </label>
                 </div>
                 {!multiItem ? (
                   <select value={form.item_id} onChange={(e) => setForm({ ...form, item_id: e.target.value })}
-                    className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    <option value="">— اختر البند —</option>
+                    className={`w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 ${form.item_id ? '' : 'border-red-300 bg-red-50'}`}>
+                    <option value="">— اختر البند (إلزامي) —</option>
                     {items.filter((it) => it.is_active !== false || it.id === form.item_id).map((it) => <option key={it.id} value={it.id}>{it.name}{it.is_active === false ? ' (موقوف)' : ''}</option>)}
                   </select>
                 ) : (
