@@ -136,8 +136,21 @@ function parseWorkbook(wb: XLSX.WorkBook): GubalMonth[] {
   const ws = wb.Sheets['Sheet1'] || wb.Sheets[wb.SheetNames[0]];
   const g: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: null });
   const map = deriveMap(g);
-  const hdr = g[2] || []; // row index 2 = line-item headers
-  const labelOf = (c: number) => String(hdr[c] ?? `عمود ${c}`).replace(/\s+/g, ' ').trim();
+  /*
+   * اسم البند يُلتمس في صفوف الرأس الثلاثة لا في صفٍّ واحد.
+   *
+   * أكثر البنود مُسمّاة في الصف الثالث، لكن المجموعات ذات العمود الواحد —
+   * «الإهلاك» و«وسطاء مالطا» — اسمها في صف المجموعات وحده. وقراءة صفٍّ واحد
+   * كانت تُظهرها «عمود 18» و«عمود 62» في التقرير المطبوع.
+   */
+  const labelOf = (c: number) => {
+    for (const r of [2, 1, 3]) {
+      const v = (g[r] || [])[c];
+      const t = String(v ?? '').replace(/\s+/g, ' ').trim();
+      if (t) return t;
+    }
+    return `عمود ${c}`;
+  };
   const out: GubalMonth[] = [];
   for (const row of g) {
     if (!row) continue;
@@ -421,11 +434,43 @@ export default function GubalProfitReport() {
             <div>
               <h3>التكاليف بالمجموعات</h3>
               <table><tbody>
-                {sortedGroups.map((g) => (<tr key={g.id}><td>{grpMeta(g.id).ar}</td><td>{fmt(g.total)}</td></tr>))}
-                <tr className="tot"><td>إجمالي التكاليف</td><td>{fmt(agg.costTotal)}</td></tr>
+                {sortedGroups.map((g) => (
+                  <tr key={g.id}>
+                    <td>{grpMeta(g.id).ar}</td>
+                    <td>{fmt(g.total)}</td>
+                    <td className="pc">{agg.costTotal ? Math.round((g.total / agg.costTotal) * 100) : 0}%</td>
+                  </tr>
+                ))}
+                <tr className="tot"><td>إجمالي التكاليف</td><td>{fmt(agg.costTotal)}</td><td className="pc">100%</td></tr>
               </tbody></table>
             </div>
           </div>
+          {/*
+            التفصيل البندي في الورق أيضاً.
+            المجموعات وحدها تقول «قطع الغيار 55,333» ولا تقول لمن دُفعت — والورقة
+            التي تُراجَع أو تُرسَل لا تُفتح فيها صفوفٌ بالنقر كما على الشاشة.
+          */}
+          <div className="detail">
+            <h3>التكاليف بالتفصيل</h3>
+            {sortedGroups.filter((g) => g.lines.length > 0).map((g) => (
+              <table key={g.id} className="dt"><tbody>
+                <tr className="gh2">
+                  <td>{grpMeta(g.id).ar} <span className="en">{grpMeta(g.id).en}</span></td>
+                  <td>{fmt(g.total)}</td>
+                  <td className="pc">{agg.costTotal ? Math.round((g.total / agg.costTotal) * 100) : 0}%</td>
+                </tr>
+                {g.lines.slice().sort((a, b) => b.value - a.value).map((l, i) => (
+                  <tr key={`${l.label}-${i}`} className="ln">
+                    <td>{l.label}</td><td>{fmt(l.value)}</td><td />
+                  </tr>
+                ))}
+              </tbody></table>
+            ))}
+            <table className="dt"><tbody>
+              <tr className="tot"><td>إجمالي التكاليف</td><td>{fmt(agg.costTotal)}</td><td className="pc">100%</td></tr>
+            </tbody></table>
+          </div>
+
           {/*
             الرسوم في مستند الطباعة أيضاً.
             المحتوى المعروض كلّه `print:hidden` ومستندُ الطباعة نسخةٌ مستقلّة —
@@ -529,6 +574,14 @@ const PRINT_CSS = `@media print {
   #gubal-doc td { padding:4px 8px; border-bottom:.5pt solid #e5e9f0; }
   #gubal-doc td:last-child { text-align:left; white-space:nowrap; }
   #gubal-doc tr.tot td { background:#dbe4ff; color:#0f2c5c; font-weight:800; border-top:1pt solid #94a3b8; }
+  #gubal-doc .pc { width:34px; text-align:left; color:#64748b; }
+  #gubal-doc .detail { margin-top:14px; }
+  /* المجموعة لا تُشطر بين صفحتين — عنوانٌ في آخر ورقة وبنودُه في التالية لا يُقرأ */
+  #gubal-doc .dt { break-inside: avoid; page-break-inside: avoid; margin-bottom:6px; }
+  #gubal-doc .dt tr.gh2 td { background:#eef2ff; font-weight:800; color:#0f2c5c; border-top:1pt solid #c7d2fe; padding:4px 8px; }
+  #gubal-doc .dt tr.gh2 .en { font-weight:400; color:#64748b; font-size:7.5pt; }
+  #gubal-doc .dt tr.ln td { font-size:8pt; color:#475569; padding:2px 8px 2px 18px; }
+  #gubal-doc .dt tr.ln td:first-child { padding-right:18px; }
   #gubal-doc .charts { margin-top:14px; }
   /* الرسم لا يُشطر بين صفحتين — نصفُ مخطّطٍ على ورقةٍ لا يُقرأ */
   #gubal-doc .cbox { break-inside: avoid; page-break-inside: avoid; margin-bottom:12px; }
