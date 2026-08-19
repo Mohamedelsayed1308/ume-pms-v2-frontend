@@ -43,6 +43,23 @@ function Shell({ children }: { children: React.ReactNode }) {
 
   useEffect(() => { setMobileOpen(false); }, [pathname]);
 
+  /*
+   * طيّ المجموعات.
+   *
+   * القائمة عشرون سطراً في عمودٍ واحد — تُقرأ جداراً لا مجموعات. والطيّ يجعل
+   * المجموعة كتلةً يملكها المستخدم: يُغلق ما لا يفتحه ويُبقي ما يعمل عليه.
+   * والحالة تُحفظ فلا يُعيد ترتيبها كل صباح.
+   */
+  const [folded, setFolded] = useState<Record<string, boolean>>({});
+  useEffect(() => {
+    try { setFolded(JSON.parse(localStorage.getItem('navFolded') || '{}')); } catch { /* تخزين تالف */ }
+  }, []);
+  const toggleGroup = (k: string) => setFolded((f) => {
+    const n = { ...f, [k]: !f[k] };
+    localStorage.setItem('navFolded', JSON.stringify(n));
+    return n;
+  });
+
   const toggleCollapse = () => setCollapsed((c) => { const n = !c; localStorage.setItem('sidebarCollapsed', n ? '1' : '0'); return n; });
 
   const isActive = (href: string) => href === '/dashboard' ? pathname === href : pathname.startsWith(href);
@@ -50,38 +67,68 @@ function Shell({ children }: { children: React.ReactNode }) {
   const initials = (user?.full_name || 'U').trim().slice(0, 2);
 
   const NavContent = ({ collapsed }: { collapsed: boolean }) => (
-    <nav className="flex-1 overflow-y-auto px-2.5 py-3 space-y-4">
+    <nav className="flex-1 overflow-y-auto px-2 py-3 space-y-1">
       {GROUPS.map((g) => {
         const items = SCREENS.filter((s) => s.group === g.key && !s.hidden && canAccess(user, s));
         if (!items.length) return null;
+        const shut = !!folded[g.key] && !collapsed;
+        const hasActive = items.some((it) => isActive(it.href));
         return (
-          <div key={g.key}>
-            {!collapsed && <p className="px-2 mb-1.5 text-[10px] font-semibold tracking-wide text-slate-500">{t(g.i18nKey)}</p>}
-            <div className="space-y-0.5">
-              {items.map((item) => {
-                const on = isActive(item.href);
-                return (
-                  /*
-                   * الحالة النشطة: شريط عند حافّة البداية مع تعبئة خافتة.
-                   *
-                   * كانت كتلةً زرقاء صمّاء تسحب العين إليها في كل لقطة وتزاحم
-                   * محتوى الصفحة على الانتباه. والشريط يقول «أنت هنا» بالقدر
-                   * الكافي — والقائمة إشارةُ موضع لا بطلَ الشاشة.
-                   */
-                  <Link key={item.href} href={item.href} title={collapsed ? item.label : undefined}
-                    aria-current={on ? 'page' : undefined}
-                    className={cx('relative flex items-center gap-3 rounded-lg text-sm transition-colors',
-                      collapsed ? 'justify-center px-0 py-2.5' : 'px-3 py-2',
-                      on
-                        ? 'bg-brand-500/15 text-white font-medium before:absolute before:inset-y-1.5 before:start-0 before:w-[3px] before:rounded-full before:bg-brand-400'
-                        : 'text-slate-300 hover:bg-white/[.07] hover:text-white')}>
-                    <Icon name={item.iconName || 'file'} size={19} strokeWidth={on ? 2 : 1.7}
-                      className={on ? 'text-brand-300' : undefined} />
-                    {!collapsed && <span className="truncate">{item.label}</span>}
-                  </Link>
-                );
-              })}
-            </div>
+          <div key={g.key} className={cx(!collapsed && 'pb-1')}>
+            {collapsed ? (
+              <div className="h-px bg-white/[.08] mx-2 my-2" />
+            ) : (
+              /*
+               * عنوان المجموعة زرٌّ لا نصّ.
+               *
+               * كان سطراً رمادياً بعشر بكسلات لا يُرى ولا يُفعل شيئاً — فالمجموعات
+               * موجودة في البيانات وغائبة عن العين. وصار يحمل خطّاً يمتدّ إلى آخر
+               * السطر فيفصل بصرياً، وسهماً يقول إنه يُطوى.
+               */
+              <button type="button" onClick={() => toggleGroup(g.key)}
+                aria-expanded={!shut} aria-controls={`nav-${g.key}`}
+                className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer
+                  hover:bg-white/[.05] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#6EB08B]/70">
+                <span className="text-[10.5px] font-semibold tracking-[0.12em] shrink-0"
+                  style={{ color: hasActive ? '#6EB08B' : '#7A93A3' }}>
+                  {t(g.i18nKey)}
+                </span>
+                <span className="h-px flex-1" style={{ background: 'rgba(255,255,255,.10)' }} />
+                <Icon name="chevronDown" size={13}
+                  className={cx('shrink-0 transition-transform duration-200', shut && '-rotate-90')}
+                  style={{ color: '#5C7686' }} />
+              </button>
+            )}
+
+            {!shut && (
+              <div id={`nav-${g.key}`}
+                className={cx('space-y-0.5', !collapsed && 'ms-2 ps-2 border-s')}
+                style={!collapsed ? { borderColor: 'rgba(255,255,255,.07)' } : undefined}>
+                {items.map((item) => {
+                  const on = isActive(item.href);
+                  return (
+                    /*
+                     * الحالة النشطة بأخضر الهوية: شريطٌ عند حافّة البداية وتعبئةٌ
+                     * خافتة. لا كتلة صمّاء تسحب العين — القائمة إشارةُ موضع لا
+                     * بطلَ الشاشة.
+                     */
+                    <Link key={item.href} href={item.href} title={collapsed ? item.label : undefined}
+                      aria-current={on ? 'page' : undefined}
+                      className={cx('relative flex items-center gap-3 rounded-lg text-sm transition-colors',
+                        collapsed ? 'justify-center px-0 py-2.5' : 'px-2.5 py-2',
+                        on
+                          ? 'text-white font-medium before:absolute before:inset-y-1.5 before:start-0 before:w-[3px] before:rounded-full'
+                          : 'text-slate-300 hover:bg-white/[.07] hover:text-white')}
+                      style={on ? { background: 'rgba(61,138,103,.20)' } : undefined}>
+                      {on && <span className="absolute inset-y-1.5 start-0 w-[3px] rounded-full" style={{ background: '#6EB08B' }} />}
+                      <Icon name={item.iconName || 'file'} size={19} strokeWidth={on ? 2 : 1.7}
+                        style={on ? { color: '#6EB08B' } : undefined} />
+                      {!collapsed && <span className="truncate">{item.label}</span>}
+                    </Link>
+                  );
+                })}
+              </div>
+            )}
           </div>
         );
       })}
@@ -99,7 +146,7 @@ function Shell({ children }: { children: React.ReactNode }) {
     <div className="flex h-screen bg-canvas overflow-hidden">
       {/* ===== Desktop sidebar ===== */}
       <aside className={cx('hidden md:flex flex-col bg-navy-900 text-white transition-[width] duration-200 shrink-0', collapsed ? 'w-[72px]' : 'w-64')}
-        style={{ background: 'linear-gradient(180deg,#0c1524,#060b16)' }}>
+        style={{ background: '#00283A' }}>
         <Brand collapsed={collapsed} />
         <NavContent collapsed={collapsed} />
         <div className="p-2.5 border-t border-white/[.08]">
@@ -113,7 +160,7 @@ function Shell({ children }: { children: React.ReactNode }) {
       {/* ===== Mobile drawer ===== */}
       {mobileOpen && (
         <div className="md:hidden fixed inset-0 z-50 bg-black/50" onClick={() => setMobileOpen(false)}>
-          <aside className="absolute inset-y-0 right-0 w-64 flex flex-col text-white" style={{ background: 'linear-gradient(180deg,#0c1524,#060b16)', animation: 'ume-slide-in-rtl .2s ease-out' }} onClick={(e) => e.stopPropagation()}>
+          <aside className="absolute inset-y-0 right-0 w-64 flex flex-col text-white" style={{ background: '#00283A', animation: 'ume-slide-in-rtl .2s ease-out' }} onClick={(e) => e.stopPropagation()}>
             <Brand collapsed={false} />
             <NavContent collapsed={false} />
           </aside>
