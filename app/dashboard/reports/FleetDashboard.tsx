@@ -255,7 +255,14 @@ export default function FleetDashboard() {
                 return (
                   <button key={v} onClick={() => toggleVessel(v)}
                     className={`text-xs px-2.5 py-1 rounded-full border transition-all ${on ? 'bg-white text-gray-800 border-white font-semibold shadow-sm' : 'bg-transparent text-white/70 border-white/30 hover:border-white/60'}`}>
-                    <span className="inline-block w-2 h-2 rounded-full ml-1 align-middle" style={{ background: on ? c : 'currentColor' }} />
+                    {/*
+                      * النقطة مفتاحُ ألوانٍ لا زينة: في العرض الكلاسيكي تُطابق لون
+                      * المركب في المخطّط، وفي «الغاطس» لا مخطّط ملوّن أصلاً — فتصير
+                      * ثماني نقاطٍ صارخة في رأسٍ كحلي بلا وظيفة. فتظهر حيث تعمل.
+                      */}
+                    {design === 'classic' && (
+                      <span className="inline-block w-2 h-2 rounded-full ml-1 align-middle" style={{ background: on ? c : 'currentColor' }} />
+                    )}
                     {v}
                   </button>
                 );
