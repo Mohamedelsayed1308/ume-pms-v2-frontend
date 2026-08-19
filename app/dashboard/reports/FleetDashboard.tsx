@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import api from '@/lib/api';
 import FleetAssistant from './FleetAssistant';
+import FleetInstrument from './FleetInstrument';
 
 interface MonthRow {
   vessel: string; month: string; voyages: number; net: number; avgNet: number;
@@ -142,6 +143,14 @@ export default function FleetDashboard() {
     for (const mt of METRICS) o[mt.key] = sum(mr, mt.key);
     return o;
   }), [rows, monthsInRange]);
+
+  /*
+   * عرضان متعايشان.
+   *
+   * «الغاطس» عرضٌ جديد يبدأ بأطروحةٍ ثم يقارن المراكب بمقاييس غاطس. والكلاسيكي
+   * يبقى كما هو حتى يستقرّ الشكل — كما فُعل مع تقارير الربحية.
+   */
+  const [design, setDesign] = useState<'classic' | 'draft'>('draft');
 
   const toggleVessel = (v: string) =>
     setSelVessels((s) => s.includes(v) ? (s.length > 1 ? s.filter((x) => x !== v) : s) : [...s, v]);
@@ -384,6 +393,25 @@ export default function FleetDashboard() {
         </div>
       )}
 
+      {/* مبدّل العرض — الكلاسيكي يبقى حتى يستقرّ الشكل */}
+      <div className="flex items-center gap-1.5 justify-end">
+        {([['draft', 'الغاطس'], ['classic', 'الكلاسيكي']] as const).map(([k, lbl]) => (
+          <button key={k} onClick={() => setDesign(k)} aria-pressed={design === k}
+            className={`text-xs px-3 py-1.5 rounded-md border transition-colors cursor-pointer ${
+              design === k ? 'bg-[#00283A] text-white border-[#00283A]' : 'bg-white text-gray-500 border-gray-300 hover:border-gray-400'}`}>
+            {lbl}
+          </button>
+        ))}
+      </div>
+
+      {design === 'draft' ? (
+        <FleetInstrument
+          perVessel={perVessel} totals={totals} prevTotals={prevTotals}
+          fleetMonthly={fleetMonthly} monthsInRange={monthsInRange} monthLabel={monthLabel}
+          metric={metric} setMetric={(k) => setMetric(k as any)} metrics={METRICS}
+          periodLabel={`${monthLabel(monthsInRange[0] || from)} — ${monthLabel(monthsInRange[monthsInRange.length - 1] || to)}`}
+        />
+      ) : (<>
       {/* ── بطاقات المؤشرات ── */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {METRICS.map((m) => {
@@ -479,6 +507,8 @@ export default function FleetDashboard() {
           </button>
         ))}
       </div>
+
+      </>)}
 
       {/* ── جدول الأداء ── */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 overflow-x-auto">
