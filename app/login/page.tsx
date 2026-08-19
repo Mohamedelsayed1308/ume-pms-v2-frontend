@@ -31,7 +31,8 @@ export default function LoginPage() {
     <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
       <div className="bg-white p-8 rounded-xl shadow-md w-full max-w-md">
         <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold text-gray-800">UME Holding</h1>
+          {/* الشعار الرسمي — على أرضيةٍ فاتحة يُعرض بألوانه كما هي */}
+          <img src="/ume-logo.svg" alt="UME Holding" className="h-10 w-auto mx-auto mb-1" />
           <p className="text-gray-500 mt-1">نظام إدارة المشتريات والمدفوعات</p>
         </div>
 

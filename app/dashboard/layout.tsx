@@ -137,8 +137,21 @@ function Shell({ children }: { children: React.ReactNode }) {
 
   const Brand = ({ collapsed }: { collapsed: boolean }) => (
     <div className={cx('flex items-center gap-2.5 px-4 h-16 border-b border-white/[.08] shrink-0', collapsed && 'justify-center px-0')}>
-      <div className="w-9 h-9 rounded-lg bg-brand-600 text-white flex items-center justify-center font-extrabold shrink-0">U</div>
-      {!collapsed && <div><p className="font-bold text-white leading-tight">{t('app.name')}</p><p className="text-[11px] text-slate-400">PMS</p></div>}
+      {/*
+       * الشعار الرسمي — مستخرَجٌ من umeshipping.com بألوانه الثلاثة.
+       *
+       * حرف «U» في مربّعٍ أزرق كان نائباً عن شعارٍ غائب. وعلى الخلفية الكحلية
+       * تُقلَب حروف الشعار إلى الأبيض وتبقى العلامة بخضرتها — وهي المعالجة
+       * المعتادة للشعار على أرضيةٍ داكنة. والمطويّة تأخذ العلامة وحدها.
+       */}
+      {collapsed ? (
+        <img src="/ume-mark-light.svg" alt={t('app.name')} className="w-9 h-9 shrink-0" />
+      ) : (
+        <>
+          <img src="/ume-logo-light.svg" alt={t('app.name')} className="h-7 w-auto shrink-0" />
+          <span className="text-[11px] text-slate-400 self-end pb-0.5">PMS</span>
+        </>
+      )}
     </div>
   );
 
