@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import api from '@/lib/api';
+import CustomerStatement from './CustomerStatement';
 import { CURRENCIES } from '@/lib/currencies';
 import { TableSkeleton } from '@/components/ui';
 
@@ -69,6 +70,8 @@ export default function HireInvoicesPage() {
   const [filterStatus, setFilterStatus] = useState('');
   const [docFilter, setDocFilter] = useState('');
   const [search, setSearch] = useState('');
+  const [filterVessel, setFilterVessel] = useState('');
+  const [showStmt, setShowStmt] = useState(false);
 
   // التحميل حالة ثالثة — «لا توجد مستندات» أثناء الجلب نفيٌ قاطع في غير موضعه.
   const [listLoading, setListLoading] = useState(true);
@@ -429,6 +432,7 @@ export default function HireInvoicesPage() {
   const displayed = invoices.filter((i) =>
     (!filterStatus || i.status === filterStatus) &&
     (!docFilter || (i.doc_type || 'invoice') === docFilter) &&
+    (!filterVessel || i.vessel?.id === filterVessel) &&
     (!q ||
       (i.customer?.name || '').toLowerCase().includes(q) ||
       (i.vessel?.name || '').toLowerCase().includes(q) ||
@@ -443,6 +447,7 @@ export default function HireInvoicesPage() {
           <button onClick={() => openAdd('invoice')} className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">+ فاتورة إيجار جديدة</button>
           <button onClick={() => openAdd('credit_note')} className="bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700">+ إشعار دائن</button>
           <button onClick={() => openAdd('debit_note')} className="bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700">+ إشعار مدين</button>
+          <button onClick={() => setShowStmt(true)} className="bg-slate-700 text-white px-4 py-2 rounded-lg hover:bg-slate-800">📄 كشف حساب عميل</button>
         </div>
       </div>
 
@@ -453,6 +458,19 @@ export default function HireInvoicesPage() {
           className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
         {search && (
           <button onClick={() => setSearch('')} className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-sm">✕</button>
+        )}
+      </div>
+
+      {/* Vessel filter — يعمل مع البحث لا بدلاً منه */}
+      <div className="mb-3 flex items-center gap-2">
+        <label className="text-sm text-gray-600">المركب:</label>
+        <select value={filterVessel} onChange={(e) => setFilterVessel(e.target.value)}
+          className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm">
+          <option value="">كل المراكب</option>
+          {vessels.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
+        </select>
+        {filterVessel && (
+          <button onClick={() => setFilterVessel('')} className="text-xs text-gray-400 hover:text-gray-600">✕ إلغاء</button>
         )}
       </div>
 
@@ -552,6 +570,13 @@ export default function HireInvoicesPage() {
       </div>
 
       {/* Add/Edit Modal */}
+      {showStmt && (
+        <CustomerStatement
+          docs={invoices as any} customers={customers} vessels={vessels}
+          onClose={() => setShowStmt(false)}
+        />
+      )}
+
       {showModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-3xl max-h-[95vh] overflow-y-auto">
