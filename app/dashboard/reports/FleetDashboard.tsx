@@ -185,14 +185,13 @@ export default function FleetDashboard() {
     <div className="space-y-5" dir="rtl">
       {/* ── رأس اللوحة (Hero) ── */}
       <div className="relative overflow-hidden rounded-2xl shadow-lg text-white p-5"
-        style={{ background: 'linear-gradient(120deg,#312e81 0%,#4f46e5 45%,#2563eb 100%)' }}>
-        <div className="absolute -top-16 -left-16 w-64 h-64 rounded-full opacity-20" style={{ background: 'radial-gradient(circle,#a5b4fc,transparent 70%)' }} />
+        style={{ background: '#00283A' }}>
         <div className="relative flex items-start justify-between flex-wrap gap-3">
           <div>
-            <h2 className="text-2xl font-extrabold flex items-center gap-2 tracking-tight">🚢 لوحة الأسطول التنفيذية</h2>
+            <h2 className="text-2xl font-extrabold tracking-tight">لوحة الأسطول التنفيذية</h2>
             <div className="flex items-center gap-2 mt-2 text-xs">
-              <span className="inline-flex items-center gap-1.5 bg-emerald-400/20 text-emerald-100 px-2 py-0.5 rounded-full">
-                <span className="relative flex h-2 w-2"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-300 opacity-75" /><span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-300" /></span>
+              <span className="inline-flex items-center gap-1.5 bg-[#3D8A67]/30 text-[#A7CFB9] px-2 py-0.5 rounded-full">
+                <span className="relative flex h-2 w-2"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#6EB08B] opacity-75" /><span className="relative inline-flex rounded-full h-2 w-2 bg-[#6EB08B]" /></span>
                 مباشر من جوجل شيت
               </span>
               <span className="opacity-75">آخر تحديث: {new Date(data.generatedAt).toLocaleString('ar-EG', { dateStyle: 'medium', timeStyle: 'short' })}</span>

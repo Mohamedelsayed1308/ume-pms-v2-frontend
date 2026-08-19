@@ -111,7 +111,12 @@ function DraftGauge({ name, value, share, avgShare, money, isTop }: {
         {isTop && <rect x="8" y="4" width="44" height="96" fill="none" stroke={TOKENS.orange} strokeWidth="0" />}
       </svg>
       <div className="text-center leading-tight">
-        <div className="text-[10.5px] tracking-wide" style={{ fontFamily: 'var(--font-brand)', fontWeight: 800, letterSpacing: '-0.02em', color: TOKENS.navy }}>
+        <div className="text-[10.5px] tracking-wide" style={{
+          /* اسم المركب قد يحمل عربية («AMAL — جدة/سواكن») و Inter Tight بلا حروف
+             عربية، فيُردَف بـPlex ليسقط عليه المحرف العربي بدل خطٍّ عشوائي */
+          fontFamily: 'var(--font-brand), var(--font-plex)',
+          fontWeight: 800, letterSpacing: '-0.02em', color: TOKENS.navy,
+        }}>
           {name}
         </div>
         <div className="text-[11px] tabular-nums" style={{ color: above ? TOKENS.navy : TOKENS.slate, fontWeight: above ? 700 : 400 }}>
