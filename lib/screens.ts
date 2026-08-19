@@ -1,4 +1,4 @@
-export type GroupKey = 'overview' | 'procurement' | 'fleet' | 'revenue' | 'finance' | 'sivamar_qb' | 'operations' | 'admin';
+export type GroupKey = 'overview' | 'procurement' | 'revenue' | 'fleet' | 'sivamar_qb' | 'admin';
 
 export interface Screen {
   href: string;
@@ -18,15 +18,22 @@ export interface Screen {
   hidden?: boolean;
 }
 
-// ترتيب مجموعات التنقّل + مفاتيح الترجمة
+/*
+ * ترتيب مجموعات التنقّل.
+ *
+ * ست مجموعات لا ثمان: كانت «المالية والرقابة» تحمل شاشةً واحدة و«العمليات»
+ * شاشةً واحدة — وعنوانُ مجموعةٍ فوق سطرٍ واحد ضجيجٌ خالص، يُطيل القائمة ولا
+ * يُنظّمها. فوُزّعت شاشتاهما على مجموعتين قائمتين تنتميان إليهما فعلاً.
+ *
+ * والترتيب يتبع دورة المال: ما ندفعه، ثم ما نقبضه، ثم الأصل الذي يُنتجهما،
+ * ثم الدفتر الذي يُسجّلهما، ثم ما يُدار به النظام.
+ */
 export const GROUPS: { key: GroupKey; i18nKey: string }[] = [
   { key: 'overview', i18nKey: 'group.overview' },
   { key: 'procurement', i18nKey: 'group.procurement' },
-  { key: 'fleet', i18nKey: 'group.fleet' },
   { key: 'revenue', i18nKey: 'group.revenue' },
-  { key: 'finance', i18nKey: 'group.finance' },
+  { key: 'fleet', i18nKey: 'group.fleet' },
   { key: 'sivamar_qb', i18nKey: 'group.sivamar_qb' },
-  { key: 'operations', i18nKey: 'group.operations' },
   { key: 'admin', i18nKey: 'group.admin' },
 ];
 
@@ -36,43 +43,58 @@ export const SCREENS: Screen[] = [
   { href: '/dashboard/reports', label: 'التقارير', icon: '📊', iconName: 'chart', group: 'overview' },
   { href: '/dashboard/ask-ume', label: 'اسأل UME', icon: '🤖', iconName: 'sparkle', group: 'overview', always: true },
 
+  /*
+   * دورة الشراء بترتيبها الواقعي: مورّد ← أمر شراء ← استلام ← فاتورة ← بنودها ← سداد.
+   *
+   * الترتيب هنا معلومة لا تنسيق: من يفتح القائمة يقرأ المسار الذي يسلكه المستند
+   * فعلاً. و«تأكيد الاستلام» كان في مجموعة المحاسبة — وهو حلقةٌ في هذه السلسلة
+   * لا في الدفتر، فعاد إلى موضعه.
+   */
   { href: '/dashboard/suppliers', label: 'الموردين', icon: '🏭', iconName: 'factory', group: 'procurement' },
   { href: '/dashboard/purchase-orders', label: 'أوامر الشراء', icon: '📋', iconName: 'clipboard', group: 'procurement' },
+  { href: '/dashboard/receipts', label: 'تأكيد الاستلام', icon: '📦', iconName: 'check', group: 'procurement' },
   { href: '/dashboard/invoices', label: 'الفواتير', icon: '🧾', iconName: 'receipt', group: 'procurement' },
   { href: '/dashboard/items', label: 'بنود الفواتير', icon: '🏷️', iconName: 'tag', group: 'procurement' },
   { href: '/dashboard/payments', label: 'المدفوعات', icon: '💳', iconName: 'card', group: 'procurement' },
 
-  { href: '/dashboard/vessels', label: 'السفن', icon: '🚢', iconName: 'ship', group: 'fleet' },
-  { href: '/dashboard/market', label: 'تحليل السوق الملاحي', icon: '📈', iconName: 'chart', group: 'fleet' },
-
+  // ودورة القبض بترتيبها: عميل ← شركة الشحن ← ما يُفوتر عليه
   { href: '/dashboard/customers', label: 'العملاء', icon: '🤝', iconName: 'users', group: 'revenue' },
-  { href: '/dashboard/hire-invoices', label: 'فواتير الإيجار', icon: '🚢💰', iconName: 'file', group: 'revenue' },
   { href: '/dashboard/shipping-companies', label: 'شركات الشحن', icon: '🏢', iconName: 'building', group: 'revenue' },
+  { href: '/dashboard/hire-invoices', label: 'فواتير الإيجار', icon: '🚢💰', iconName: 'file', group: 'revenue' },
   { href: '/dashboard/management-invoices', label: 'فواتير الإدارة', icon: '📄', iconName: 'file', group: 'revenue' },
 
-  { href: '/dashboard/profit-distribution', label: 'توزيع الأرباح', icon: '💰', iconName: 'coins', group: 'finance' },
-
-  { href: '/dashboard/tasks', label: 'مهام الفريق', icon: '✅', iconName: 'check', group: 'operations' },
-
-  { href: '/dashboard/users', label: 'الصلاحيات', icon: '🔐', iconName: 'shield', group: 'admin', adminOnly: true },
-  { href: '/dashboard/audit', label: 'تدقيق السلامة المالية', icon: '🛡️', iconName: 'shield', group: 'admin', adminOnly: true },
+  /*
+   * الأسطول: الأصل وما يُقاس به.
+   * و«توزيع الأرباح» يقسم أرباح رحلات المراكب بين الشريكين — فمكانه هنا لا في
+   * مجموعةٍ ماليةٍ لا تحمل غيره.
+   */
+  { href: '/dashboard/vessels', label: 'السفن', icon: '🚢', iconName: 'ship', group: 'fleet' },
+  { href: '/dashboard/profit-distribution', label: 'توزيع الأرباح', icon: '💰', iconName: 'coins', group: 'fleet' },
+  { href: '/dashboard/market', label: 'تحليل السوق الملاحي', icon: '📈', iconName: 'chart', group: 'fleet' },
 
   // ── المحاسبة · P1.1A ──
   // لا تُمنح لأحد تلقائياً: لا `always` ولا تعديل على allowed_screens لأي مستخدم.
   // الفصل بين الواجبات هنا: مُعِدّ القيد (journals) ≠ مُرحِّله (posting).
   //
-  // `accounting` و `receipts` لهما صفحتان فظهرتا في التنقّل. والثلاث الباقيات
-  // صلاحيات بلا صفحات بعد: `journals` و `posting` تحكمان أزراراً داخل الشاشات
-  // القائمة، و`periods` و`setup` عبر الـAPI حتى تُبنيا. فتبقى `hidden` — الرابط
-  // الذي يؤدي إلى 404 أسوأ من غياب الرابط.
+  // والثلاث المخفيّة صلاحيات بلا صفحات بعد: `journals` و `posting` تحكمان أزراراً
+  // داخل الشاشات القائمة، و`periods` عبر الـAPI حتى تُبنى. فتبقى `hidden` —
+  // الرابط الذي يؤدي إلى 404 أسوأ من غياب الرابط.
   { href: '/dashboard/accounting', label: 'دفتر الأستاذ', icon: '📒', iconName: 'file', group: 'sivamar_qb' },
   { href: '/dashboard/accounting/statements', label: 'القوائم المالية', icon: '📑', iconName: 'chart', group: 'sivamar_qb' },
   { href: '/dashboard/accounting/reports', label: 'تقارير الدفتر', icon: '📊', iconName: 'chart', group: 'sivamar_qb' },
-  { href: '/dashboard/receipts', label: 'تأكيد الاستلام', icon: '📦', iconName: 'check', group: 'sivamar_qb' },
   { href: '/dashboard/accounting/journals', label: 'إعداد القيود', icon: '📝', iconName: 'file', group: 'sivamar_qb', hidden: true },
   { href: '/dashboard/accounting/posting', label: 'ترحيل القيود', icon: '📮', iconName: 'check', group: 'sivamar_qb', hidden: true },
   { href: '/dashboard/accounting/periods', label: 'الفترات المحاسبية', icon: '🗓️', iconName: 'file', group: 'sivamar_qb', hidden: true },
-  { href: '/dashboard/accounting/setup', label: 'إعداد المحاسبة', icon: '⚙️', iconName: 'file', group: 'sivamar_qb' },
+
+  /*
+   * الإدارة والإعدادات — آخر القائمة.
+   * ما يُفتح مرّةً كل شهر لا يزاحم ما يُفتح كل يوم. و«إعداد المحاسبة» شاشة ضبطٍ
+   * كانت تجلس بين شاشات العمل اليومي في الدفتر.
+   */
+  { href: '/dashboard/tasks', label: 'مهام الفريق', icon: '✅', iconName: 'check', group: 'admin' },
+  { href: '/dashboard/accounting/setup', label: 'إعداد المحاسبة', icon: '⚙️', iconName: 'file', group: 'admin' },
+  { href: '/dashboard/users', label: 'الصلاحيات', icon: '🔐', iconName: 'shield', group: 'admin', adminOnly: true },
+  { href: '/dashboard/audit', label: 'تدقيق السلامة المالية', icon: '🛡️', iconName: 'shield', group: 'admin', adminOnly: true },
 ];
 
 // الشاشات التي يمكن منحها/منعها في شاشة الصلاحيات (استبعاد الرئيسية والأدمن-فقط)
