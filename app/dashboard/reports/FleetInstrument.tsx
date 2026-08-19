@@ -198,20 +198,21 @@ export default function FleetInstrument({
               <span className="text-[10px] ms-1" style={{ color: TOKENS.slate }}>عن الفترة السابقة</span>
             </div>
           )}
-          {/* اختيار المؤشّر — نصٌّ لا أيقونات */}
-          <div className="ms-auto flex flex-wrap gap-1 pb-1">
-            {metrics.map((m) => (
-              <button key={m.key} onClick={() => setMetric(m.key)}
-                aria-pressed={m.key === metric}
-                className="text-[11px] px-2.5 py-1 rounded-sm border transition-colors cursor-pointer focus:outline-none focus-visible:ring-2"
-                style={{
-                  borderColor: m.key === metric ? TOKENS.navy : '#CBD5DC',
-                  background: m.key === metric ? TOKENS.navy : 'transparent',
-                  color: m.key === metric ? '#fff' : TOKENS.slate,
-                }}>
-                {m.label}
-              </button>
-            ))}
+          {/*
+            * المؤشّر يُطوى في قائمة.
+            *
+            * كان ثمانية أزرارٍ تحت الرقم مباشرةً فتُزاحم الأطروحة: العين تمسح
+            * ثمانية خياراتٍ قبل أن تستقرّ على الرقم الذي جاءت من أجله. والقائمة
+            * تُبقي الخيار متاحاً وتُخرجه من مسار النظر.
+            */}
+          <div className="ms-auto pb-1">
+            <label htmlFor="fi-metric" className="block text-[10px] tracking-[0.14em] uppercase mb-1"
+              style={{ color: TOKENS.slate }}>المؤشّر</label>
+            <select id="fi-metric" value={metric} onChange={(e) => setMetric(e.target.value)}
+              className="text-[12px] px-2.5 py-1.5 rounded-sm border cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1"
+              style={{ borderColor: TOKENS.mist, background: '#fff', color: TOKENS.navy }}>
+              {metrics.map((m) => <option key={m.key} value={m.key}>{m.label}</option>)}
+            </select>
           </div>
         </div>
 
