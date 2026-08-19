@@ -72,7 +72,14 @@ const CSS = `
   body * { visibility: hidden !important; }
   #vf-doc, #vf-doc * { visibility: visible !important; }
   #vf-doc { position: absolute; left:0; top:0; width:100%; }
-  .vf-break { break-before: page; page-break-before: always; }
+  /*
+   * لا فاصل صفحةٍ قسري.
+   *
+   * كان كل ملحقٍ يبدأ ورقةً جديدة مهما قصُر، فخرج التقرير سبع ورقاتٍ كلٌّ منها
+   * ممتلئةٌ إلى ثُلثها. والمستند المالي يُقرأ متّصلاً: تُمنع الجداول من الانشطار
+   * ويُمنع العنوان أن ينفصل عمّا تحته، ثم يقع الفاصل حيث تنتهي الورقة فعلاً.
+   */
+  #vf-doc .vf-sec { break-inside: auto; }
   /*
    * الخلفيات تُطبع.
    *
@@ -189,13 +196,13 @@ export default function VesselFinReport({
 
   const maxNet = Math.max(...allocVoy.map((v) => Math.abs(v.net)), 1);
 
-  const Head = ({ page }: { page: string }) => (
+  const Head = () => (
     <div className="dh">
       <div className="brand">UME <span>Holding</span><small>MARITIME · PMS</small></div>
       <div className="meta">
         <div>المركب: <b>{cfg.vessel}</b></div>
         <div>الفترة: <b>{monthLabel}</b></div>
-        <div>عدد الرحلات: <b>{data.count}</b> · العملة: <b>USD</b> · {page}</div>
+        <div>عدد الرحلات: <b>{data.count}</b> · العملة: <b>USD</b></div>
       </div>
     </div>
   );
@@ -218,9 +225,8 @@ export default function VesselFinReport({
 
       <div className="max-w-4xl mx-auto my-5 bg-white shadow-xl print:shadow-none print:my-0 print:max-w-none">
         <div id="vf-doc" dir="rtl" className="p-6 print:p-0">
+          <Head />
 
-          {/* ── ص١ · قائمة الدخل المتدرّجة ── */}
-          <Head page="١/٦" />
           <h2>قائمة الدخل — من الإيراد إلى صافي الربح</h2>
           <table className="pl">
             <tbody>
@@ -301,8 +307,7 @@ export default function VesselFinReport({
           )}
 
           {/* ── ص٢ · ملحق ١ و٢ ── */}
-          <div className="vf-break">
-            <Head page="٢/٦" />
+          <div className="vf-sec">
             <h2>ملحق ١ · الإيرادات</h2>
             <table>
               <thead><tr>
@@ -368,8 +373,7 @@ export default function VesselFinReport({
           </div>
 
           {/* ── ص٣ · ملحق ٣ و٤ ── */}
-          <div className="vf-break">
-            <Head page="٣/٦" />
+          <div className="vf-sec">
             <h2>ملحق ٣ · مصروفات الوكلاء</h2>
             <div className="cols">
               <div>
@@ -435,8 +439,7 @@ export default function VesselFinReport({
           </div>
 
           {/* ── ص٤ · ملحق ٥ · المشتريات ── */}
-          <div className="vf-break">
-            <Head page="٤/٦" />
+          <div className="vf-sec">
             <h2>ملحق ٥ · المشتريات</h2>
             <h3>الإجمالي حسب البند</h3>
             <table>
@@ -484,8 +487,7 @@ export default function VesselFinReport({
           </div>
 
           {/* ── ص٥ · التحليل ── */}
-          <div className="vf-break">
-            <Head page="٥/٦" />
+          <div className="vf-sec">
             <h2>التحليل</h2>
 
             <h3>هيكل التكاليف</h3>
