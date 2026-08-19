@@ -6,6 +6,7 @@ import { useInitialQuery } from '@/lib/useInitialQuery';
 import { useI18n } from '@/lib/i18n';
 import { Card, Button, Badge, Input, Field, Select, Modal, Drawer, Skeleton, EmptyState, Icon, useToast, cx } from '@/components/ui';
 import { fmtNum, fmtMoney, fmtMoneyC, ccyEntries, n0 } from '@/lib/format';
+import { vesselPhoto } from '@/lib/vesselPhoto';
 
 interface Vessel { id: string; name: string; imo_number: string; flag: string; vessel_type: string; is_active: boolean; shipping_company_id: string; owner_name: string; owner_address: string; shipping_company?: { id: string; name: string }; }
 const empty = { name: '', imo_number: '', flag: '', vessel_type: '', is_active: true, shipping_company_id: '', owner_name: '', owner_address: '' };
@@ -192,7 +193,15 @@ export default function VesselsPage() {
               <tbody>
                 {list.map((v) => { const st = stats[v.id] || emptyStat(); return (
                   <tr key={v.id} onClick={() => setDetail(v)} className="border-b border-gray-50 last:border-0 hover:bg-brand-50/40 cursor-pointer">
-                    <td className="py-2.5 px-4 font-medium text-gray-800" dir="auto">{v.name}{v.imo_number ? <span className="block text-[11px] text-gray-400 font-normal">IMO {v.imo_number}</span> : null}</td>
+                    <td className="py-2.5 px-4 font-medium text-gray-800" dir="auto">
+                      <div className="flex items-center gap-2.5">
+                        {/* الصورة تسبق الاسم: المركب يُعرف برؤيته قبل قراءته */}
+                        {vesselPhoto(v.name)
+                          ? <img src={vesselPhoto(v.name)!} alt="" aria-hidden className="w-12 h-8 rounded object-cover shrink-0 ring-1 ring-black/5" loading="lazy" />
+                          : <span className="w-12 h-8 rounded shrink-0 bg-slate-100 ring-1 ring-black/5" aria-hidden />}
+                        <span>{v.name}{v.imo_number ? <span className="block text-[11px] text-gray-400 font-normal">IMO {v.imo_number}</span> : null}</span>
+                      </div>
+                    </td>
                     <td className="py-2.5 px-4 text-gray-500">{v.vessel_type || '—'}</td>
                     <td className="py-2.5 px-4 text-gray-500 whitespace-normal break-words max-w-[15rem]" dir="auto">{v.shipping_company?.name || v.owner_name || '—'}</td>
                     <td className="py-2.5 px-4"><OutCell open={st.open} /></td>
@@ -213,7 +222,11 @@ export default function VesselsPage() {
 
           <div className="lg:hidden grid grid-cols-1 sm:grid-cols-2 gap-3">
             {list.map((v) => { const st = stats[v.id] || emptyStat(); return (
-              <Card key={v.id} className="p-4" onClick={() => setDetail(v)}>
+              <Card key={v.id} className="p-0 overflow-hidden" onClick={() => setDetail(v)}>
+                {vesselPhoto(v.name) && (
+                  <img src={vesselPhoto(v.name)!} alt="" aria-hidden className="w-full h-28 object-cover" loading="lazy" />
+                )}
+                <div className="p-4">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0"><p className="font-bold text-gray-800 break-words" dir="auto">{v.name}</p><p className="text-xs text-gray-500 truncate">{v.vessel_type || '—'}{v.flag ? ` · ${v.flag}` : ''}</p></div>
                   <Badge tone={v.is_active ? 'success' : 'neutral'}>{v.is_active ? t('ves.active') : t('ves.inactive')}</Badge>
@@ -221,6 +234,7 @@ export default function VesselsPage() {
                 <div className="flex items-center justify-between mt-3 text-xs">
                   <span className="text-gray-500">{t('ves.invoices')}: <span className="tabular-nums text-gray-700">{st.count || 0}</span></span>
                   <OutCell open={st.open} />
+                </div>
                 </div>
               </Card>
             ); })}
@@ -238,6 +252,11 @@ export default function VesselsPage() {
           const rp = [...st.recentPay].sort((a, b) => +new Date(b.payment_date) - +new Date(a.payment_date)).slice(0, 5);
           return (
             <div className="space-y-5">
+              {vesselPhoto(detail.name) && (
+                /* في لوح التفاصيل تُعرض الصورة كاملةً — هنا يقف المستخدم ليقرأ */
+                <img src={vesselPhoto(detail.name)!} alt={detail.name}
+                  className="w-full h-40 object-cover rounded-xl ring-1 ring-black/5" />
+              )}
               <div>
                 <h4 className="text-xs font-semibold text-gray-400 uppercase mb-2">{t('ves.identity')}</h4>
                 <div className="grid grid-cols-2 gap-2">
