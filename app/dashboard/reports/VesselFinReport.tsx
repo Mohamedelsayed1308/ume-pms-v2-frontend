@@ -73,6 +73,16 @@ const CSS = `
   #vf-doc, #vf-doc * { visibility: visible !important; }
   #vf-doc { position: absolute; left:0; top:0; width:100%; }
   .vf-break { break-before: page; page-break-before: always; }
+  /*
+   * الخلفيات تُطبع.
+   *
+   * المتصفّح يُسقط ألوان الخلفية افتراضياً عند التوليد إلى PDF. فتخرج ترويسات
+   * الجداول الكحلية وسطر الصافي الأخضر وصفوف المجاميع بيضاء، ويصير المستند على
+   * الورق شيئاً آخر غير الذي يُرى على الشاشة. وهذه القاعدة تُلزمه بطباعتها.
+   */
+  #vf-doc, #vf-doc * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+  #vf-doc tr, #vf-doc .note { break-inside: avoid; page-break-inside: avoid; }
+  #vf-doc h2, #vf-doc h3 { break-after: avoid; page-break-after: avoid; }
 }
 #vf-doc { color:#0f172a; font-size:9pt; line-height:1.45; background:#fff; }
 #vf-doc .dh { display:flex; align-items:center; justify-content:space-between;
@@ -116,6 +126,16 @@ const CSS = `
 #vf-doc .foot { margin-top:14px; border-top:.75pt solid #cbd5e1; padding-top:6px;
   font-size:7.5pt; color:#94a3b8; display:flex; justify-content:space-between; }
 #vf-doc table, #vf-doc .cols, #vf-doc .dn { page-break-inside:avoid; break-inside:avoid; }
+/*
+ * الجداول التي يطول صفّها بطول الشهر تُكسَر ويتكرّر عنوانها.
+ *
+ * منعُ الكسر يدفع الجدول كلّه إلى الورقة التالية فتُترك نصف صفحةٍ بيضاء —
+ * وجدول الفواتير وربحية الرحلات يفعلانها كلّما زادت رحلات الشهر أو فواتيره.
+ * والصفّ يبقى غير قابلٍ للكسر فلا ينشطر رقمٌ عن سطره.
+ */
+#vf-doc table.long { page-break-inside:auto; break-inside:auto; }
+#vf-doc table.long thead { display:table-header-group; }
+#vf-doc table.long tr { page-break-inside:avoid; break-inside:avoid; }
 `;
 
 export default function VesselFinReport({
@@ -435,7 +455,7 @@ export default function VesselFinReport({
               والفاتورة متعددة البنود تظهر تحت كل بندٍ بحصّته منها لا بكامل قسطها.
             </div>
             {grouped.length ? grouped.map((g) => (
-              <table key={g.name}>
+              <table className="long" key={g.name}>
                 <thead><tr>
                   <th scope="col" colSpan={4}>{g.name}</th>
                   <th scope="col" style={{ textAlign: 'left' }}>{fmt(g.value)}</th>
@@ -502,7 +522,7 @@ export default function VesselFinReport({
             {showVoy && allocVoy.length > 0 && (
               <>
                 <h3>ربحية كل رحلة — بعد توزيع البنكر والمرتبات والمشتريات</h3>
-                <table>
+                <table className="long">
                   <thead><tr>
                     <th scope="col">الرحلة</th><th scope="col">الإيراد</th>
                     <th scope="col">الصافي بعد التوزيع</th><th scope="col">هامش</th>
