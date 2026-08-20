@@ -210,7 +210,18 @@ export default function HireInvoicesPage() {
       if ((field === 'days' || field === 'daily_hire') && newIt.days && newIt.daily_hire) {
         newIt.amount = String(parseFloat(newIt.days) * parseFloat(newIt.daily_hire));
       }
-      if (field === 'days' && idx === 0 && vessel) {
+      /*
+       * الوصف يتبع الأيام المُدخَلة — في كل بند لا في الأول وحده.
+       *
+       * كان مقصوراً على `idx === 0`، فبندٌ ثانٍ تُغيَّر أيامه يبقى وصفه يقول
+       * العدد القديم: «Hire for 15 Days» فوق سطرٍ أيامه أربعة عشر. والمستند
+       * يُرسَل إلى العميل برقمين متناقضين في السطر الواحد.
+       *
+       * والشرط الثاني يحمي ما كتبتَه بيدك: إن كان الوصف معدَّلاً يدوياً — أي
+       * لا يساوي ما يولّده النظام من الأيام السابقة — فلا يُمسّ. النظام يقرأ
+       * المُدخَل ولا يكتب فوقه.
+       */
+      if (field === 'days' && vessel) {
         const autoDesc = buildItemDesc(vessel, val);
         if (!it.description || it.description === buildItemDesc(vessel, it.days)) {
           newIt.description = autoDesc;
