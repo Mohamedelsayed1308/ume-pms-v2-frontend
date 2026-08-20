@@ -50,6 +50,22 @@ function bankInfo(company: any, currency: string): { iban: string; label: string
   return { iban: company.iban_eur || '', label: 'EURO' };
 }
 
+/**
+ * تاريخٌ يُعرض كما خُزّن — بلا تحويل منطقةٍ زمنية.
+ *
+ * `hire_to` يُحفظ عند 23:59 بتوقيت UTC. و`new Date(x).toLocaleDateString()` يحوّله
+ * إلى توقيت متصفّح القارئ، فيصير 02:59 من اليوم التالي في القاهرة والرياض
+ * وستوكهولم — **ويقفز التاريخ يوماً كاملاً**. فيقرأ المستخدم في النموذج 29 وفي
+ * الفاتورة 30، والفاتورة هي التي تُرسَل إلى العميل.
+ *
+ * وفترة الإيجار عقدٌ لا لحظة: يومها هو اليوم الذي كُتب في العقد أياً كان مكان
+ * من يقرؤه. فيُقتطع من النصّ كما يفعل النموذج، ولا يُبنى منه كائن تاريخ أصلاً.
+ */
+function dmy(d?: string | null): string {
+  const m = String(d || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m ? `${m[3]}-${m[2]}-${m[1]}` : '—';
+}
+
 function fmt(n: number) { return Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 
 export default function HireInvoicesPage() {
@@ -348,7 +364,7 @@ export default function HireInvoicesPage() {
     doc.text(inv.customer?.vat_no ? `VAT NO  ${inv.customer.vat_no}` : 'VAT NO', M + 3, vatY);
 
     // ── Charter party header table (only columns that have data; Vessel always) ─
-    const fmtDate = (d: string | undefined) => d ? new Date(d).toLocaleDateString('en-GB').replace(/\//g, '-') : '—';
+    const fmtDate = dmy;
     const chCols: { h: string; v: string }[] = [];
     if (inv.place_of_business) chCols.push({ h: 'Place of Business', v: inv.place_of_business });
     if (inv.cp_date)          chCols.push({ h: 'CP Date', v: inv.cp_date.slice(0, 10) });
@@ -530,9 +546,9 @@ export default function HireInvoicesPage() {
                 <td className="px-4 py-3">{inv.customer?.name}</td>
                 <td className="px-4 py-3">{inv.vessel?.name}</td>
                 <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">
-                  {inv.hire_from ? new Date(inv.hire_from).toLocaleDateString('en-GB').replace(/\//g,'-') : '—'}
+                  {dmy(inv.hire_from)}
                   <span className="mx-1 text-gray-300">→</span>
-                  {inv.hire_to ? new Date(inv.hire_to).toLocaleDateString('en-GB').replace(/\//g,'-') : '—'}
+                  {dmy(inv.hire_to)}
                 </td>
                 <td className="px-4 py-3 font-medium">
                   {isNote && (dt === 'credit_note' ? '−' : '+')}{fmt(+inv.total_amount)} {inv.currency}
@@ -827,8 +843,8 @@ export default function HireInvoicesPage() {
                   const cells: { h: string; body: any }[] = [];
                   if (previewInv.place_of_business) cells.push({ h: 'Place of Business', body: previewInv.place_of_business });
                   if (previewInv.cp_date) cells.push({ h: 'CP Date', body: previewInv.cp_date.slice(0,10) });
-                  if (previewInv.hire_from) cells.push({ h: 'Hire From', body: <>{new Date(previewInv.hire_from).toLocaleDateString('en-GB').replace(/\//g,'-')}<br/><span className="text-gray-400 text-[10px]">UTC 00:00</span></> });
-                  if (previewInv.hire_to) cells.push({ h: 'Hire To', body: <>{new Date(previewInv.hire_to).toLocaleDateString('en-GB').replace(/\//g,'-')}<br/><span className="text-gray-400 text-[10px]">UTC 23:59</span></> });
+                  if (previewInv.hire_from) cells.push({ h: 'Hire From', body: <>{dmy(previewInv.hire_from)}<br/><span className="text-gray-400 text-[10px]">UTC 00:00</span></> });
+                  if (previewInv.hire_to) cells.push({ h: 'Hire To', body: <>{dmy(previewInv.hire_to)}<br/><span className="text-gray-400 text-[10px]">UTC 23:59</span></> });
                   cells.push({ h: 'Vessel', body: <><span className="font-semibold">{previewInv.vessel?.name}</span><br/><span className="text-gray-400 text-[10px]">IMO:{previewInv.vessel?.imo_number}</span></> });
                   return (
                     <table className="w-full border-collapse text-xs mb-0">
