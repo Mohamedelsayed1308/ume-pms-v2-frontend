@@ -130,8 +130,9 @@ export default function FleetDashboard() {
    * ولاختفى مركبٌ من تحت يده وهو يقارن. والخطّ صفةٌ ثابتة للمركب، والفترة
    * مِرشَحٌ فوقها.
    *
-   * ومركبٌ ترك الخطّ — كدليلة على ضبا/سفاجا — يظهر بصفرٍ داخل فترةٍ لاحقة.
-   * وذلك خبرٌ لا نقص: يقول إنه كان هنا ولم يعد.
+   * ومركبٌ ترك الخطّ — كدليلة على ضبا/سفاجا — تبقى رقيقته ظاهرة، لكنّها
+   * تُوسَم «بلا رحلات» فيُعرف أنه على الخطّ ولم يُبحر في هذه المدّة. فلا
+   * يختفي من تحت اليد، ولا يُخلط صفرُ الغياب بصفر الرقم.
    */
   const vesselsOfLines = useMemo(() => {
     const rows = data?.monthly || [];
@@ -141,16 +142,28 @@ export default function FleetDashboard() {
     return [...new Set(scoped.map((r) => r.vessel))].sort();
   }, [data, selLines]);
 
+  /**
+   * مراكب الخطّ التي أبحرت فعلاً داخل الفترة.
+   *
+   * ما عداها يظهر باهتاً وخارج الاختيار — لأن اختياره لا يضيف رقماً، وإبقاؤه
+   * مختاراً يجعل عدّاد «المراكب» يعِد بما لا يُرى في الأرقام.
+   */
+  const vesselsWithData = useMemo(() => {
+    const rows = data?.monthly || [];
+    const scoped = rows.filter((r) => inRange(r.month) && lineOk(r) && (r.voyages || r.revenue || r.net));
+    return new Set(scoped.map((r) => r.vessel));
+  }, [data, lo, hi, selLines]);
+
   /*
-   * تغيير الخطّ يُعيد ضبط المراكب المختارة على مراكبه.
+   * تغيير الخطّ أو الفترة يُعيد ضبط المراكب المختارة على مَن أبحر منها.
    *
    * وإلا بقي مركبٌ من خطٍّ آخر مختاراً بلا رقيقةٍ تُريه، فيؤثّر في الأرقام
    * ولا يُفسّرها شيء على الشاشة — رقمٌ يُحسب ولا يُرى.
    */
   useEffect(() => {
     if (!data) return;
-    setSelVessels(vesselsOfLines);
-  }, [data, vesselsOfLines]);
+    setSelVessels(vesselsOfLines.filter((v) => vesselsWithData.has(v)));
+  }, [data, vesselsOfLines, vesselsWithData]);
 
   const rows = useMemo(
     () => (data?.monthly || []).filter((r) => inRange(r.month) && selVessels.includes(r.vessel) && lineOk(r)),
@@ -342,13 +355,24 @@ export default function FleetDashboard() {
           )}
           <div className="flex-1 min-w-[220px]">
             <div className="flex items-center justify-between mb-1">
-              <label className="text-[11px] opacity-75">المراكب ({selVessels.length}/{vesselsOfLines.length})</label>
-              <button onClick={() => setSelVessels(vesselsOfLines)} className="text-[11px] underline opacity-80 hover:opacity-100">تحديد الكل</button>
+              <label className="text-[11px] opacity-75">
+                المراكب ({selVessels.length}/{vesselsOfLines.filter((v) => vesselsWithData.has(v)).length})
+              </label>
+              <button
+                onClick={() => setSelVessels(vesselsOfLines.filter((v) => vesselsWithData.has(v)))}
+                className="text-[11px] underline opacity-80 hover:opacity-100">تحديد الكل</button>
             </div>
             <div className="flex flex-wrap gap-1.5">
-              {/* الرقائق تتبع الخطّ المختار — فما يُعرض هو ما يُحسب */}
+              {/*
+                * الرقائق تتبع الخطّ المختار — فما يُعرض هو ما يُحسب.
+                *
+                * ومركبٌ على الخطّ بلا رحلاتٍ في الفترة يبقى ظاهراً باهتاً
+                * ومعطَّلاً: لا يختفي فتظنّه ليس على الخطّ، ولا يُنقر فيُضيف
+                * صفراً إلى العدّاد بلا أن يُضيف رقماً.
+                */}
               {vesselsOfLines.map((v) => {
-                const on = selVessels.includes(v);
+                const has = vesselsWithData.has(v);
+                const on = has && selVessels.includes(v);
                 /*
                  * اللون من ترتيب المركب في الأسطول كلّه — لا في قائمة الخطّ.
                  *
@@ -358,7 +382,9 @@ export default function FleetDashboard() {
                  */
                 const c = VESSEL_COLORS[Math.max(0, data.vessels.indexOf(v)) % VESSEL_COLORS.length];
                 return (
-                  <button key={v} onClick={() => toggleVessel(v)} className={CHIP(on)}>
+                  <button key={v} onClick={() => has && toggleVessel(v)} disabled={!has}
+                    title={has ? undefined : 'على هذا الخطّ — بلا رحلات في الفترة المختارة'}
+                    className={`${CHIP(on)}${has ? '' : ' opacity-40 cursor-not-allowed line-through decoration-white/40'}`}>
                     {/*
                       * النقطة مفتاحُ ألوانٍ لا زينة: في العرض الكلاسيكي تُطابق لون
                       * المركب في المخطّط، وفي «الغاطس» لا مخطّط ملوّن أصلاً — فتصير
