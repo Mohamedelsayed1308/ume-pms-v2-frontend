@@ -62,6 +62,19 @@ const METRICS: { key: MetricKey; label: string; money: boolean; goodUp: boolean;
 
 function sum(rows: MonthRow[], k: MetricKey) { return rows.reduce((s, r) => s + (Number(r[k]) || 0), 0); }
 
+/** حقل الشهر — أبيضُ صراحةً ليُقرأ فوق الرأس الكحليّ. */
+const MONTH_SELECT =
+  'bg-white text-gray-800 rounded-xl px-3 py-2 text-sm shadow-sm ' +
+  'focus:outline-none focus:ring-2 focus:ring-white/60';
+
+/** رقيقة فلتر — مختارةٌ بيضاء، وغيرها شفّافةٌ بحدٍّ باهت. */
+const CHIP = (on: boolean) =>
+  `text-xs px-2.5 py-1 rounded-full border transition-all ${
+    on
+      ? 'bg-white text-gray-800 border-white font-semibold shadow-sm'
+      : 'bg-transparent text-white/70 border-white/30 hover:border-white/60'
+  }`;
+
 export default function FleetDashboard() {
   const [data, setData] = useState<FleetData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -109,6 +122,35 @@ export default function FleetDashboard() {
    * وقبل إعادة بناء التقارير.
    */
   const lineOk = (r: MonthRow) => !selLines.length || selLines.includes(r.line || '');
+
+  /*
+   * مراكب الخطّ المختار — تُشتقّ من الخطّ لا من الفترة.
+   *
+   * فلو اشتُقّت من الفترة أيضاً لاهتزّت الرقائق كلّما حرّك المستخدم التواريخ،
+   * ولاختفى مركبٌ من تحت يده وهو يقارن. والخطّ صفةٌ ثابتة للمركب، والفترة
+   * مِرشَحٌ فوقها.
+   *
+   * ومركبٌ ترك الخطّ — كدليلة على ضبا/سفاجا — يظهر بصفرٍ داخل فترةٍ لاحقة.
+   * وذلك خبرٌ لا نقص: يقول إنه كان هنا ولم يعد.
+   */
+  const vesselsOfLines = useMemo(() => {
+    const rows = data?.monthly || [];
+    const scoped = selLines.length
+      ? rows.filter((r) => selLines.includes(r.line || ''))
+      : rows;
+    return [...new Set(scoped.map((r) => r.vessel))].sort();
+  }, [data, selLines]);
+
+  /*
+   * تغيير الخطّ يُعيد ضبط المراكب المختارة على مراكبه.
+   *
+   * وإلا بقي مركبٌ من خطٍّ آخر مختاراً بلا رقيقةٍ تُريه، فيؤثّر في الأرقام
+   * ولا يُفسّرها شيء على الشاشة — رقمٌ يُحسب ولا يُرى.
+   */
+  useEffect(() => {
+    if (!data) return;
+    setSelVessels(vesselsOfLines);
+  }, [data, vesselsOfLines]);
 
   const rows = useMemo(
     () => (data?.monthly || []).filter((r) => inRange(r.month) && selVessels.includes(r.vessel) && lineOk(r)),
@@ -254,48 +296,69 @@ export default function FleetDashboard() {
         <div className="relative flex items-end gap-3 flex-wrap mt-5">
           <div>
             <label className="block text-[11px] opacity-75 mb-1">من شهر</label>
-            <select value={from} onChange={(e) => setFrom(e.target.value)} className="text-gray-800 rounded-xl px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-white/60">
-              {months.map((m) => <option key={m} value={m}>{monthLabel(m)}</option>)}
+            {/*
+              * الخلفية البيضاء ليست زينة.
+              *
+              * كان الحقل يحمل `text-gray-800` بلا خلفية، و`preflight` يجعل خلفية
+              * العناصر شفّافة — فصار نصٌّ رماديٌّ داكن فوق رأسٍ كحليٍّ داكن،
+              * لا يُقرأ. والرقائق بجواره تُرى لأن فيها `bg-white` صراحةً.
+              */}
+            <select value={from} onChange={(e) => setFrom(e.target.value)} className={MONTH_SELECT}>
+              {months.map((m) => <option key={m} value={m} className="bg-white text-gray-800">{monthLabel(m)}</option>)}
             </select>
           </div>
           <div>
             <label className="block text-[11px] opacity-75 mb-1">إلى شهر</label>
-            <select value={to} onChange={(e) => setTo(e.target.value)} className="text-gray-800 rounded-xl px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-white/60">
-              {months.map((m) => <option key={m} value={m}>{monthLabel(m)}</option>)}
+            <select value={to} onChange={(e) => setTo(e.target.value)} className={MONTH_SELECT}>
+              {months.map((m) => <option key={m} value={m} className="bg-white text-gray-800">{monthLabel(m)}</option>)}
             </select>
           </div>
+          {/*
+            * الخطّ يُختار واحداً في المرّة.
+            *
+            * الضغط على خطٍّ يُظهره وحده ويستبدل سابقه — وهو ما يتوقّعه من يضغط
+            * «جدة/سواكن» ليرى مراكبها. و«الكل» يُعيد الخطوط مجتمعةً للمقارنة.
+            *
+            * وكان الاختيار متعدّداً بالإضافة والطرح، فيبقى خطٌّ آخر مضاءً بلا
+            * أن يُلاحَظ، ويظنّ الناظر أنه يرى خطّاً وهو يرى خطّين.
+            */}
           {(data.lines?.length || 0) > 1 && (
             <div className="min-w-[180px]">
               <div className="flex items-center justify-between mb-1">
-                <label className="text-[11px] opacity-75">الخطوط ({selLines.length}/{data.lines!.length})</label>
-                <button onClick={() => setSelLines(data.lines!)} className="text-[11px] underline opacity-80 hover:opacity-100">الكل</button>
+                <label className="text-[11px] opacity-75">
+                  الخطّ {selLines.length === data.lines!.length ? '· الكل' : `(${selLines.length}/${data.lines!.length})`}
+                </label>
+                <button onClick={() => setSelLines(data.lines!)}
+                  className="text-[11px] underline opacity-80 hover:opacity-100">الكل</button>
               </div>
               <div className="flex flex-wrap gap-1.5">
-                {data.lines!.map((ln) => {
-                  const on = selLines.includes(ln);
-                  return (
-                    <button key={ln}
-                      onClick={() => setSelLines((s) => s.includes(ln) ? (s.length > 1 ? s.filter((x) => x !== ln) : s) : [...s, ln])}
-                      className={`text-xs px-2.5 py-1 rounded-full border transition-all ${on ? 'bg-white text-gray-800 border-white font-semibold shadow-sm' : 'bg-transparent text-white/70 border-white/30 hover:border-white/60'}`}>
-                      {ln}
-                    </button>
-                  );
-                })}
+                {data.lines!.map((ln) => (
+                  <button key={ln} onClick={() => setSelLines([ln])} className={CHIP(selLines.includes(ln))}>
+                    {ln}
+                  </button>
+                ))}
               </div>
             </div>
           )}
           <div className="flex-1 min-w-[220px]">
             <div className="flex items-center justify-between mb-1">
-              <label className="text-[11px] opacity-75">المراكب ({selVessels.length}/{data.vessels.length})</label>
-              <button onClick={() => setSelVessels(data.vessels)} className="text-[11px] underline opacity-80 hover:opacity-100">تحديد الكل</button>
+              <label className="text-[11px] opacity-75">المراكب ({selVessels.length}/{vesselsOfLines.length})</label>
+              <button onClick={() => setSelVessels(vesselsOfLines)} className="text-[11px] underline opacity-80 hover:opacity-100">تحديد الكل</button>
             </div>
             <div className="flex flex-wrap gap-1.5">
-              {data.vessels.map((v, i) => {
+              {/* الرقائق تتبع الخطّ المختار — فما يُعرض هو ما يُحسب */}
+              {vesselsOfLines.map((v) => {
                 const on = selVessels.includes(v);
-                const c = VESSEL_COLORS[i % VESSEL_COLORS.length];
+                /*
+                 * اللون من ترتيب المركب في الأسطول كلّه — لا في قائمة الخطّ.
+                 *
+                 * فالمخطّط يلوّن بـ`data.vessels.indexOf`، ولو لوّنت الرقيقة
+                 * بترتيبها داخل الخطّ لتبدّل لون المركب كلّما بدّلت الخطّ،
+                 * وصار مفتاح الألوان يكذب.
+                 */
+                const c = VESSEL_COLORS[Math.max(0, data.vessels.indexOf(v)) % VESSEL_COLORS.length];
                 return (
-                  <button key={v} onClick={() => toggleVessel(v)}
-                    className={`text-xs px-2.5 py-1 rounded-full border transition-all ${on ? 'bg-white text-gray-800 border-white font-semibold shadow-sm' : 'bg-transparent text-white/70 border-white/30 hover:border-white/60'}`}>
+                  <button key={v} onClick={() => toggleVessel(v)} className={CHIP(on)}>
                     {/*
                       * النقطة مفتاحُ ألوانٍ لا زينة: في العرض الكلاسيكي تُطابق لون
                       * المركب في المخطّط، وفي «الغاطس» لا مخطّط ملوّن أصلاً — فتصير
