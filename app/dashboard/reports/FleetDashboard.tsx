@@ -5,7 +5,7 @@ import FleetAssistant from './FleetAssistant';
 import FleetInstrument from './FleetInstrument';
 
 interface MonthRow {
-  vessel: string; month: string; voyages: number; net: number; avgNet: number;
+  vessel: string; line: string; month: string; voyages: number; net: number; avgNet: number;
   revenue: number; expenses: number; liquidity: number;
   trucks: number; vehicles: number; passengers: number;
 }
@@ -21,7 +21,7 @@ interface FleetSource {
   lastImport?: LastImport;
 }
 interface FleetData {
-  vessels: string[]; months: string[]; monthly: MonthRow[]; voyages: any[];
+  vessels: string[]; lines?: string[]; months: string[]; monthly: MonthRow[]; voyages: any[];
   generatedAt: string; source?: FleetSource;
 }
 
@@ -71,6 +71,7 @@ export default function FleetDashboard() {
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [selVessels, setSelVessels] = useState<string[]>([]);
+  const [selLines, setSelLines] = useState<string[]>([]);
   const [metric, setMetric] = useState<MetricKey>('net');
   const [sortKey, setSortKey] = useState<MetricKey>('net');
   const [chartType, setChartType] = useState<ChartType>('line');
@@ -87,6 +88,7 @@ export default function FleetDashboard() {
       setData(d);
       if (d.months.length) { setFrom((f) => f || d.months[0]); setTo((t) => t || d.months[d.months.length - 1]); }
       if (d.vessels.length) setSelVessels((s) => s.length ? s : d.vessels);
+      if (d.lines?.length) setSelLines((s) => s.length ? s : d.lines!);
     } catch (e: any) {
       setError(e?.response?.data?.message || 'تعذّر تحميل بيانات الأسطول');
     } finally { setLoading(false); setRefreshing(false); }
@@ -99,9 +101,18 @@ export default function FleetDashboard() {
   const inRange = (m: string) => (!lo || m >= lo) && (!hi || m <= hi);
   const monthsInRange = useMemo(() => months.filter(inRange), [months, lo, hi]);
 
+  /*
+   * الخطّ فلترٌ ثانٍ — ويُتجاوز حين لا وجود له.
+   *
+   * `selLines` يبقى فارغاً إن كان الشيت سابقاً لعمود «الخطّ»، والفارغ هنا يعني
+   * «لا تفلتر» لا «لا شيء» — وإلا اختفت اللوحة كلّها عند أوّل تشغيل بعد النشر
+   * وقبل إعادة بناء التقارير.
+   */
+  const lineOk = (r: MonthRow) => !selLines.length || selLines.includes(r.line || '');
+
   const rows = useMemo(
-    () => (data?.monthly || []).filter((r) => inRange(r.month) && selVessels.includes(r.vessel)),
-    [data, lo, hi, selVessels],
+    () => (data?.monthly || []).filter((r) => inRange(r.month) && selVessels.includes(r.vessel) && lineOk(r)),
+    [data, lo, hi, selVessels, selLines],
   );
   const prevRows = useMemo(() => {
     if (!data || !lo) return [];
@@ -109,20 +120,30 @@ export default function FleetDashboard() {
     const len = monthsInRange.length;
     if (i < 0 || len === 0 || i - len < 0) return [];
     const set = new Set(months.slice(i - len, i));
-    return data.monthly.filter((r) => set.has(r.month) && selVessels.includes(r.vessel));
-  }, [data, lo, selVessels, monthsInRange]);
+    return data.monthly.filter((r) => set.has(r.month) && selVessels.includes(r.vessel) && lineOk(r));
+  }, [data, lo, selVessels, selLines, monthsInRange]);
 
+  /*
+   * صفٌّ لكل (مركب + خطّ) حين تتعدّد الخطوط.
+   *
+   * دليلة مركبٌ واحد على خطّين، وجمعُهما في سطرٍ واحد يُخفي أن أحدهما بلا سيولة
+   * أصلاً. فيُشقّ السطر ويحمل الاسمَ والخطَّ معاً — وإن كان في البيانات خطٌّ
+   * واحد بقي الاسم مجرّداً فلا ضجيج بلا فائدة.
+   */
+  const multiLine = (data?.lines?.length || 0) > 1;
   const perVessel = useMemo(() => {
     const map: Record<string, MonthRow> = {};
     for (const r of rows) {
-      const a = map[r.vessel] || (map[r.vessel] = { vessel: r.vessel, month: '', voyages: 0, net: 0, avgNet: 0, revenue: 0, expenses: 0, liquidity: 0, trucks: 0, vehicles: 0, passengers: 0 });
+      const line = r.line || '';
+      const label = multiLine && line ? `${r.vessel} · ${line}` : r.vessel;
+      const a = map[label] || (map[label] = { vessel: label, line, month: '', voyages: 0, net: 0, avgNet: 0, revenue: 0, expenses: 0, liquidity: 0, trucks: 0, vehicles: 0, passengers: 0 });
       a.voyages += r.voyages; a.net += r.net; a.revenue += r.revenue; a.expenses += r.expenses;
       a.liquidity += r.liquidity; a.trucks += r.trucks; a.vehicles += r.vehicles; a.passengers += r.passengers;
     }
     const arr = Object.values(map);
     arr.forEach((a) => { a.avgNet = a.voyages ? a.net / a.voyages : 0; });
     return arr;
-  }, [rows]);
+  }, [rows, multiLine]);
 
   const totals = useMemo(() => {
     const t: Record<string, number> = {};
@@ -243,6 +264,26 @@ export default function FleetDashboard() {
               {months.map((m) => <option key={m} value={m}>{monthLabel(m)}</option>)}
             </select>
           </div>
+          {(data.lines?.length || 0) > 1 && (
+            <div className="min-w-[180px]">
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-[11px] opacity-75">الخطوط ({selLines.length}/{data.lines!.length})</label>
+                <button onClick={() => setSelLines(data.lines!)} className="text-[11px] underline opacity-80 hover:opacity-100">الكل</button>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {data.lines!.map((ln) => {
+                  const on = selLines.includes(ln);
+                  return (
+                    <button key={ln}
+                      onClick={() => setSelLines((s) => s.includes(ln) ? (s.length > 1 ? s.filter((x) => x !== ln) : s) : [...s, ln])}
+                      className={`text-xs px-2.5 py-1 rounded-full border transition-all ${on ? 'bg-white text-gray-800 border-white font-semibold shadow-sm' : 'bg-transparent text-white/70 border-white/30 hover:border-white/60'}`}>
+                      {ln}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
           <div className="flex-1 min-w-[220px]">
             <div className="flex items-center justify-between mb-1">
               <label className="text-[11px] opacity-75">المراكب ({selVessels.length}/{data.vessels.length})</label>
@@ -559,7 +600,7 @@ export default function FleetDashboard() {
         </table>
       </div>
 
-      <FleetAssistant filters={{ from, to, vessels: selVessels }} />
+      <FleetAssistant filters={{ from, to, vessels: selVessels, lines: selLines.length ? selLines : undefined }} />
     </div>
   );
 }

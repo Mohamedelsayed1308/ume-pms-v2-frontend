@@ -8,10 +8,18 @@ import { Card, Button, Badge, Input, Field, Select, Modal, Drawer, Skeleton, Emp
 import { fmtNum, fmtMoney, fmtMoneyC, ccyEntries, n0 } from '@/lib/format';
 import { vesselPhoto } from '@/lib/vesselPhoto';
 
-interface Vessel { id: string; name: string; imo_number: string; flag: string; vessel_type: string; is_active: boolean; shipping_company_id: string; owner_name: string; owner_address: string; shipping_company?: { id: string; name: string }; }
+interface Vessel { id: string; name: string; imo_number: string; flag: string; vessel_type: string; is_active: boolean; shipping_company_id: string; owner_name: string; owner_address: string; shipping_company?: { id: string; name: string }; fleetOnly?: boolean; }
 const empty = { name: '', imo_number: '', flag: '', vessel_type: '', is_active: true, shipping_company_id: '', owner_name: '', owner_address: '' };
 const fmtDate = (d: any) => (d ? String(d).slice(0, 10) : '—');
-const normName = (s: string) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
+/*
+ * الحروف العربية تبقى في المفتاح.
+ *
+ * كانت تُحذف مع بقيّة ما ليس لاتينياً، فصار `AMAL — جدة/سواكن` مفتاحه `amal`
+ * نفسه — ومركبان على خطّين مختلفين يتقاسمان مفتاحاً واحداً فتندمج أرقامهما
+ * وتظهر «أمل» في هذه الشاشة حاملةً إيراد الخطّين معاً.
+ */
+const normName = (s: string) => (s || '').toLowerCase().replace(/[^a-z0-9؀-ۿ]/g, '');
 
 interface VStat { count: number; open: Record<string, number>; invoiced: Record<string, number>; hire: Record<string, number>; last: string | null; pos: number; suppliers: Set<string>; recentInv: any[]; recentPay: any[]; op: { rev: number; exp: number; net: number; matched: boolean }; }
 const emptyStat = (): VStat => ({ count: 0, open: {}, invoiced: {}, hire: {}, last: null, pos: 0, suppliers: new Set(), recentInv: [], recentPay: [], op: { rev: 0, exp: 0, net: 0, matched: false } });
@@ -66,11 +74,46 @@ export default function VesselsPage() {
     for (const x of (fleet?.monthly || [])) { const k = normName(x.vessel); (m[k] ||= { rev: 0, exp: 0, net: 0 }); m[k].rev += n0(x.revenue); m[k].exp += n0(x.expenses); m[k].net += n0(x.net); }
     return m;
   }, [fleet]);
-  const matchFleet = (name: string) => {
+  /*
+   * المطابقة التامّة أولاً، ثم الاحتواء.
+   *
+   * الاحتواء وحده يرتهن بترتيب المفاتيح: `amal` تحتويها `amalجدةسواكن`، فأيّهما
+   * جاء أوّلاً في الحلقة فاز — ومركبٌ يأخذ أرقام غيره لأن الترتيب حالفه.
+   */
+  const fleetKeyFor = (name: string) => {
     const n = normName(name); if (!n) return null;
-    for (const k of Object.keys(fleetByName)) { if (n === k || n.includes(k) || k.includes(n)) return { ...fleetByName[k], matched: true }; }
+    if (fleetByName[n]) return n;
+    for (const k of Object.keys(fleetByName)) if (n.includes(k) || k.includes(n)) return k;
     return null;
   };
+  const matchFleet = (name: string) => {
+    const k = fleetKeyFor(name);
+    return k ? { ...fleetByName[k], matched: true } : null;
+  };
+
+  /*
+   * مراكب الأسطول التي لا سجلَّ لها هنا — تظهر ببطاقتها بدل أن تختفي.
+   *
+   * المخزنان اثنان: شيت الأسطول يعرف مَن يُبحر، وقاعدة النظام تعرف مَن له
+   * فواتيرُ وأوامرُ شراء. ومركبٌ جديد يدخل الأول ولا يدخل الثانية إلا بتسجيلٍ
+   * يدويّ — فيبقى رقمه في الإجماليات **بلا بطاقةٍ تحمل اسمه**، وهو ما وقع
+   * لعمّان ولخطّ أمل جدّة/سواكن.
+   *
+   * فتُبنى لهم بطاقةٌ من بيانات الأسطول، مَوسومةً بأنها من الشيت لا من النظام،
+   * ومعها زرٌّ يسجّلها تسجيلاً حقيقياً بنقرة.
+   */
+  const ghosts = useMemo<Vessel[]>(() => {
+    const claimed = new Set<string>();
+    for (const v of vessels) { const k = fleetKeyFor(v.name); if (k) claimed.add(k); }
+    const byKey: Record<string, string> = {};
+    for (const x of (fleet?.monthly || [])) { const k = normName(x.vessel); if (k && !byKey[k]) byKey[k] = x.vessel; }
+    return Object.keys(byKey).filter((k) => !claimed.has(k)).sort().map((k) => ({
+      id: 'fleet:' + k, name: byKey[k], imo_number: '', flag: '', vessel_type: '',
+      is_active: true, shipping_company_id: '', owner_name: '', owner_address: '', fleetOnly: true,
+    }));
+  }, [vessels, fleet, fleetByName]);
+
+  const rows = useMemo(() => [...vessels, ...ghosts], [vessels, ghosts]);
 
   const stats = useMemo(() => {
     const m: Record<string, VStat> = {};
@@ -89,9 +132,9 @@ export default function VesselsPage() {
     for (const p of payments) { const vid = p.invoice?.vessel?.id; if (!vid) continue; get(vid).recentPay.push(p); }
     for (const po of pos) { const vid = po.vessel?.id || po.vessel_id; if (!vid) continue; get(vid).pos++; }
     for (const h of hire) { const vid = h.vessel?.id || h.vessel_id; if (!vid) continue; const e = get(vid); const c = (h.currency || 'EUR').toUpperCase(); e.hire[c] = (e.hire[c] || 0) + n0(h.total_amount); }
-    for (const v of vessels) { const e = get(v.id); const f = matchFleet(v.name); if (f) e.op = f; }
+    for (const v of rows) { const e = get(v.id); const f = matchFleet(v.name); if (f) e.op = f; }
     return m;
-  }, [invoices, payments, pos, hire, vessels, fleetByName]);
+  }, [invoices, payments, pos, hire, rows, fleetByName]);
 
   const summary = useMemo(() => {
     const total = vessels.length;
@@ -106,7 +149,7 @@ export default function VesselsPage() {
 
   const list = useMemo(() => {
     const ql = q.trim().toLowerCase();
-    let out = vessels.filter((v) => {
+    let out = rows.filter((v) => {
       if (status === 'active' && !v.is_active) return false;
       if (status === 'inactive' && v.is_active) return false;
       if (vtype && v.vessel_type !== vtype) return false;
@@ -117,9 +160,11 @@ export default function VesselsPage() {
     const maxOpen = (v: Vessel) => Math.max(0, ...Object.values(stats[v.id]?.open || {}));
     out = [...out].sort((a, b) => sortBy === 'outstanding' ? maxOpen(b) - maxOpen(a) : sortBy === 'invoices' ? (stats[b.id]?.count || 0) - (stats[a.id]?.count || 0) : a.name.localeCompare(b.name, locale === 'ar' ? 'ar' : 'en'));
     return out;
-  }, [vessels, stats, q, status, vtype, onlyOutstanding, sortBy, locale]);
+  }, [rows, stats, q, status, vtype, onlyOutstanding, sortBy, locale]);
 
   function openAdd() { setEditing(null); setForm(empty); setFormErr(''); setShowModal(true); }
+  /** تسجيل مركبٍ رآه الأسطول ولم يره النظام — الاسم مُعبّأ كما ورد في الشيت. */
+  function openRegister(name: string) { setEditing(null); setForm({ ...empty, name }); setFormErr(''); setShowModal(true); }
   function openEdit(v: Vessel) { setEditing(v); setForm({ name: v.name, imo_number: v.imo_number || '', flag: v.flag || '', vessel_type: v.vessel_type || '', is_active: v.is_active, shipping_company_id: v.shipping_company_id || '', owner_name: v.owner_name || '', owner_address: v.owner_address || '' }); setFormErr(''); setShowModal(true); }
   async function handleSave() {
     if (!form.name.trim()) { setFormErr(t('ves.nameReq')); return; }
@@ -172,7 +217,7 @@ export default function VesselsPage() {
         {types.length > 0 && <Select aria-label={t("ves.allTypes")} value={vtype} onChange={(e) => setVtype(e.target.value)} className="w-auto"><option value="">{t('ves.allTypes')}</option>{types.map((c) => <option key={c} value={c}>{c}</option>)}</Select>}
         <Select aria-label={t("ves.sortName")} value={sortBy} onChange={(e) => setSortBy(e.target.value as any)} className="w-auto"><option value="name">{t('ves.sortName')}</option><option value="outstanding">{t('ves.sortOutstanding')}</option><option value="invoices">{t('ves.sortInvoices')}</option></Select>
         <label className="flex items-center gap-1.5 text-xs text-gray-600 cursor-pointer"><input type="checkbox" checked={onlyOutstanding} onChange={(e) => setOnlyOutstanding(e.target.checked)} />{t('ves.hasOutstanding')}</label>
-        <span className="text-xs text-gray-400 ms-auto">{list.length}/{vessels.length}</span>
+        <span className="text-xs text-gray-400 ms-auto">{list.length}/{rows.length}</span>
       </Card>
 
       {loading && <div className="grid gap-2">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-14 rounded-xl" />)}</div>}
@@ -199,7 +244,10 @@ export default function VesselsPage() {
                         {vesselPhoto(v.name)
                           ? <img src={vesselPhoto(v.name)!} alt="" aria-hidden className="w-12 h-8 rounded object-cover shrink-0 ring-1 ring-black/5" loading="lazy" />
                           : <span className="w-12 h-8 rounded shrink-0 bg-slate-100 ring-1 ring-black/5" aria-hidden />}
-                        <span>{v.name}{v.imo_number ? <span className="block text-[11px] text-gray-400 font-normal">IMO {v.imo_number}</span> : null}</span>
+                        <span>{v.name}
+                          {v.imo_number ? <span className="block text-[11px] text-gray-400 font-normal">IMO {v.imo_number}</span> : null}
+                          {v.fleetOnly ? <span className="block text-[11px] text-amber-600 font-normal">{t('ves.fleetOnly')}</span> : null}
+                        </span>
                       </div>
                     </td>
                     <td className="py-2.5 px-4 text-gray-500">{v.vessel_type || '—'}</td>
@@ -211,8 +259,13 @@ export default function VesselsPage() {
                     <td className="py-2.5 px-4"><Badge tone={v.is_active ? 'success' : 'neutral'}>{v.is_active ? t('ves.active') : t('ves.inactive')}</Badge></td>
                     <td className="py-2.5 px-4" onClick={(e) => e.stopPropagation()}><div className="flex gap-2 text-xs">
                       <button onClick={() => setDetail(v)} className="text-gray-500 hover:text-brand-600">{t('ves.viewDetails')}</button>
-                      {canWrite && <button onClick={() => openEdit(v)} className="text-brand-600 hover:underline">{t('ves.edit')}</button>}
-                      {canWrite && <button onClick={() => setDelTarget(v)} className="text-red-400 hover:text-red-600">{t('ves.delete')}</button>}
+                      {/* بطاقة الشيت لا تُعدَّل ولا تُحذف — لا سجلَّ لها يُمسّ. وتُسجَّل بدلاً من ذلك. */}
+                      {canWrite && (v.fleetOnly
+                        ? <button onClick={() => openRegister(v.name)} className="text-amber-600 hover:underline">{t('ves.register')}</button>
+                        : <>
+                            <button onClick={() => openEdit(v)} className="text-brand-600 hover:underline">{t('ves.edit')}</button>
+                            <button onClick={() => setDelTarget(v)} className="text-red-400 hover:text-red-600">{t('ves.delete')}</button>
+                          </>)}
                     </div></td>
                   </tr>
                 ); })}
@@ -228,8 +281,8 @@ export default function VesselsPage() {
                 )}
                 <div className="p-4">
                 <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0"><p className="font-bold text-gray-800 break-words" dir="auto">{v.name}</p><p className="text-xs text-gray-500 truncate">{v.vessel_type || '—'}{v.flag ? ` · ${v.flag}` : ''}</p></div>
-                  <Badge tone={v.is_active ? 'success' : 'neutral'}>{v.is_active ? t('ves.active') : t('ves.inactive')}</Badge>
+                  <div className="min-w-0"><p className="font-bold text-gray-800 break-words" dir="auto">{v.name}</p><p className="text-xs text-gray-500 truncate">{v.fleetOnly ? t('ves.fleetOnly') : (v.vessel_type || '—') + (v.flag ? ` · ${v.flag}` : '')}</p></div>
+                  <Badge tone={v.fleetOnly ? 'warning' : v.is_active ? 'success' : 'neutral'}>{v.fleetOnly ? t('ves.fleetOnly') : v.is_active ? t('ves.active') : t('ves.inactive')}</Badge>
                 </div>
                 <div className="flex items-center justify-between mt-3 text-xs">
                   <span className="text-gray-500">{t('ves.invoices')}: <span className="tabular-nums text-gray-700">{st.count || 0}</span></span>
@@ -294,7 +347,10 @@ export default function VesselsPage() {
               </div>
               <DrawerList title={t('ves.recentInvoices')} rows={ri.map((i) => ({ a: i.invoice_number, b: fmtMoneyC(i.total_amount, i.currency), c: fmtDate(i.invoice_date || i.created_at) }))} empty={t('ves.none')} />
               <DrawerList title={t('ves.recentPayments')} rows={rp.map((p) => ({ a: p.invoice?.invoice_number || '—', b: fmtMoneyC(p.amount, p.currency), c: fmtDate(p.payment_date) }))} empty={t('ves.none')} />
-              {canWrite && <Button variant="outline" icon="clipboard" onClick={() => { setDetail(null); openEdit(detail); }} className="w-full">{t('ves.edit')}</Button>}
+              {detail.fleetOnly && <p className="text-xs text-amber-700 bg-amber-50 ring-1 ring-inset ring-amber-200 rounded-lg p-2.5">{t('ves.fleetOnlyHint')}</p>}
+              {canWrite && (detail.fleetOnly
+                ? <Button variant="outline" icon="plus" onClick={() => { const nm = detail.name; setDetail(null); openRegister(nm); }} className="w-full">{t('ves.register')}</Button>
+                : <Button variant="outline" icon="clipboard" onClick={() => { setDetail(null); openEdit(detail); }} className="w-full">{t('ves.edit')}</Button>)}
             </div>
           );
         })()}
