@@ -29,6 +29,24 @@ import {
  */
 const DISTRIBUTION_LINE = 'ضبا/سفاجا';
 
+/**
+ * تفصيل رحلةٍ واحدة — لقطةٌ من دفتر المركب لحظة الجلب.
+ *
+ * وعمودا `Dianna` و`Mafis` في المستند الورقيّ لا وجود لهما في الدفتر: فيه عمود
+ * `TRUCK` واحد ومن يُعدّ المستند هو من يقسمه. فتُعرض الشاحنات مجموعةً، وفرقُها
+ * عن المستند هو ميناء البسّام — ثبت على رحلة بوسيدون ٦٩ بالسنت.
+ */
+interface VoyageRow {
+  ref: number | null;
+  dateExp: string; dateImp: string;
+  nTruckE: number; nTruckI: number; truck: number;
+  nVehE: number; nVehI: number; veh: number;
+  nPaxE: number; nPaxI: number; pax: number;
+  income: number; comm: number; man: number; net: number;
+  cashDuba: number; cashSafaga: number; overPax: number;
+}
+type VoyageDetail = Partial<Record<VesselKey, VoyageRow[]>> & { fetchedAt?: string };
+
 interface Period {
   id: string;
   period_name: string;
@@ -59,6 +77,8 @@ interface Period {
 
   adjust_reason: string;
   commission_rate: number; per_voyage_fee: number;
+  /** لقطة تفصيل الرحلات لحظة الجلب — دليلٌ على ما حُسب، لا رابطٌ حيّ */
+  voyage_detail: VoyageDetail | null;
 
   // ── حقول المعادلة السابقة — محفوظة لا محسوبة ──
   bunker_badawi: number; bunker_ittihad: number;
@@ -99,6 +119,7 @@ const emptyForm = (): Form => ({
 
   adjust_reason: '',
   commission_rate: 6.5, per_voyage_fee: 500,
+  voyage_detail: null,
 
   bunker_badawi: 0, bunker_ittihad: 0,
   poseidon_rent: 0, amal_rent: 0, daleela_rent: 0,
@@ -242,6 +263,13 @@ export default function ProfitDistributionPage() {
         // العمولة الإجمالية القديمة — تُحدَّث لأنّها معروضة، ولا تدخل الحساب
         next.commission_amount =
           (d.poseidon?.commission ?? 0) + (d.amal?.commission ?? 0) + (d.daleela?.commission ?? 0);
+        // لقطةُ التفصيل تُحفظ مع الفترة — الدفتر يتغيّر، والمحفوظ هو الدليل
+        const detail: VoyageDetail = { fetchedAt: d.source?.fetchedAt };
+        for (const k of VESSEL_KEYS) {
+          const r = d[k]?.voyageRows;
+          if (Array.isArray(r) && r.length) detail[k] = r;
+        }
+        next.voyage_detail = Object.keys(detail).length > 1 ? detail : null;
         return next;
       });
       setSheetInfo(d.source ? { ...d, source: d.source } : d);
@@ -373,7 +401,8 @@ export default function ProfitDistributionPage() {
       </div>
 
       {selected && detail && (
-        <DistributionCard title={`${selected.period_name} — كشف التوزيع`} result={detail} />
+        <DistributionCard title={`${selected.period_name} — كشف التوزيع`} result={detail}
+          detail={selected.voyage_detail} />
       )}
 
       {showModal && (
@@ -653,7 +682,8 @@ export default function ProfitDistributionPage() {
             </Section>
 
             {/* ── المعاينة ── */}
-            <DistributionCard title="معاينة التوزيع" result={calc} compact />
+            <DistributionCard title="معاينة التوزيع" result={calc} compact
+              detail={form.voyage_detail} />
 
             {/* ── حقول المعادلة السابقة ── */}
             <div className="mt-4">
@@ -715,12 +745,13 @@ export default function ProfitDistributionPage() {
  * ثمّ الخصومات الثلاثة ثمّ تسوية صفاجا ثمّ التوزيع. والسطر الأخير — المتبقّي
  * في ضبا — تحقّقٌ ذاتيّ: إن لم يقارب الصفر فثمّة خلل.
  * ══════════════════════════════════════════════════════════════════════════ */
-function DistributionCard({ title, result, compact }: {
-  title: string; result: ModelResult; compact?: boolean;
+function DistributionCard({ title, result, compact, detail }: {
+  title: string; result: ModelResult; compact?: boolean; detail?: VoyageDetail | null;
 }) {
   const vs = result.vessels;
   const blocked = result.missing.length > 0;
   const pad = compact ? 'p-4' : 'p-6';
+  const [openVessel, setOpenVessel] = useState<string | null>(null);
 
   return (
     <div className={`bg-white rounded-xl shadow ${pad} mb-6 border ${blocked ? 'border-amber-300' : 'border-transparent'}`}>
@@ -795,6 +826,33 @@ function DistributionCard({ title, result, compact }: {
         </div>
       )}
 
+      {/* تفصيل الرحلات — طيّةٌ لكلّ مركب */}
+      {vs.length > 0 && detail && (
+        <div className="mt-4 pt-3 border-t">
+          <p className="text-xs font-semibold text-gray-500 mb-2">تفصيل الرحلات</p>
+          <div className="flex gap-2 flex-wrap">
+            {vs.map((v) => {
+              const rowsOf = detail[v.key as VesselKey];
+              if (!rowsOf?.length) return null;
+              const on = openVessel === v.key;
+              return (
+                <button key={v.key} type="button"
+                  onClick={() => setOpenVessel(on ? null : v.key)}
+                  className={`text-xs rounded-lg px-3 py-1.5 border transition ${
+                    on ? 'bg-emerald-600 text-white border-emerald-600'
+                       : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                  }`}>
+                  {on ? '▾' : '▸'} {v.name} — {rowsOf.length} رحلة
+                </button>
+              );
+            })}
+          </div>
+          {openVessel && detail[openVessel as VesselKey]?.length ? (
+            <VoyageTable rows={detail[openVessel as VesselKey]!} />
+          ) : null}
+        </div>
+      )}
+
       {!compact && vs.length > 0 && (
         <div className="mt-4 pt-3 border-t grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
           <Stat label="مجموع نقد ضبا" value={fmt(result.totalCashDuba)} />
@@ -804,6 +862,110 @@ function DistributionCard({ title, result, compact }: {
             value={fmt(vs.reduce((a, v) => a + v.dueToAccount, 0))} />
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * جدول رحلات المركب — على ترتيب المستند الورقيّ مع زيادة.
+ *
+ * المستند يعرض الإيراد وحده. والدفتر يحمل معه **الصافي والخزينة** لكلّ رحلة،
+ * فيُعرضان — وهما ما يُجيب «ربح كلّ رحلة» لا إيرادها.
+ *
+ * والشاحنات مجموعةٌ لا مفرَّقة: المستند يقسمها `Trucks` و`Dianna` و`Mafis`،
+ * والدفتر يحمل عمود `TRUCK` واحداً. القسمة يدويّة عند من يُعدّ المستند.
+ */
+function VoyageTable({ rows }: { rows: VoyageRow[] }) {
+  const sum = (f: (r: VoyageRow) => number) => rows.reduce((a, r) => a + f(r), 0);
+  const cnt = (f: (r: VoyageRow) => number) => Math.round(sum(f));
+
+  return (
+    <div className="overflow-x-auto mt-3">
+      <table className="w-full text-xs min-w-[860px]">
+        <thead>
+          <tr className="text-gray-500 border-b">
+            <th className="text-right font-medium py-1.5 whitespace-nowrap">الرحلة</th>
+            <th className="text-right font-medium py-1.5 whitespace-nowrap">التاريخ</th>
+            <th className="text-center font-medium py-1.5" colSpan={2}>شاحنات</th>
+            <th className="text-center font-medium py-1.5" colSpan={2}>مركبات</th>
+            <th className="text-center font-medium py-1.5" colSpan={2}>ركّاب</th>
+            <th className="text-left font-medium py-1.5">الإيراد</th>
+            <th className="text-left font-medium py-1.5">العمولة</th>
+            <th className="text-left font-medium py-1.5">المصاريف</th>
+            <th className="text-left font-medium py-1.5">الصافي</th>
+            <th className="text-left font-medium py-1.5">نقد ضبا</th>
+            <th className="text-left font-medium py-1.5">صفاجا</th>
+          </tr>
+          <tr className="text-gray-400 text-[10px] border-b">
+            <th /><th />
+            <th className="text-center font-normal pb-1">ذهاب / إياب</th>
+            <th className="text-left font-normal pb-1">قيمة</th>
+            <th className="text-center font-normal pb-1">ذهاب / إياب</th>
+            <th className="text-left font-normal pb-1">قيمة</th>
+            <th className="text-center font-normal pb-1">ذهاب / إياب</th>
+            <th className="text-left font-normal pb-1">قيمة</th>
+            <th colSpan={6} />
+          </tr>
+        </thead>
+        <tbody className="font-mono">
+          {rows.map((r, i) => (
+            <tr key={`${r.ref ?? 'x'}-${i}`} className="border-b border-gray-100 hover:bg-gray-50">
+              <td className="py-1.5 font-sans font-medium text-gray-700 whitespace-nowrap">
+                {r.ref ?? '—'}
+                {r.overPax > 0 && (
+                  <span className="ms-1 text-[9px] bg-amber-100 text-amber-800 px-1 rounded">
+                    Over Pax
+                  </span>
+                )}
+              </td>
+              <td className="py-1.5 pe-2 text-gray-400 whitespace-nowrap text-[10px]">
+                {r.dateExp || '—'}{r.dateImp && r.dateImp !== r.dateExp ? ` ← ${r.dateImp}` : ''}
+              </td>
+              <td className="py-1.5 text-center text-gray-500">{r.nTruckE} / {r.nTruckI}</td>
+              <td className="py-1.5 pe-3 text-left">{fmt(r.truck)}</td>
+              <td className="py-1.5 text-center text-gray-500">{r.nVehE} / {r.nVehI}</td>
+              <td className="py-1.5 pe-3 text-left">{fmt(r.veh)}</td>
+              <td className="py-1.5 text-center text-gray-500">{r.nPaxE} / {r.nPaxI}</td>
+              <td className="py-1.5 pe-3 text-left">{fmt(r.pax)}</td>
+              <td className="py-1.5 pe-3 text-left font-semibold text-gray-800">{fmt(r.income)}</td>
+              <td className="py-1.5 pe-3 text-left text-gray-500">{fmt(r.comm)}</td>
+              <td className="py-1.5 pe-3 text-left text-gray-500">{fmt(r.man)}</td>
+              <td className={`py-1.5 pe-3 text-left font-semibold ${
+                r.net >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>{paren(r.net)}</td>
+              <td className="py-1.5 pe-3 text-left">{fmt(r.cashDuba)}</td>
+              <td className="py-1.5 text-left">{fmt(r.cashSafaga)}</td>
+            </tr>
+          ))}
+          <tr className="border-t-2 border-gray-300 font-semibold">
+            <td className="py-2 font-sans text-gray-700" colSpan={2}>الإجمالي — {rows.length} رحلة</td>
+            <td className="py-2 text-center text-gray-500">
+              {cnt((r) => r.nTruckE)} / {cnt((r) => r.nTruckI)}
+            </td>
+            <td className="py-2 pe-3 text-left">{fmt(sum((r) => r.truck))}</td>
+            <td className="py-2 text-center text-gray-500">
+              {cnt((r) => r.nVehE)} / {cnt((r) => r.nVehI)}
+            </td>
+            <td className="py-2 pe-3 text-left">{fmt(sum((r) => r.veh))}</td>
+            <td className="py-2 text-center text-gray-500">
+              {cnt((r) => r.nPaxE)} / {cnt((r) => r.nPaxI)}
+            </td>
+            <td className="py-2 pe-3 text-left">{fmt(sum((r) => r.pax))}</td>
+            <td className="py-2 pe-3 text-left text-gray-800">{fmt(sum((r) => r.income))}</td>
+            <td className="py-2 pe-3 text-left text-gray-500">{fmt(sum((r) => r.comm))}</td>
+            <td className="py-2 pe-3 text-left text-gray-500">{fmt(sum((r) => r.man))}</td>
+            <td className={`py-2 pe-3 text-left ${
+              sum((r) => r.net) >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>
+              {paren(sum((r) => r.net))}
+            </td>
+            <td className="py-2 pe-3 text-left">{fmt(sum((r) => r.cashDuba))}</td>
+            <td className="py-2 text-left">{fmt(sum((r) => r.cashSafaga))}</td>
+          </tr>
+        </tbody>
+      </table>
+      <p className="text-[10px] text-gray-400 mt-1.5">
+        الشاحنات مجموعةٌ — المستند الورقيّ يقسمها Trucks و Dianna و Mafis، والدفتر
+        يحمل عموداً واحداً. والفرق عن المستند هو ميناء البسّام.
+      </p>
     </div>
   );
 }
