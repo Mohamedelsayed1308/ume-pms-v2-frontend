@@ -1,139 +1,156 @@
 'use client';
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import api from '@/lib/api';
 import { TableSkeleton } from '@/components/ui';
+import {
+  calculateDistribution, toModelInput, daysBetween,
+  VESSEL_KEYS, VESSEL_NAMES, DEFAULT_DAILY_RATE,
+  type ModelResult, type VesselKey,
+} from '@/lib/profitModel';
+
+/*
+ * شاشة توزيع الأرباح — مبنيّة على معادلة المستند المعتمد.
+ *
+ * المستند لا يبدأ من الإيراد بل من النقد المتاح في ضبا. فالشاشة تُفرّق صراحةً
+ * بين ما يعرفه دفتر الرحلات وما لا يعرفه:
+ *
+ *   من الشيت   عدد الرحلات · أساس العمولة `trE` · الوقود `bnk` · الإيراد · السيولة
+ *   من الخزينة نقد ضبا · صافي التحصيل في صفاجا
+ *
+ * وكلّ حقلٍ يحمل مصدره على وجهه، فلا يُخلط رقمٌ محسوبٌ برقمٍ مُدخَل.
+ */
+
+/**
+ * التوزيع شراكةُ خطّ ضبا/سفاجا وحده.
+ *
+ * دليلة تُبحر على جدّة/سواكن منذ يناير ٢٠٢٦ — ولهذا تظهر صفراً في مستندات
+ * التوزيع رغم نشاطها. وأرقام رحلاتها تبدأ من ١ في كلّ خطّ، فمدىً بالرقم بلا
+ * قيد الخطّ يخلط سلسلتين ويقلب القسمة من شريكين إلى ثلاثة.
+ */
+const DISTRIBUTION_LINE = 'ضبا/سفاجا';
 
 interface Period {
   id: string;
   period_name: string;
   date_from: string;
   date_to: string;
+
   poseidon_revenue: number; amal_revenue: number; daleela_revenue: number;
   poseidon_voyages: number; amal_voyages: number; daleela_voyages: number;
   poseidon_over_pax: number; amal_over_pax: number; daleela_over_pax: number;
+
+  // ── مدخلات معادلة المستند ──
+  poseidon_sd_base: number; poseidon_sd_adjust: number;
+  poseidon_fuel: number; poseidon_fuel_adjust: number;
+  poseidon_cash_duba: number; poseidon_net_collected: number;
+  poseidon_liquidity: number; poseidon_daily_rate: number;
+
+  amal_sd_base: number; amal_sd_adjust: number;
+  amal_fuel: number; amal_fuel_adjust: number;
+  amal_cash_duba: number; amal_net_collected: number;
+  amal_liquidity: number; amal_daily_rate: number;
+
+  daleela_sd_base: number; daleela_sd_adjust: number;
+  daleela_fuel: number; daleela_fuel_adjust: number;
+  daleela_cash_duba: number; daleela_net_collected: number;
+  daleela_liquidity: number; daleela_daily_rate: number;
+
+  poseidon_off_hire: number; amal_off_hire: number; daleela_off_hire: number;
+
+  adjust_reason: string;
+  commission_rate: number; per_voyage_fee: number;
+
+  // ── حقول المعادلة السابقة — محفوظة لا محسوبة ──
   bunker_badawi: number; bunker_ittihad: number;
   poseidon_rent: number; amal_rent: number; daleela_rent: number;
   commission_amount: number;
   cash_safaga_badawi: number; cash_safaga_ittihad: number;
   transfers_badawi: number; transfers_ittihad: number;
   ratio_badawi: number; ratio_ittihad: number;
-  commission_rate: number; per_voyage_fee: number;
   balance_prev_badawi: number; balance_prev_ittihad: number;
+
   status: string; notes: string;
 }
 
-interface Calc {
-  totalRevenue: number; totalRent: number; totalCommission: number;
-  netForDistribution: number;
-  distributionBadawi: number; distributionIttihad: number;
-  overPaxBadawi: number; overPaxIttihad: number;
-  activityBadawi: number; activityIttihad: number;
-  balanceBadawi: number; balanceIttihad: number;
-  days: number; poseidonRent: number; amalRent: number; daleelaRent: number;
-}
+type Form = Omit<Period, 'id'>;
 
-const emptyForm = (): Omit<Period, 'id'> => ({
+const emptyForm = (): Form => ({
   period_name: '', date_from: '', date_to: '',
   poseidon_revenue: 0, amal_revenue: 0, daleela_revenue: 0,
   poseidon_voyages: 0, amal_voyages: 0, daleela_voyages: 0,
   poseidon_over_pax: 0, amal_over_pax: 0, daleela_over_pax: 0,
+
+  poseidon_sd_base: 0, poseidon_sd_adjust: 0,
+  poseidon_fuel: 0, poseidon_fuel_adjust: 0,
+  poseidon_cash_duba: 0, poseidon_net_collected: 0,
+  poseidon_liquidity: 0, poseidon_daily_rate: DEFAULT_DAILY_RATE.poseidon,
+
+  amal_sd_base: 0, amal_sd_adjust: 0,
+  amal_fuel: 0, amal_fuel_adjust: 0,
+  amal_cash_duba: 0, amal_net_collected: 0,
+  amal_liquidity: 0, amal_daily_rate: DEFAULT_DAILY_RATE.amal,
+
+  daleela_sd_base: 0, daleela_sd_adjust: 0,
+  daleela_fuel: 0, daleela_fuel_adjust: 0,
+  daleela_cash_duba: 0, daleela_net_collected: 0,
+  daleela_liquidity: 0, daleela_daily_rate: DEFAULT_DAILY_RATE.daleela,
+
+  poseidon_off_hire: 0, amal_off_hire: 0, daleela_off_hire: 0,
+
+  adjust_reason: '',
+  commission_rate: 6.5, per_voyage_fee: 500,
+
   bunker_badawi: 0, bunker_ittihad: 0,
   poseidon_rent: 0, amal_rent: 0, daleela_rent: 0,
   commission_amount: 0,
   cash_safaga_badawi: 0, cash_safaga_ittihad: 0,
   transfers_badawi: 0, transfers_ittihad: 0,
   ratio_badawi: 50, ratio_ittihad: 50,
-  commission_rate: 6.5, per_voyage_fee: 0,
   balance_prev_badawi: 0, balance_prev_ittihad: 0,
+
   status: 'draft', notes: '',
 });
 
 const fmt = (n: number) =>
   new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n || 0);
 
-const r2 = (n: any): number => {
-  const num = parseFloat(String(n ?? 0));
-  return isNaN(num) ? 0 : parseFloat(num.toFixed(2));
+/** الأقواس للسالب — كما يكتبها المستند. */
+const paren = (n: number) => (n < 0 ? `(${fmt(Math.abs(n))})` : fmt(n));
+
+const num = (v: unknown) => {
+  const x = Number(v);
+  return Number.isFinite(x) ? x : 0;
 };
 
-const DAILY_RATES = { poseidon: 14000, amal: 13000, daleela: 12000 };
-
-function calcRent(f: Pick<Omit<Period,'id'>, 'date_from'|'date_to'|'daleela_revenue'>) {
-  const days = f.date_from && f.date_to
-    ? Math.max(0, Math.round((new Date(f.date_to).getTime() - new Date(f.date_from).getTime()) / 86400000) + 1)
-    : 0;
-  const poseidon = days * DAILY_RATES.poseidon;
-  const amal     = days * DAILY_RATES.amal;
-  const daleela  = Number(f.daleela_revenue) > 0 ? days * DAILY_RATES.daleela : 0;
-  return { days, poseidon, amal, daleela, total: poseidon + amal + daleela };
-}
-
-function calcLocal(f: Omit<Period, 'id'>): Calc {
-  const n = (v: any) => Number(v) || 0;
-  const rent = calcRent(f);
-
-  // الإيراد من الشيت يتضمن Over Pax — لا يُضاف مرة ثانية
-  const totalRevenue = n(f.poseidon_revenue) + n(f.amal_revenue) + n(f.daleela_revenue);
-  const totalRent    = rent.total;
-  const totalCommission = n(f.commission_amount);
-
-  // توزيع النسب = (إيراد - إيجار) × ratio%
-  const netForDistribution = totalRevenue - totalRent;
-  const distributionBadawi  = netForDistribution * (n(f.ratio_badawi)  / 100);
-  const distributionIttihad = netForDistribution * (n(f.ratio_ittihad) / 100);
-
-  // توزيع Over Pax: بدوي=66.67% Poseidon + 33.33% Daleela
-  const overPaxBadawi  = n(f.poseidon_over_pax) * (2/3) + n(f.daleela_over_pax) * (1/3);
-  const overPaxIttihad = n(f.poseidon_over_pax) * (1/3) + n(f.amal_over_pax) + n(f.daleela_over_pax) * (2/3);
-
-  // نتيجة نشاط = توزيع - كاش + overPax + إيجار العبارة + بنكر
-  const activityBadawi  = distributionBadawi  - n(f.cash_safaga_badawi)  + overPaxBadawi  + rent.poseidon + n(f.bunker_badawi);
-  const activityIttihad = distributionIttihad - n(f.cash_safaga_ittihad) + overPaxIttihad + rent.amal + rent.daleela + n(f.bunker_ittihad);
-
-  const balanceBadawi  = n(f.balance_prev_badawi)  + activityBadawi  - n(f.transfers_badawi);
-  const balanceIttihad = n(f.balance_prev_ittihad) + activityIttihad - n(f.transfers_ittihad);
-
-  return {
-    totalRevenue, totalRent, totalCommission,
-    netForDistribution,
-    distributionBadawi, distributionIttihad,
-    overPaxBadawi, overPaxIttihad,
-    activityBadawi, activityIttihad,
-    balanceBadawi, balanceIttihad,
-    days: rent.days, poseidonRent: rent.poseidon, amalRent: rent.amal, daleelaRent: rent.daleela,
-  };
-}
+/** المثنّى في العربيّة يحمل العدد في صيغته، فذكرُ الرقم معه تكرار. */
+const partnersLabel = (n: number) =>
+  n === 0 ? 'لا شركاء' : n === 1 ? 'شريكٌ واحد' : n === 2 ? 'شريكان' : `${n} شركاء`;
 
 export default function ProfitDistributionPage() {
   const [periods, setPeriods] = useState<Period[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<Period | null>(null);
-  const [form, setForm] = useState(emptyForm());
+  const [form, setForm] = useState<Form>(emptyForm());
   const [loading, setLoading] = useState(false);
-  const [fetching, setFetching] = useState(false);
   const [fetchingSheet, setFetchingSheet] = useState(false);
   const [sheetInfo, setSheetInfo] = useState<any>(null);
+  const [error, setError] = useState('');
+  const [selected, setSelected] = useState<Period | null>(null);
+  const [showLegacy, setShowLegacy] = useState(false);
+
   /*
-   * مدى رقم الرحلة لكل مركب.
+   * مدى رقم الرحلة لكلّ مركب.
    *
-   * رحلات المراكب لا تتزامن — بوسيدون 60→64 يقع بين 21 يونيو و3 يوليو، ومدىً
-   * تقويميّ يغطّيه يلتقط من أمل رحلاتٍ أخرى. فالفترة تُحدَّد بالرقم لا بالتاريخ.
+   * رحلات المراكب لا تتزامن — بوسيدون ٦٩→٧٢ وأمل ٥٢→٥٦ يقعان في الفترة نفسها
+   * بأرقامٍ مختلفة، ومدىً تقويميّ واحد يلتقط من كلٍّ ما لا يخصّ الفترة. والمستند
+   * نفسه يعمل بأرقام الرحلات — فهي الانتقاء الصحيح، والتاريخ بديلٌ عند غيابها.
    */
   const [voyRange, setVoyRange] = useState<Record<string, { from: string; to: string }>>({
     poseidon: { from: '', to: '' }, amal: { from: '', to: '' }, daleela: { from: '', to: '' },
   });
   const setRange = (k: string, part: 'from' | 'to', v: string) =>
     setVoyRange((r) => ({ ...r, [k]: { ...r[k], [part]: v.replace(/[^\d]/g, '') } }));
-  const [error, setError] = useState('');
-  const [driveId, setDriveId] = useState('1xBNKsoDdlh2q6uEoKNEf49Q3UdIR6cJz');
-  const [selected, setSelected] = useState<Period | null>(null);
-  const [voyageFrom, setVoyageFrom] = useState('');
-  const [voyageTo, setVoyageTo] = useState('');
-  const [fetchingVoyage, setFetchingVoyage] = useState(false);
-  const [confirmedVoyFrom, setConfirmedVoyFrom] = useState<number | null>(null);
-  const [confirmedVoyTo, setConfirmedVoyTo] = useState<number | null>(null);
 
-  // التحميل حالة ثالثة — «لا توجد فترات» أثناء الجلب نفيٌ قاطع في غير موضعه.
   const [listLoading, setListLoading] = useState(true);
   const [listError, setListError] = useState('');
 
@@ -154,14 +171,9 @@ export default function ProfitDistributionPage() {
 
   function openAdd() {
     setEditing(null);
-    const f = emptyForm();
-    if (periods.length > 0) {
-      const last = periods[0];
-      const c = calcLocal(last as any);
-      f.balance_prev_badawi = Math.round(c.balanceBadawi * 100) / 100;
-      f.balance_prev_ittihad = Math.round(c.balanceIttihad * 100) / 100;
-    }
-    setForm(f);
+    setForm(emptyForm());
+    setVoyRange({ poseidon: { from: '', to: '' }, amal: { from: '', to: '' }, daleela: { from: '', to: '' } });
+    setSheetInfo(null);
     setError('');
     setShowModal(true);
   }
@@ -169,112 +181,82 @@ export default function ProfitDistributionPage() {
   function openEdit(p: Period) {
     setEditing(p);
     const { id, ...rest } = p;
-    setForm(rest as any);
+    // فترةٌ حُفظت قبل هذه الحقول تأتي بـ null — تُملأ بالافتراضيّ لا بصفرٍ يُعطّل الإيجار
+    const f = { ...emptyForm(), ...rest } as Form;
+    for (const k of VESSEL_KEYS) {
+      const rateKey = `${k}_daily_rate` as keyof Form;
+      if (!num(f[rateKey])) (f as any)[rateKey] = DEFAULT_DAILY_RATE[k];
+    }
+    if (!num(f.commission_rate)) f.commission_rate = 6.5;
+    if (!num(f.per_voyage_fee)) f.per_voyage_fee = 500;
+    setForm(f);
+    setSheetInfo(null);
     setError('');
     setShowModal(true);
   }
 
-  const set = (key: keyof Omit<Period, 'id'>, val: any) =>
+  const set = <K extends keyof Form>(key: K, val: Form[K]) =>
     setForm((prev) => ({ ...prev, [key]: val }));
 
-  const setNum = (key: keyof Omit<Period, 'id'>, val: string) =>
-    setForm((prev) => ({ ...prev, [key]: val === '' ? 0 : parseFloat(val.replace(/,/g, '')) || 0 }));
-
-  async function fetchVoyageDates() {
-    if (!voyageFrom || !voyageTo) { alert('أدخل أرقام الرحلات'); return; }
-    setFetchingVoyage(true);
-    try {
-      const res = await api.get('/api/profit-periods/voyage-dates', {
-        params: { from: voyageFrom, to: voyageTo },
-      });
-      if (res.data.error) { alert(res.data.error); return; }
-      setForm((prev) => ({ ...prev, date_from: res.data.date_from, date_to: res.data.date_to }));
-      setConfirmedVoyFrom(res.data.voy_from ?? Number(voyageFrom));
-      setConfirmedVoyTo(res.data.voy_to ?? Number(voyageTo));
-    } catch (e: any) {
-      alert('خطأ: ' + (e?.response?.data?.message || e?.message));
-    } finally {
-      setFetchingVoyage(false);
-    }
-  }
+  const setNum = (key: keyof Form, val: number) =>
+    setForm((prev) => ({ ...prev, [key]: val } as Form));
 
   /*
    * الجلب من الشيت الموحّد.
    *
-   * المسار الآخر يمرّ عبر Apps Script يقرأ إكسل درايف — وهو المصدر نفسه الذي
-   * يسحبه الشيت ثلاث مرّات يومياً. فالقراءة منه مباشرةً تُسقط وسيطاً وتُصيب
-   * النسخة التي عليها بقيّة النظام.
-   *
-   * و**الكاش المصروف لا يُمسّ**: دفعاتٌ لا إيراد، ولا وجود لها في دفاتر المراكب.
-   * تصفيرها ترفع نتيجة النشاط بمقدارها بلا أن يُنبّه أحد.
+   * يملأ ما يعرفه دفتر الرحلات فقط. نقد ضبا وتحصيل صفاجا **لا يُمسّان**:
+   * أرصدة خزينةٍ فعليّة، وتصفيرها من الشيت يمحو مُدخلاً بشرياً بلا تنبيه.
    */
   async function fetchSheet() {
-    if (!form.date_from || !form.date_to) { alert('أدخل الفترة الزمنية أولاً'); return; }
+    if (!form.date_from || !form.date_to) { setError('أدخل الفترة الزمنية أولاً'); return; }
     setFetchingSheet(true);
+    setError('');
     try {
       const ranges: Record<string, { from: number; to: number }> = {};
-      for (const k of ['poseidon', 'amal', 'daleela']) {
+      for (const k of VESSEL_KEYS) {
         const r = voyRange[k];
         if (r?.from && r?.to) ranges[k] = { from: Number(r.from), to: Number(r.to) };
       }
       const res = await api.post('/api/profit-periods/fetch-sheet', {
         date_from: form.date_from, date_to: form.date_to,
+        line: DISTRIBUTION_LINE,
         ...(Object.keys(ranges).length ? { ranges } : {}),
       });
       const d = res.data;
-      setForm((prev) => ({
-        ...prev,
-        poseidon_revenue: d.poseidon?.revenue ?? prev.poseidon_revenue,
-        poseidon_voyages: d.poseidon?.voyages ?? prev.poseidon_voyages,
-        amal_revenue:     d.amal?.revenue     ?? prev.amal_revenue,
-        amal_voyages:     d.amal?.voyages     ?? prev.amal_voyages,
-        daleela_revenue:  d.daleela?.revenue  ?? prev.daleela_revenue,
-        daleela_voyages:  d.daleela?.voyages  ?? prev.daleela_voyages,
-        commission_amount:
-          (d.poseidon?.commission ?? 0) + (d.amal?.commission ?? 0) + (d.daleela?.commission ?? 0),
-        bunker_badawi:   d.poseidon?.bunker ?? prev.bunker_badawi,
-        bunker_ittihad:  (d.amal?.bunker ?? 0) + (d.daleela?.bunker ?? 0),
-      }));
-      setSheetInfo(d.source || null);
+      setForm((prev) => {
+        const next = { ...prev };
+        for (const k of VESSEL_KEYS) {
+          const v = d[k];
+          if (!v) continue;
+          (next as any)[`${k}_revenue`] = v.revenue ?? 0;
+          (next as any)[`${k}_voyages`] = v.voyages ?? 0;
+          (next as any)[`${k}_sd_base`] = v.sdBase ?? 0;
+          (next as any)[`${k}_fuel`] = v.bunker ?? 0;
+          (next as any)[`${k}_liquidity`] = v.liquidity ?? 0;
+        }
+        // العمولة الإجمالية القديمة — تُحدَّث لأنّها معروضة، ولا تدخل الحساب
+        next.commission_amount =
+          (d.poseidon?.commission ?? 0) + (d.amal?.commission ?? 0) + (d.daleela?.commission ?? 0);
+        return next;
+      });
+      setSheetInfo(d.source ? { ...d, source: d.source } : d);
     } catch (e: any) {
-      alert('فشل الجلب من الشيت: ' + (e?.response?.data?.message || e?.message));
+      setError('فشل الجلب من الشيت: ' + (e?.response?.data?.message || e?.message));
     } finally {
       setFetchingSheet(false);
     }
   }
 
-  async function fetchExcel() {
-    if (!form.date_from || !form.date_to) { alert('أدخل الفترة الزمنية أولاً'); return; }
-    setFetching(true);
-    try {
-      const res = await api.post('/api/profit-periods/fetch-excel', {
-        file_id: driveId, date_from: form.date_from, date_to: form.date_to,
-        ...(confirmedVoyFrom != null && confirmedVoyTo != null
-          ? { voy_from: confirmedVoyFrom, voy_to: confirmedVoyTo }
-          : {}),
-      });
-      const d = res.data;
-      setForm((prev) => ({
-        ...prev,
-        poseidon_revenue: d.poseidon?.revenue ?? prev.poseidon_revenue,
-        poseidon_voyages: d.poseidon?.voyages ?? prev.poseidon_voyages,
-        amal_revenue:     d.amal?.revenue     ?? prev.amal_revenue,
-        amal_voyages:     d.amal?.voyages     ?? prev.amal_voyages,
-        daleela_revenue:  d.daleela?.revenue  ?? prev.daleela_revenue,
-        daleela_voyages:  d.daleela?.voyages  ?? prev.daleela_voyages,
-        commission_amount:
-          (d.poseidon?.commission ?? 0) + (d.amal?.commission ?? 0) + (d.daleela?.commission ?? 0),
-        cash_safaga_badawi:  d.poseidon?.cash_safaga ?? prev.cash_safaga_badawi,
-        cash_safaga_ittihad: (d.amal?.cash_safaga ?? 0) + (d.daleela?.cash_safaga ?? 0),
-        bunker_badawi:   d.poseidon?.bunker ?? prev.bunker_badawi,
-        bunker_ittihad:  (d.amal?.bunker ?? 0) + (d.daleela?.bunker ?? 0),
-        per_voyage_fee: 0,
-      }));
-    } catch (e: any) {
-      alert('فشل جلب البيانات: ' + (e?.response?.data?.message || e?.message));
-    } finally {
-      setFetching(false);
-    }
+  /** ينقل سيولة الدفتر إلى نقد ضبا — اقتراحاً يبقى قابلاً للتحرير. */
+  function applyLiquiditySuggestion() {
+    setForm((prev) => {
+      const next = { ...prev };
+      for (const k of VESSEL_KEYS) {
+        const liq = num((prev as any)[`${k}_liquidity`]);
+        if (liq) (next as any)[`${k}_cash_duba`] = liq;
+      }
+      return next;
+    });
   }
 
   async function handleSave() {
@@ -282,13 +264,14 @@ export default function ProfitDistributionPage() {
       setError('اسم الفترة والتواريخ مطلوبة');
       return;
     }
+    if (hasAdjust && !form.adjust_reason.trim()) {
+      setError('تعديلٌ يدويّ بلا سبب — اكتب سبب التعديل قبل الحفظ');
+      return;
+    }
     setLoading(true);
     try {
-      if (editing) {
-        await api.put(`/api/profit-periods/${editing.id}`, form);
-      } else {
-        await api.post('/api/profit-periods', form);
-      }
+      if (editing) await api.put(`/api/profit-periods/${editing.id}`, form);
+      else await api.post('/api/profit-periods', form);
       setShowModal(false);
       load();
     } catch (e: any) {
@@ -301,46 +284,81 @@ export default function ProfitDistributionPage() {
   async function handleDelete(id: string, name: string) {
     if (!confirm(`حذف "${name}"؟`)) return;
     await api.delete(`/api/profit-periods/${id}`);
+    if (selected?.id === id) setSelected(null);
     load();
   }
 
-  const calc = calcLocal(form);
-  const detailCalc = selected ? calcLocal(selected as any) : null;
+  const calc = useMemo(() => calculateDistribution(toModelInput(form as any)), [form]);
+  const detail = useMemo(
+    () => (selected ? calculateDistribution(toModelInput(selected as any)) : null),
+    [selected],
+  );
+  const hasAdjust = VESSEL_KEYS.some(
+    (k) => num((form as any)[`${k}_sd_adjust`]) !== 0 || num((form as any)[`${k}_fuel_adjust`]) !== 0,
+  );
+  const days = daysBetween(form.date_from, form.date_to);
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-gray-800">توزيع الأرباح الأسبوعي</h1>
+      <div className="flex items-start justify-between mb-2 gap-4 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-800">توزيع الأرباح</h1>
+          <p className="text-xs text-gray-500 mt-1">
+            على معادلة المستند المعتمد — الأساس هو النقد المتاح في ضبا، لا الإيراد
+          </p>
+        </div>
         <button onClick={openAdd} className="bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700">
           + فترة جديدة
         </button>
       </div>
 
-      {/* قائمة الفترات */}
-      <div className="bg-white rounded-xl shadow overflow-hidden mb-6">
-        <table className="w-full text-sm">
+      <div className="bg-white rounded-xl shadow overflow-x-auto mb-6">
+        <table className="w-full text-sm min-w-[720px]">
           <thead className="bg-gray-50 text-gray-600 text-right">
             <tr>
               <th scope="col" className="px-4 py-3">الفترة</th>
               <th scope="col" className="px-4 py-3">من</th>
               <th scope="col" className="px-4 py-3">إلى</th>
-              <th scope="col" className="px-4 py-3 text-left">إجمالي الإيراد</th>
-              <th scope="col" className="px-4 py-3 text-left">رصيد بدوي</th>
-              <th scope="col" className="px-4 py-3 text-left">رصيد الاتحاد</th>
+              <th scope="col" className="px-4 py-3 text-left">نقد ضبا</th>
+              <th scope="col" className="px-4 py-3 text-left">توزيع أمل</th>
+              <th scope="col" className="px-4 py-3 text-left">توزيع بوسيدون</th>
               <th scope="col" className="px-4 py-3">إجراءات</th>
             </tr>
           </thead>
           <tbody>
             {periods.map((p) => {
-              const c = calcLocal(p as any);
+              const c = calculateDistribution(toModelInput(p as any));
+              const amal = c.vessels.find((v) => v.key === 'amal');
+              const pos = c.vessels.find((v) => v.key === 'poseidon');
+              const blocked = c.missing.length > 0;
               return (
-                <tr key={p.id} className="border-t hover:bg-gray-50 cursor-pointer" onClick={() => setSelected(selected?.id === p.id ? null : p)}>
-                  <td className="px-4 py-3 font-medium">{p.period_name}</td>
+                <tr key={p.id} className="border-t hover:bg-gray-50 cursor-pointer"
+                  onClick={() => setSelected(selected?.id === p.id ? null : p)}>
+                  <td className="px-4 py-3 font-medium">
+                    {p.period_name}
+                    {blocked && (
+                      <span className="ms-2 text-[10px] bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded">
+                        مدخلات ناقصة
+                      </span>
+                    )}
+                  </td>
                   <td className="px-4 py-3 text-gray-500">{p.date_from}</td>
                   <td className="px-4 py-3 text-gray-500">{p.date_to}</td>
-                  <td className="px-4 py-3 text-left font-mono">{fmt(c.totalRevenue)}</td>
-                  <td className={`px-4 py-3 text-left font-mono font-semibold ${c.balanceBadawi >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>{fmt(c.balanceBadawi)}</td>
-                  <td className={`px-4 py-3 text-left font-mono font-semibold ${c.balanceIttihad >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>{fmt(c.balanceIttihad)}</td>
+                  <td className="px-4 py-3 text-left font-mono">{fmt(c.totalCashDuba)}</td>
+                  {blocked ? (
+                    <td className="px-4 py-3 text-left text-amber-700 text-xs" colSpan={2}>
+                      لا يُحتسب — {c.missing[0]}
+                    </td>
+                  ) : (
+                    <>
+                      <td className="px-4 py-3 text-left font-mono font-semibold text-emerald-700">
+                        {fmt(amal?.dividendPayable ?? 0)}
+                      </td>
+                      <td className="px-4 py-3 text-left font-mono font-semibold text-emerald-700">
+                        {fmt(pos?.dividendPayable ?? 0)}
+                      </td>
+                    </>
+                  )}
                   <td className="px-4 py-3 flex gap-2" onClick={(e) => e.stopPropagation()}>
                     <button onClick={() => openEdit(p)} className="text-blue-600 hover:underline text-xs">تعديل</button>
                     <button onClick={() => handleDelete(p.id, p.period_name)} className="text-red-500 hover:underline text-xs">حذف</button>
@@ -361,92 +379,20 @@ export default function ProfitDistributionPage() {
         </table>
       </div>
 
-      {/* تفاصيل الفترة المختارة */}
-      {selected && detailCalc && (
-        <div className="bg-white rounded-xl shadow p-6 mb-6">
-          <h3 className="font-bold text-lg mb-4 text-emerald-700">{selected.period_name} — تفاصيل الحساب</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-            {[
-              { label: 'Poseidon', rev: selected.poseidon_revenue, voy: selected.poseidon_voyages, op: selected.poseidon_over_pax },
-              { label: 'Amal',     rev: selected.amal_revenue,     voy: selected.amal_voyages,     op: selected.amal_over_pax },
-              { label: 'Daleela',  rev: selected.daleela_revenue,  voy: selected.daleela_voyages,  op: selected.daleela_over_pax },
-            ].map((v) => (
-              <div key={v.label} className="bg-gray-50 rounded-lg p-4">
-                <p className="text-xs text-gray-500 font-semibold uppercase">{v.label}</p>
-                <p className="text-xl font-bold font-mono mt-1">${fmt(v.rev)}</p>
-                <p className="text-sm text-gray-500">{v.voy} رحلة</p>
-                {v.op > 0 && <p className="text-xs text-amber-600 font-mono">Over Pax: ${fmt(v.op)}</p>}
-              </div>
-            ))}
-          </div>
-
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm mb-6">
-            <DetailBox label="إجمالي الإيراد" value={`$${fmt(detailCalc.totalRevenue)}`} />
-            <DetailBox label="إجمالي الإيجار" value={`$${fmt(detailCalc.totalRent)}`} color="red" />
-            <DetailBox label="العمولة (للعرض)" value={`$${fmt(detailCalc.totalCommission)}`} />
-            <DetailBox label="أساس التوزيع" value={`$${fmt(detailCalc.netForDistribution)}`} color={detailCalc.netForDistribution >= 0 ? 'green' : 'red'} />
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {[
-              {
-                name: 'بدوي (بوسيدون)',
-                dist: detailCalc.distributionBadawi,
-                rent: detailCalc.poseidonRent,
-                overPax: detailCalc.overPaxBadawi,
-                bunker: selected.bunker_badawi,
-                cash: selected.cash_safaga_badawi,
-                transfer: selected.transfers_badawi,
-                prev: selected.balance_prev_badawi,
-                activity: detailCalc.activityBadawi,
-                balance: detailCalc.balanceBadawi,
-              },
-              {
-                name: 'الاتحاد (امل + دليلة)',
-                dist: detailCalc.distributionIttihad,
-                rent: detailCalc.amalRent + detailCalc.daleelaRent,
-                overPax: detailCalc.overPaxIttihad,
-                bunker: selected.bunker_ittihad,
-                cash: selected.cash_safaga_ittihad,
-                transfer: selected.transfers_ittihad,
-                prev: selected.balance_prev_ittihad,
-                activity: detailCalc.activityIttihad,
-                balance: detailCalc.balanceIttihad,
-              },
-            ].map((co) => (
-              <div key={co.name} className="border rounded-xl p-4">
-                <p className="font-bold text-base mb-3">{co.name}</p>
-                <div className="space-y-1 text-sm">
-                  <Row label="رصيد سابق" val={`$${fmt(co.prev)}`} />
-                  <Row label="توزيع النسب" val={`$${fmt(co.dist)}`} />
-                  <Row label="كاش سفاجا" val={`-$${fmt(co.cash)}`} color="red" />
-                  <Row label="Over Pax" val={`+$${fmt(co.overPax)}`} color="amber" />
-                  <Row label="إيجار العبارات" val={`+$${fmt(co.rent)}`} color="green" />
-                  <Row label="بنكر" val={`+$${fmt(co.bunker)}`} color="green" />
-                  <Row label="نتيجة النشاط" val={`$${fmt(co.activity)}`} bold />
-                  <Row label="تحويلات" val={`-$${fmt(co.transfer)}`} color="red" />
-                  <div className="border-t pt-2 mt-2">
-                    <Row label="الرصيد المرحّل" val={`$${fmt(co.balance)}`} bold color={co.balance >= 0 ? 'green' : 'red'} />
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+      {selected && detail && (
+        <DistributionCard title={`${selected.period_name} — كشف التوزيع`} result={detail} />
       )}
 
-      {/* Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black/50 flex items-start justify-center z-50 p-4 overflow-y-auto">
-          <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-2xl my-4">
+          <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-4xl my-4">
             <h3 className="font-bold text-lg mb-4 text-emerald-700">{editing ? 'تعديل فترة' : 'فترة جديدة'}</h3>
 
-            {/* بيانات أساسية */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
-              <div className="md:col-span-1">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
+              <div className="md:col-span-2">
                 <label className="block text-xs text-gray-500 mb-1">اسم الفترة *</label>
                 <input value={form.period_name} onChange={(e) => set('period_name', e.target.value)}
-                  placeholder="الأسبوع الأول - يوليو 2025"
+                  placeholder="١٨ – ٣١ يوليو ٢٠٢٦"
                   className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />
               </div>
               <div>
@@ -455,65 +401,39 @@ export default function ProfitDistributionPage() {
                   className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />
               </div>
               <div>
-                <label className="block text-xs text-gray-500 mb-1">إلى *</label>
+                <label className="block text-xs text-gray-500 mb-1">
+                  إلى * {days > 0 && <span className="text-emerald-600 font-semibold">· {days} يوم</span>}
+                </label>
                 <input type="date" value={form.date_to} onChange={(e) => set('date_to', e.target.value)}
                   className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />
               </div>
             </div>
 
-            {/* مساعد رقم الرحلة */}
-            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4">
-              <p className="text-xs font-semibold text-amber-700 mb-2">تحديد التواريخ من رقم الرحلة — Poseidon (اختياري)</p>
-              <div className="flex gap-2 items-end flex-wrap">
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">من رحلة رقم</label>
-                  <input type="number" value={voyageFrom} onChange={(e) => setVoyageFrom(e.target.value)}
-                    placeholder="60" className="w-24 border rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-amber-400" />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">إلى رحلة رقم</label>
-                  <input type="number" value={voyageTo} onChange={(e) => setVoyageTo(e.target.value)}
-                    placeholder="64" className="w-24 border rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-amber-400" />
-                </div>
-                <button onClick={fetchVoyageDates} disabled={fetchingVoyage}
-                  className="bg-amber-500 text-white px-3 py-1.5 rounded text-xs hover:bg-amber-600 disabled:opacity-50 whitespace-nowrap">
-                  {fetchingVoyage ? 'جاري...' : 'تطبيق التواريخ تلقائياً'}
-                </button>
-                {form.date_from && form.date_to && (
-                  <span className="text-xs text-amber-700 font-mono">{form.date_from} → {form.date_to}</span>
-                )}
-              </div>
-            </div>
-
-            {/* جلب من الشيت الموحّد — المصدر المعتمد */}
-            <div className="bg-emerald-50 border-2 border-emerald-300 rounded-lg p-3 mb-3">
+            {/* ── الجلب من الشيت ── */}
+            <div className="bg-emerald-50 border-2 border-emerald-300 rounded-lg p-3 mb-4">
               <div className="flex items-center justify-between gap-2 flex-wrap">
                 <div className="min-w-0">
                   <p className="text-xs font-bold text-emerald-800">
-                    🟢 جلب من الشيت الموحّد — المصدر المعتمد
+                    جلب من الشيت الموحّد — خطّ {DISTRIBUTION_LINE}
                   </p>
                   <p className="text-[11px] text-emerald-700 mt-0.5">
-                    إيراد + عمولة + بنكر + عدد الرحلات · يُحدَّث تلقائياً ثلاث مرّات يومياً
+                    الرحلات · أساس العمولة · الوقود · الإيراد · السيولة — يُحدَّث ثلاث مرّات يومياً
                   </p>
                 </div>
                 <button onClick={fetchSheet} disabled={fetchingSheet}
                   className="bg-emerald-600 text-white px-3 py-1.5 rounded text-xs hover:bg-emerald-700 disabled:opacity-50 whitespace-nowrap">
-                  {fetchingSheet ? 'جاري الجلب...' : '🔄 جلب من الشيت'}
+                  {fetchingSheet ? 'جاري الجلب...' : 'جلب من الشيت'}
                 </button>
               </div>
-              {/*
-                المدى بالرقم يسبق التاريخ.
-                رحلات المراكب لا تتزامن، فمدىً تقويميّ واحد يلتقط من كل مركب
-                ما لا يخصّ الفترة — وهو خطأٌ لا يظهر في الأرقام بل في اختيارها.
-              */}
+
               <div className="mt-2 border-t border-emerald-200 pt-2">
                 <p className="text-[11px] font-semibold text-emerald-800 mb-1.5">
-                  حدّد بأرقام الرحلات لكل مركب (الأدقّ) — واتركها فارغة ليُنتقى بالتاريخ
+                  حدّد بأرقام الرحلات لكلّ مركب — كما يفعل المستند. واتركها فارغة ليُنتقى بالتاريخ.
                 </p>
                 <div className="grid gap-1.5 sm:grid-cols-3">
-                  {([['poseidon', 'Poseidon'], ['amal', 'Amal'], ['daleela', 'Daleela']] as const).map(([k, lbl]) => (
+                  {VESSEL_KEYS.map((k) => (
                     <div key={k} className="flex items-center gap-1">
-                      <span className="text-[11px] text-emerald-900 w-16 shrink-0">{lbl}</span>
+                      <span className="text-[11px] text-emerald-900 w-14 shrink-0">{VESSEL_NAMES[k]}</span>
                       <input inputMode="numeric" value={voyRange[k].from} onChange={(e) => setRange(k, 'from', e.target.value)}
                         placeholder="من" className="w-full border border-emerald-300 rounded px-1.5 py-1 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-emerald-400" />
                       <span className="text-emerald-500 text-[11px]">→</span>
@@ -526,274 +446,257 @@ export default function ProfitDistributionPage() {
 
               {sheetInfo && (
                 <div className="text-[11px] text-emerald-800 mt-2 border-t border-emerald-200 pt-1.5 space-y-0.5">
-                  {(['poseidon', 'amal', 'daleela'] as const).map((k) => {
+                  {VESSEL_KEYS.map((k) => {
                     const v = sheetInfo[k];
                     if (!v || (!v.voyages && !v.expected)) return null;
                     const gap = v.missing && v.missing.length > 0;
                     return (
                       <p key={k} className={gap ? 'text-red-700 font-semibold' : ''}>
-                        {gap ? '⚠' : '✓'} {k} — {v.voyages} رحلة
+                        {gap ? '⚠' : '✓'} {VESSEL_NAMES[k]} — {v.voyages} رحلة
                         {v.by === 'ref' && v.refs?.length ? <> · REF {v.refs[0]}–{v.refs[v.refs.length - 1]}</> : null}
                         {v.firstDate && <> · {v.firstDate} → {v.lastDate}</>}
                         {gap && <> · <span className="text-red-700">غير موجودة: {v.missing.join('، ')}</span></>}
                       </p>
                     );
                   })}
-                  <p className="text-emerald-700 pt-0.5">الكاش المصروف لا يأتي من الشيت — أدخله يدوياً</p>
+                  {sheetInfo.source?.offLine > 0 && (
+                    <p className="text-emerald-700 pt-0.5">
+                      استُبعدت {sheetInfo.source.offLine} رحلة على خطوطٍ أخرى — التوزيع
+                      شراكةُ {DISTRIBUTION_LINE} وحده
+                    </p>
+                  )}
+                  <p className="text-emerald-700 pt-0.5">
+                    نقد ضبا وتحصيل صفاجا لا يأتيان من الشيت — أدخلهما يدوياً
+                  </p>
                 </div>
               )}
             </div>
 
-            {/* جلب من Google Drive — المسار القديم */}
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
-              <p className="text-xs font-semibold text-blue-700 mb-2">جلب البيانات من Google Drive Excel (إيراد + عمولة + كاش + بنكر)</p>
-              <div className="flex gap-2">
-                <input value={driveId} onChange={(e) => setDriveId(e.target.value)}
-                  placeholder="Google Drive File ID"
-                  className="flex-1 border rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400" />
-                <button onClick={fetchExcel} disabled={fetching}
-                  className="bg-blue-600 text-white px-3 py-1.5 rounded text-xs hover:bg-blue-700 disabled:opacity-50 whitespace-nowrap">
-                  {fetching ? 'جاري الجلب...' : 'جلب تلقائي'}
+            {/* ── مدخلات المراكب ── */}
+            <Section title="من دفتر الرحلات — يُجلب من الشيت ويقبل التصحيح">
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs min-w-[640px]">
+                  <thead className="text-gray-500">
+                    <tr>
+                      <th className="text-right py-1 font-medium">المركب</th>
+                      <th className="text-right py-1 font-medium">رحلات</th>
+                      <th className="text-right py-1 font-medium">الإيراد (عرض)</th>
+                      <th className="text-right py-1 font-medium">أساس ٦.٥٪ — شاحنات الذهاب</th>
+                      <th className="text-right py-1 font-medium">الوقود</th>
+                      <th className="text-right py-1 font-medium">سعر يوميّ</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {VESSEL_KEYS.map((k) => (
+                      <tr key={k} className="border-t">
+                        <td className="py-1.5 pe-2 font-medium text-gray-700 whitespace-nowrap">{VESSEL_NAMES[k]}</td>
+                        <td className="py-1.5 pe-2">
+                          <input type="number" min={0}
+                            value={num((form as any)[`${k}_voyages`])}
+                            onChange={(e) => setNum(`${k}_voyages` as keyof Form, Math.max(0, Number(e.target.value) || 0))}
+                            className="w-16 border rounded px-1.5 py-1 focus:outline-none focus:ring-1 focus:ring-emerald-400" />
+                        </td>
+                        <td className="py-1.5 pe-2">
+                          <MoneyInput value={num((form as any)[`${k}_revenue`])}
+                            onChange={(v) => setNum(`${k}_revenue` as keyof Form, v)} muted />
+                        </td>
+                        <td className="py-1.5 pe-2">
+                          <MoneyInput value={num((form as any)[`${k}_sd_base`])}
+                            onChange={(v) => setNum(`${k}_sd_base` as keyof Form, v)} />
+                        </td>
+                        <td className="py-1.5 pe-2">
+                          <MoneyInput value={num((form as any)[`${k}_fuel`])}
+                            onChange={(v) => setNum(`${k}_fuel` as keyof Form, v)} />
+                        </td>
+                        <td className="py-1.5 pe-2">
+                          <MoneyInput value={num((form as any)[`${k}_daily_rate`])}
+                            onChange={(v) => setNum(`${k}_daily_rate` as keyof Form, v)} width="w-24" />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Section>
+
+            {/* ── مدخلات الخزينة ── */}
+            <Section title="من الخزينة — لا يعرفها دفتر الرحلات">
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs min-w-[560px]">
+                  <thead className="text-gray-500">
+                    <tr>
+                      <th className="text-right py-1 font-medium">المركب</th>
+                      <th className="text-right py-1 font-medium">نقد ضبا *</th>
+                      <th className="text-right py-1 font-medium">صافي التحصيل — صفاجا</th>
+                      <th className="text-right py-1 font-medium">Over Pax — كما نشأ</th>
+                      <th className="text-right py-1 font-medium">سيولة الدفتر</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {VESSEL_KEYS.map((k) => {
+                      const liq = num((form as any)[`${k}_liquidity`]);
+                      const duba = num((form as any)[`${k}_cash_duba`]);
+                      const gap = liq && duba ? liq - duba : null;
+                      return (
+                        <tr key={k} className="border-t">
+                          <td className="py-1.5 pe-2 font-medium text-gray-700 whitespace-nowrap">{VESSEL_NAMES[k]}</td>
+                          <td className="py-1.5 pe-2">
+                            <MoneyInput value={duba}
+                              onChange={(v) => setNum(`${k}_cash_duba` as keyof Form, v)} />
+                          </td>
+                          <td className="py-1.5 pe-2">
+                            <MoneyInput value={num((form as any)[`${k}_net_collected`])}
+                              onChange={(v) => setNum(`${k}_net_collected` as keyof Form, v)} />
+                          </td>
+                          <td className="py-1.5 pe-2">
+                            <MoneyInput value={num((form as any)[`${k}_over_pax`])}
+                              onChange={(v) => setNum(`${k}_over_pax` as keyof Form, v)} />
+                          </td>
+                          <td className="py-1.5 pe-2 font-mono text-gray-400">
+                            {liq ? fmt(liq) : '—'}
+                            {gap != null && Math.abs(gap) > 0.5 && (
+                              <span className="text-amber-600 ms-1">({paren(gap)})</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <div className="flex items-center justify-between gap-2 mt-2 flex-wrap">
+                <p className="text-[11px] text-gray-500 max-w-lg">
+                  نقد ضبا أساس التوزيع كلّه، وهو رصيد خزينةٍ فعليّ لا يُشتقّ من الدفتر.
+                  سيولة الدفتر تقاربه — طابقته مرّةً بسنتٍ واحد وزادت عليه في غيرها بآلافٍ
+                  قليلة — فهي اقتراحٌ لا بديل.
+                  <br />
+                  و Over Pax يُدخَل <b>كما نشأ على المركب</b> لا كما آل إلى الشريك — القسمة
+                  ٦٦.٦٧٪ / ٣٣.٣٣٪ يُجريها النظام.
+                </p>
+                <button type="button" onClick={applyLiquiditySuggestion}
+                  className="text-[11px] border border-gray-300 rounded px-2 py-1 hover:bg-gray-50 whitespace-nowrap">
+                  انقل السيولة اقتراحاً
                 </button>
               </div>
-            </div>
-
-            {/* إيرادات العبارات */}
-            <Section title="إيرادات العبارات (Over Pax يدوي — يُوزَّع 66.67%/33.33%)">
-              <VesselRow label="Poseidon"
-                revenue={form.poseidon_revenue} onRev={(v) => setNum('poseidon_revenue', v)}
-                voyages={form.poseidon_voyages} onVoy={(v) => setNum('poseidon_voyages', v)}
-                overPax={form.poseidon_over_pax} onOver={(v) => setNum('poseidon_over_pax', v)} />
-              <VesselRow label="Amal"
-                revenue={form.amal_revenue} onRev={(v) => setNum('amal_revenue', v)}
-                voyages={form.amal_voyages} onVoy={(v) => setNum('amal_voyages', v)}
-                overPax={form.amal_over_pax} onOver={(v) => setNum('amal_over_pax', v)} />
-              <VesselRow label="Daleela"
-                revenue={form.daleela_revenue} onRev={(v) => setNum('daleela_revenue', v)}
-                voyages={form.daleela_voyages} onVoy={(v) => setNum('daleela_voyages', v)}
-                overPax={form.daleela_over_pax} onOver={(v) => setNum('daleela_over_pax', v)} />
             </Section>
 
-            {/* بنكر */}
-            <Section title="بنكر (مجلوب تلقائياً من الشيت — يمكن التعديل)">
-              <div className="grid grid-cols-2 gap-3">
+            {/* ── التعديلات اليدوية ── */}
+            <Section title="تعديلاتٌ يدويّة — تُسجَّل ولا تُخفى">
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs min-w-[440px]">
+                  <thead className="text-gray-500">
+                    <tr>
+                      <th className="text-right py-1 font-medium">المركب</th>
+                      <th className="text-right py-1 font-medium">تعديل الأساس</th>
+                      <th className="text-right py-1 font-medium">تعديل الوقود</th>
+                      <th className="text-right py-1 font-medium">تسوية الإيقاف</th>
+                      <th className="text-right py-1 font-medium">الأثر</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {VESSEL_KEYS.map((k) => {
+                      const sd = num((form as any)[`${k}_sd_base`]) + num((form as any)[`${k}_sd_adjust`]);
+                      const fu = num((form as any)[`${k}_fuel`]) + num((form as any)[`${k}_fuel_adjust`]);
+                      const touched = num((form as any)[`${k}_sd_adjust`]) || num((form as any)[`${k}_fuel_adjust`]);
+                      return (
+                        <tr key={k} className="border-t">
+                          <td className="py-1.5 pe-2 font-medium text-gray-700 whitespace-nowrap">{VESSEL_NAMES[k]}</td>
+                          <td className="py-1.5 pe-2">
+                            <MoneyInput value={num((form as any)[`${k}_sd_adjust`])}
+                              onChange={(v) => setNum(`${k}_sd_adjust` as keyof Form, v)} />
+                          </td>
+                          <td className="py-1.5 pe-2">
+                            <MoneyInput value={num((form as any)[`${k}_fuel_adjust`])}
+                              onChange={(v) => setNum(`${k}_fuel_adjust` as keyof Form, v)} />
+                          </td>
+                          <td className="py-1.5 pe-2">
+                            <MoneyInput value={num((form as any)[`${k}_off_hire`])}
+                              onChange={(v) => setNum(`${k}_off_hire` as keyof Form, v)} muted />
+                          </td>
+                          <td className="py-1.5 pe-2 font-mono text-[11px]">
+                            {touched
+                              ? <span className="text-amber-700">أساس {fmt(sd)} · وقود {fmt(fu)}</span>
+                              : <span className="text-gray-300">—</span>}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <div className="mt-2">
+                <label className="block text-xs text-gray-500 mb-1">
+                  سبب التعديل {hasAdjust && <span className="text-red-500">*</span>}
+                </label>
+                <textarea rows={2} value={form.adjust_reason || ''}
+                  onChange={(e) => set('adjust_reason', e.target.value)}
+                  placeholder="مثال: أُضيف تحصيل صفاجا إلى أساس أمل، واستُقطع بنكرٌ مؤجَّل ١٧٩٬٥٥٦.١١ — كما في مستند ٢٠ يونيو"
+                  className={`w-full border rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 ${
+                    hasAdjust && !form.adjust_reason.trim()
+                      ? 'border-red-300 focus:ring-red-400'
+                      : 'focus:ring-emerald-400'
+                  }`} />
+              </div>
+            </Section>
+
+            {/* ── معاملات العمولة ── */}
+            <Section title="معاملات العمولة">
+              <div className="grid grid-cols-2 gap-3 max-w-md">
                 <div>
-                  <label className="block text-xs text-gray-500 mb-1">بنكر بدوي (Poseidon — عمود Z)</label>
-                  <input type="text" value={fmt(form.bunker_badawi)}
-                    onChange={(e) => setNum('bunker_badawi', e.target.value)}
-                    className="w-full border rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-400 font-mono" />
+                  <label className="block text-xs text-gray-500 mb-1">النسبة %</label>
+                  <input type="number" step="0.1" value={form.commission_rate}
+                    onChange={(e) => setNum('commission_rate', Number(e.target.value) || 0)}
+                    className="w-full border rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-400" />
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-500 mb-1">بنكر الاتحاد (Amal+Daleela — عمود W)</label>
-                  <input type="text" value={fmt(form.bunker_ittihad)}
-                    onChange={(e) => setNum('bunker_ittihad', e.target.value)}
-                    className="w-full border rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-400 font-mono" />
+                  <label className="block text-xs text-gray-500 mb-1">رسم الرحلة $</label>
+                  <input type="number" step="1" value={form.per_voyage_fee}
+                    onChange={(e) => setNum('per_voyage_fee', Number(e.target.value) || 0)}
+                    className="w-full border rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-400" />
                 </div>
               </div>
             </Section>
 
-            {/* إيجار العبارات — تلقائي */}
-            {(() => {
-              const r = calcRent(form);
-              return (
-                <Section title={`إيجار العبارات — تلقائي (${r.days} يوم)`}>
-                  <div className="grid grid-cols-3 gap-2">
-                    {[
-                      { label: 'Poseidon', rate: DAILY_RATES.poseidon, val: r.poseidon },
-                      { label: 'Amal',     rate: DAILY_RATES.amal,     val: r.amal },
-                      { label: 'Daleela',  rate: DAILY_RATES.daleela,  val: r.daleela, note: Number(form.daleela_revenue) === 0 ? '(لا إيراد)' : '' },
-                    ].map(({ label, rate, val, note }) => (
-                      <div key={label} className="bg-gray-50 rounded p-2 text-center">
-                        <p className="text-xs text-gray-400 font-semibold">{label}</p>
-                        <p className="text-xs text-gray-400">${rate.toLocaleString()}/يوم</p>
-                        <p className="font-mono font-bold text-sm text-gray-700">${fmt(val)}</p>
-                        {note && <p className="text-xs text-orange-500">{note}</p>}
+            {/* ── المعاينة ── */}
+            <DistributionCard title="معاينة التوزيع" result={calc} compact />
+
+            {/* ── حقول المعادلة السابقة ── */}
+            <div className="mt-4">
+              <button type="button" onClick={() => setShowLegacy((s) => !s)}
+                className="text-xs text-gray-500 hover:text-gray-700 underline">
+                {showLegacy ? 'إخفاء' : 'إظهار'} حقول المعادلة السابقة
+              </button>
+              {showLegacy && (
+                <div className="mt-2 border rounded-lg p-3 bg-gray-50">
+                  <p className="text-[11px] text-gray-500 mb-3">
+                    هذه الحقول لا تدخل معادلة المستند. تبقى قابلةً للتحرير لأنّ فتراتٍ
+                    سابقة حُفظت بها، ومحوُها يُخفي ما حُسب حينها بدل أن يُظهره.
+                  </p>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                    {([
+                      ['كاش سفاجا — بدوي', 'cash_safaga_badawi'],
+                      ['كاش سفاجا — الاتحاد', 'cash_safaga_ittihad'],
+                      ['تحويلات — بدوي', 'transfers_badawi'],
+                      ['تحويلات — الاتحاد', 'transfers_ittihad'],
+                      ['رصيد سابق — بدوي', 'balance_prev_badawi'],
+                      ['رصيد سابق — الاتحاد', 'balance_prev_ittihad'],
+                      ['العمولة الإجمالية', 'commission_amount'],
+                      ['بنكر — بدوي', 'bunker_badawi'],
+                      ['بنكر — الاتحاد', 'bunker_ittihad'],
+                    ] as const).map(([label, key]) => (
+                      <div key={key}>
+                        <label className="block text-[11px] text-gray-500 mb-1">{label}</label>
+                        <MoneyInput value={num((form as any)[key])}
+                          onChange={(v) => setNum(key as keyof Form, v)} width="w-full" muted />
                       </div>
                     ))}
-                  </div>
-                  <p className="text-xs text-gray-500 mt-2 text-left">الإجمالي: <span className="font-bold font-mono">${fmt(r.total)}</span></p>
-                </Section>
-              );
-            })()}
-
-            {/* العمولة */}
-            <Section title="العمولة الإجمالية">
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">
-                  العمولة $ — تُجلب تلقائياً من الشيت (للعرض فقط — لا تؤثر على التوزيع)
-                </label>
-                <input type="text" value={fmt(form.commission_amount)}
-                  onChange={(e) => setNum('commission_amount', e.target.value)}
-                  className="w-full border rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-400 font-mono" />
-              </div>
-            </Section>
-
-            {/* نسب التوزيع */}
-            <Section title="نسب التوزيع">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">بدوي %</label>
-                  <input type="number" step="0.1" value={form.ratio_badawi}
-                    onChange={(e) => setNum('ratio_badawi', e.target.value)}
-                    className="w-full border rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-400" />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">الاتحاد %</label>
-                  <input type="number" step="0.1" value={form.ratio_ittihad}
-                    onChange={(e) => setNum('ratio_ittihad', e.target.value)}
-                    className="w-full border rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-400" />
-                </div>
-              </div>
-            </Section>
-
-            {/* الدفعات اليدوية */}
-            <Section title="الدفعات المصروفة">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">كاش سفاجا — بدوي</label>
-                  <input type="text" value={fmt(form.cash_safaga_badawi)}
-                    onChange={(e) => setNum('cash_safaga_badawi', e.target.value)}
-                    className="w-full border rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-400" />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">كاش سفاجا — الاتحاد</label>
-                  <input type="text" value={fmt(form.cash_safaga_ittihad)}
-                    onChange={(e) => setNum('cash_safaga_ittihad', e.target.value)}
-                    className="w-full border rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-400" />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">تحويلات — بدوي</label>
-                  <input type="text" value={fmt(form.transfers_badawi)}
-                    onChange={(e) => setNum('transfers_badawi', e.target.value)}
-                    className="w-full border rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-400" />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">تحويلات — الاتحاد</label>
-                  <input type="text" value={fmt(form.transfers_ittihad)}
-                    onChange={(e) => setNum('transfers_ittihad', e.target.value)}
-                    className="w-full border rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-400" />
-                </div>
-              </div>
-            </Section>
-
-            {/* رصيد سابق */}
-            <Section title="رصيد مرحّل من الفترة السابقة">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">رصيد بدوي السابق</label>
-                  <input type="text" value={fmt(form.balance_prev_badawi)}
-                    onChange={(e) => setNum('balance_prev_badawi', e.target.value)}
-                    className="w-full border rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-400" />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">رصيد الاتحاد السابق</label>
-                  <input type="text" value={fmt(form.balance_prev_ittihad)}
-                    onChange={(e) => setNum('balance_prev_ittihad', e.target.value)}
-                    className="w-full border rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-400" />
-                </div>
-              </div>
-            </Section>
-
-            {/* معاينة الحساب الكاملة */}
-            <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 mb-4">
-              <p className="text-xs font-semibold text-emerald-700 mb-3">معاينة الحساب</p>
-
-              {/* صف الإيراد والإيجار */}
-              <div className="grid grid-cols-3 gap-2 text-xs mb-3">
-                <CalcItem label="إجمالي الإيراد" val={`$${fmt(calc.totalRevenue)}`} />
-                <CalcItem label="إجمالي الإيجار" val={`$${fmt(calc.totalRent)}`} color="red" />
-                <CalcItem label="أساس التوزيع" val={`$${fmt(calc.netForDistribution)}`} />
-              </div>
-
-              {/* Over Pax — نسب التوزيع */}
-              {(Number(form.poseidon_over_pax) > 0 || Number(form.amal_over_pax) > 0 || Number(form.daleela_over_pax) > 0) && (
-                <div className="bg-amber-50 border border-amber-200 rounded p-2 mb-3 text-xs">
-                  <p className="font-semibold text-amber-700 mb-1">توزيع Over Pax</p>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <p className="text-amber-600 font-medium">بدوي</p>
-                      {Number(form.poseidon_over_pax) > 0 && <p>Poseidon × 66.67% = <span className="font-mono">${fmt(Number(form.poseidon_over_pax) * 2/3)}</span></p>}
-                      {Number(form.daleela_over_pax)  > 0 && <p>Daleela × 33.33% = <span className="font-mono">${fmt(Number(form.daleela_over_pax)  * 1/3)}</span></p>}
-                      <p className="font-bold border-t mt-1 pt-1">= ${fmt(calc.overPaxBadawi)}</p>
-                    </div>
-                    <div>
-                      <p className="text-amber-600 font-medium">الاتحاد</p>
-                      {Number(form.poseidon_over_pax) > 0 && <p>Poseidon × 33.33% = <span className="font-mono">${fmt(Number(form.poseidon_over_pax) * 1/3)}</span></p>}
-                      {Number(form.amal_over_pax)     > 0 && <p>Amal × 100% = <span className="font-mono">${fmt(Number(form.amal_over_pax))}</span></p>}
-                      {Number(form.daleela_over_pax)  > 0 && <p>Daleela × 66.67% = <span className="font-mono">${fmt(Number(form.daleela_over_pax) * 2/3)}</span></p>}
-                      <p className="font-bold border-t mt-1 pt-1">= ${fmt(calc.overPaxIttihad)}</p>
-                    </div>
                   </div>
                 </div>
               )}
-
-              {/* الحساب التفصيلي لكل طرف */}
-              <div className="grid grid-cols-2 gap-3 text-xs">
-                {[
-                  {
-                    name: 'بدوي', color: 'text-blue-700',
-                    rows: [
-                      { label: `توزيع (${form.ratio_badawi}%)`, val: calc.distributionBadawi, sign: '' },
-                      { label: 'كاش سفاجا', val: -Number(form.cash_safaga_badawi), sign: '-', color: 'text-red-500' },
-                      { label: 'Over Pax', val: calc.overPaxBadawi, sign: '+', color: 'text-amber-600', hide: calc.overPaxBadawi === 0 },
-                      { label: 'إيجار Poseidon', val: calc.poseidonRent, sign: '+', color: 'text-emerald-600' },
-                      { label: 'بنكر', val: Number(form.bunker_badawi), sign: '+', color: 'text-emerald-600', hide: Number(form.bunker_badawi) === 0 },
-                    ],
-                    activity: calc.activityBadawi,
-                    transfer: Number(form.transfers_badawi),
-                    prev: Number(form.balance_prev_badawi),
-                    balance: calc.balanceBadawi,
-                  },
-                  {
-                    name: 'الاتحاد', color: 'text-purple-700',
-                    rows: [
-                      { label: `توزيع (${form.ratio_ittihad}%)`, val: calc.distributionIttihad, sign: '' },
-                      { label: 'كاش سفاجا', val: -Number(form.cash_safaga_ittihad), sign: '-', color: 'text-red-500' },
-                      { label: 'Over Pax', val: calc.overPaxIttihad, sign: '+', color: 'text-amber-600', hide: calc.overPaxIttihad === 0 },
-                      { label: 'إيجار Amal+Daleela', val: calc.amalRent + calc.daleelaRent, sign: '+', color: 'text-emerald-600' },
-                      { label: 'بنكر', val: Number(form.bunker_ittihad), sign: '+', color: 'text-emerald-600', hide: Number(form.bunker_ittihad) === 0 },
-                    ],
-                    activity: calc.activityIttihad,
-                    transfer: Number(form.transfers_ittihad),
-                    prev: Number(form.balance_prev_ittihad),
-                    balance: calc.balanceIttihad,
-                  },
-                ].map((side) => (
-                  <div key={side.name} className="bg-white rounded border p-2 space-y-0.5">
-                    <p className={`font-bold text-sm mb-1 ${side.color}`}>{side.name}</p>
-                    {side.rows.filter(r => !r.hide).map((r, i) => (
-                      <div key={i} className="flex justify-between">
-                        <span className="text-gray-500">{r.sign} {r.label}</span>
-                        <span className={`font-mono ${r.color || 'text-gray-700'}`}>${fmt(Math.abs(r.val))}</span>
-                      </div>
-                    ))}
-                    <div className="border-t pt-1 flex justify-between font-semibold">
-                      <span>نتيجة النشاط</span>
-                      <span className={`font-mono ${side.color}`}>${fmt(side.activity)}</span>
-                    </div>
-                    {side.transfer > 0 && (
-                      <div className="flex justify-between text-red-500">
-                        <span>- تحويلات</span>
-                        <span className="font-mono">${fmt(side.transfer)}</span>
-                      </div>
-                    )}
-                    {side.prev !== 0 && (
-                      <div className="flex justify-between text-gray-500">
-                        <span>+ رصيد سابق</span>
-                        <span className="font-mono">${fmt(side.prev)}</span>
-                      </div>
-                    )}
-                    <div className={`border-t pt-1 flex justify-between font-bold text-sm ${side.balance >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>
-                      <span>الرصيد</span>
-                      <span className="font-mono">${fmt(side.balance)}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
             </div>
 
-            {error && <p className="text-red-500 text-sm mb-3">{error}</p>}
-            <div className="flex gap-2">
+            {error && <p className="text-red-600 text-sm mt-3">{error}</p>}
+            <div className="flex gap-2 mt-4">
               <button onClick={handleSave} disabled={loading}
                 className="flex-1 bg-emerald-600 text-white py-2 rounded-lg hover:bg-emerald-700 disabled:opacity-50">
                 {loading ? 'جاري الحفظ...' : 'حفظ'}
@@ -810,7 +713,150 @@ export default function ProfitDistributionPage() {
   );
 }
 
-// ── مكونات مساعدة ─────────────────────────────────────────────────────────
+/* ══════════════════════════════════════════════════════════════════════════
+ * كارت التوزيع — على شكل المستند نفسه.
+ *
+ * رُتِّب صفّاً صفّاً كما في الورقة ليُقارَن بها بالعين مباشرةً: معدّل الربح
+ * ثمّ الخصومات الثلاثة ثمّ تسوية صفاجا ثمّ التوزيع. والسطر الأخير — المتبقّي
+ * في ضبا — تحقّقٌ ذاتيّ: إن لم يقارب الصفر فثمّة خلل.
+ * ══════════════════════════════════════════════════════════════════════════ */
+function DistributionCard({ title, result, compact }: {
+  title: string; result: ModelResult; compact?: boolean;
+}) {
+  const vs = result.vessels;
+  const blocked = result.missing.length > 0;
+  const pad = compact ? 'p-4' : 'p-6';
+
+  return (
+    <div className={`bg-white rounded-xl shadow ${pad} mb-6 border ${blocked ? 'border-amber-300' : 'border-transparent'}`}>
+      <div className="flex items-baseline justify-between gap-3 flex-wrap mb-3">
+        <h3 className="font-bold text-emerald-700">{title}</h3>
+        <p className="text-xs text-gray-500">
+          {result.days} يوم · {partnersLabel(result.partners)}
+        </p>
+      </div>
+
+      {result.missing.map((m, i) => (
+        <p key={i} className="text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded px-2 py-1.5 mb-1.5">
+          {m}
+        </p>
+      ))}
+      {result.warnings.map((w, i) => (
+        <p key={i} className="text-xs bg-blue-50 border border-blue-200 text-blue-800 rounded px-2 py-1.5 mb-1.5">
+          {w}
+        </p>
+      ))}
+
+      {vs.length === 0 ? (
+        <p className="text-sm text-gray-400 py-4 text-center">لا مركب نشط في هذه الفترة</p>
+      ) : (
+        <div className="overflow-x-auto mt-3">
+          <table className="w-full text-sm" style={{ minWidth: 120 + vs.length * 150 }}>
+            <thead>
+              <tr className="text-gray-500 text-xs">
+                <th className="text-right font-medium pb-2" />
+                {vs.map((v) => (
+                  <th key={v.key} className="text-left font-semibold pb-2 text-gray-700">
+                    {v.name}
+                    <span className="block font-normal text-gray-400">{v.voyages} رحلة</span>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="font-mono">
+              <ChainRow label="الإيراد (للعرض)" vs={vs} pick={(v) => v.revenue} muted />
+              <ChainRow label="نقد ضبا" vs={vs} pick={(v) => v.cashDuba} />
+              <SharedRow label={`الأساس المشترك (${fmt(result.totalCashDuba)} ÷ ${result.partners})`}
+                value={result.baseShare} cols={vs.length} tone="neutral" />
+              {result.totalOverPax !== 0 && (
+                <ChainRow label="+ حصّة Over Pax" vs={vs} pick={(v) => v.overPaxShare} signed />
+              )}
+              <tr className="border-t-2 border-gray-300">
+                <td className="py-2 pe-3 font-sans text-gray-700 font-semibold whitespace-nowrap">معدّل الربح</td>
+                {vs.map((v) => (
+                  <td key={v.key} className="py-2 text-left font-bold text-gray-800">{fmt(v.adjustedProfit)}</td>
+                ))}
+              </tr>
+              <SharedRow label={`− حصّة الإيجار (${fmt(result.totalRent)} ÷ ${result.partners})`}
+                value={-result.rentShare} cols={vs.length} />
+              <SharedRow label={`− حصّة الوقود (${fmt(result.totalFuel)} ÷ ${result.partners})`}
+                value={-result.fuelShare} cols={vs.length} />
+              <SharedRow label={`− حصّة العمولة (${fmt(result.totalFee)} ÷ ${result.partners})`}
+                value={-result.feeShare} cols={vs.length} />
+              <ChainRow label="± تسوية صفاجا" vs={vs} pick={(v) => v.safagaAdjust} signed />
+              <tr className="border-t-2 border-emerald-600 bg-emerald-50">
+                <td className="py-2.5 pe-3 font-sans font-bold text-emerald-800 whitespace-nowrap">التوزيع المقترح</td>
+                {vs.map((v) => (
+                  <td key={v.key} className="py-2.5 text-left font-bold text-emerald-800 text-base">
+                    {blocked ? '—' : fmt(v.dividendPayable)}
+                  </td>
+                ))}
+              </tr>
+              <ChainRow label="المخصوم من ضبا" vs={vs} pick={(v) => v.deductedFromDuba} muted />
+              <ChainRow label="المتبقّي في ضبا" vs={vs} pick={(v) => v.remainingAtDuba} muted />
+              <ChainRow label="المستحقّ لحساب المركب" vs={vs} pick={(v) => v.dueToAccount} />
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {!compact && vs.length > 0 && (
+        <div className="mt-4 pt-3 border-t grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+          <Stat label="مجموع نقد ضبا" value={fmt(result.totalCashDuba)} />
+          <Stat label="مجموع الإيراد" value={fmt(result.totalRevenue)} muted />
+          <Stat label="متوسّط التحصيل" value={fmt(result.avgNetCollected)} muted />
+          <Stat label="مجموع المستحقّ"
+            value={fmt(vs.reduce((a, v) => a + v.dueToAccount, 0))} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ChainRow({ label, vs, pick, muted, signed }: {
+  label: string;
+  vs: ModelResult['vessels'];
+  pick: (v: ModelResult['vessels'][number]) => number;
+  muted?: boolean;
+  signed?: boolean;
+}) {
+  return (
+    <tr className="border-t border-gray-100">
+      <td className={`py-1.5 pe-3 font-sans whitespace-nowrap ${muted ? 'text-gray-400' : 'text-gray-600'}`}>
+        {label}
+      </td>
+      {vs.map((v) => {
+        const n = pick(v);
+        const cls = signed ? (n >= 0 ? 'text-emerald-700' : 'text-red-600') : muted ? 'text-gray-400' : 'text-gray-800';
+        return <td key={v.key} className={`py-1.5 text-left ${cls}`}>{signed ? paren(n) : fmt(n)}</td>;
+      })}
+    </tr>
+  );
+}
+
+/** بندٌ يتساوى فيه الشركاء — يُعرض مرّةً ممتدّاً على الأعمدة كلّها. */
+function SharedRow({ label, value, cols, tone = 'deduction' }: {
+  label: string; value: number; cols: number; tone?: 'deduction' | 'neutral';
+}) {
+  return (
+    <tr className="border-t border-gray-100">
+      <td className="py-1.5 pe-3 font-sans text-gray-600 whitespace-nowrap">{label}</td>
+      <td className={`py-1.5 text-left ${tone === 'neutral' ? 'text-gray-700' : 'text-red-600'}`} colSpan={cols}>
+        {paren(value)}
+      </td>
+    </tr>
+  );
+}
+
+function Stat({ label, value, muted }: { label: string; value: string; muted?: boolean }) {
+  return (
+    <div className="bg-gray-50 rounded-lg p-2.5">
+      <p className="text-gray-500">{label}</p>
+      <p className={`font-bold font-mono mt-0.5 ${muted ? 'text-gray-500' : 'text-gray-800'}`}>{value}</p>
+    </div>
+  );
+}
+
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="mb-4">
@@ -820,66 +866,37 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-function VesselRow({ label, revenue, onRev, voyages, onVoy, overPax, onOver }: {
-  label: string; revenue: number; onRev: (v: string) => void;
-  voyages: number; onVoy: (v: string) => void;
-  overPax: number; onOver: (v: string) => void;
+/**
+ * حقلٌ نقديّ يحتفظ بنصّه أثناء الكتابة.
+ *
+ * تنسيقُ القيمة على كلّ ضغطة مفتاح يمنع كتابة الكسور — «١٢٣.» يصير «١٢٣.٠٠»
+ * قبل أن تُكتب المنزلة. فيُحتفظ بالنصّ الخام ما دام الحقل مركَّزاً، ويُنسَّق
+ * عند الخروج منه.
+ */
+function MoneyInput({ value, onChange, width = 'w-32', muted }: {
+  value: number; onChange: (v: number) => void; width?: string; muted?: boolean;
 }) {
-  return (
-    <div className="grid grid-cols-4 gap-2 mb-2 items-center">
-      <span className="text-sm font-medium text-gray-700">{label}</span>
-      <div>
-        <label className="block text-xs text-gray-400 mb-0.5">إيراد $</label>
-        <input type="text" value={fmt(revenue)} onChange={(e) => onRev(e.target.value)}
-          className="w-full border rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-400" />
-      </div>
-      <div>
-        <label className="block text-xs text-gray-400 mb-0.5">رحلات</label>
-        <input type="number" value={voyages} onChange={(e) => onVoy(e.target.value)}
-          className="w-full border rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-400" />
-      </div>
-      <div>
-        <label className="block text-xs text-gray-400 mb-0.5">Over Pax $ (يدوي)</label>
-        <input type="text" value={fmt(overPax)} onChange={(e) => onOver(e.target.value)}
-          className="w-full border rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-amber-400" />
-      </div>
-    </div>
-  );
-}
+  const [text, setText] = useState<string | null>(null);
+  const ref = useRef<HTMLInputElement>(null);
+  const shown = text !== null ? text : fmt(value);
 
-function DetailBox({ label, value, color }: { label: string; value: string; color?: string }) {
-  const cls = color === 'red' ? 'text-red-600' : color === 'green' ? 'text-emerald-700' : 'text-gray-800';
   return (
-    <div className="bg-gray-50 rounded-lg p-3">
-      <p className="text-xs text-gray-500">{label}</p>
-      <p className={`font-bold font-mono text-sm mt-0.5 ${cls}`}>{value}</p>
-    </div>
-  );
-}
-
-function Row({ label, val, color, bold }: { label: string; val: string; color?: string; bold?: boolean }) {
-  const cls = color === 'red' ? 'text-red-600'
-    : color === 'green' ? 'text-emerald-700'
-    : color === 'amber' ? 'text-amber-600'
-    : 'text-gray-700';
-  return (
-    <div className="flex justify-between">
-      <span className="text-gray-500">{label}</span>
-      <span className={`font-mono ${bold ? 'font-bold' : ''} ${cls}`}>{val}</span>
-    </div>
-  );
-}
-
-function CalcItem({ label, val, color }: { label: string; val: string; color?: string }) {
-  const cls = color === 'red' ? 'text-red-600'
-    : color === 'green' ? 'text-emerald-600'
-    : color === 'blue' ? 'text-blue-700'
-    : color === 'amber' ? 'text-amber-600'
-    : 'text-gray-800';
-  return (
-    <div className="bg-white rounded p-2 border">
-      <p className="text-gray-400 text-xs">{label}</p>
-      <p className={`font-bold font-mono ${cls}`}>{val}</p>
-    </div>
+    <input
+      ref={ref}
+      type="text"
+      inputMode="decimal"
+      value={shown}
+      onFocus={() => setText(value === 0 ? '' : String(value))}
+      onChange={(e) => {
+        const raw = e.target.value;
+        setText(raw);
+        const parsed = parseFloat(raw.replace(/,/g, ''));
+        onChange(Number.isFinite(parsed) ? parsed : 0);
+      }}
+      onBlur={() => setText(null)}
+      className={`${width} border rounded px-1.5 py-1 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-emerald-400 ${
+        muted ? 'text-gray-500 bg-gray-50' : ''
+      }`}
+    />
   );
 }
