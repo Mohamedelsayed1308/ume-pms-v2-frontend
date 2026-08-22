@@ -7,6 +7,8 @@ import {
   VESSEL_KEYS, VESSEL_NAMES, DEFAULT_DAILY_RATE,
   type ModelResult, type VesselKey,
 } from '@/lib/profitModel';
+import type { VoyageRow, VoyageDetail } from '@/lib/voyageDetail';
+import DistributionReport from './DistributionReport';
 
 /*
  * شاشة توزيع الأرباح — مبنيّة على معادلة المستند المعتمد.
@@ -29,23 +31,6 @@ import {
  */
 const DISTRIBUTION_LINE = 'ضبا/سفاجا';
 
-/**
- * تفصيل رحلةٍ واحدة — لقطةٌ من دفتر المركب لحظة الجلب.
- *
- * وعمودا `Dianna` و`Mafis` في المستند الورقيّ لا وجود لهما في الدفتر: فيه عمود
- * `TRUCK` واحد ومن يُعدّ المستند هو من يقسمه. فتُعرض الشاحنات مجموعةً، وفرقُها
- * عن المستند هو ميناء البسّام — ثبت على رحلة بوسيدون ٦٩ بالسنت.
- */
-interface VoyageRow {
-  ref: number | null;
-  dateExp: string; dateImp: string;
-  nTruckE: number; nTruckI: number; truck: number;
-  nVehE: number; nVehI: number; veh: number;
-  nPaxE: number; nPaxI: number; pax: number;
-  income: number; comm: number; man: number; net: number;
-  cashDuba: number; cashSafaga: number; overPax: number;
-}
-type VoyageDetail = Partial<Record<VesselKey, VoyageRow[]>> & { fetchedAt?: string };
 
 interface Period {
   id: string;
@@ -158,6 +143,7 @@ export default function ProfitDistributionPage() {
   const [error, setError] = useState('');
   const [selected, setSelected] = useState<Period | null>(null);
   const [showLegacy, setShowLegacy] = useState(false);
+  const [printing, setPrinting] = useState(false);
 
   /*
    * مدى رقم الرحلة لكلّ مركب.
@@ -401,8 +387,28 @@ export default function ProfitDistributionPage() {
       </div>
 
       {selected && detail && (
-        <DistributionCard title={`${selected.period_name} — كشف التوزيع`} result={detail}
-          detail={selected.voyage_detail} />
+        <div>
+          <div className="flex justify-end mb-2">
+            <button onClick={() => setPrinting(true)} disabled={detail.missing.length > 0}
+              title={detail.missing.length > 0 ? 'مدخلاتٌ ناقصة — لا يُطبع كشفٌ غير مكتمل' : ''}
+              className="bg-gray-800 text-white text-sm px-4 py-2 rounded-lg hover:bg-black disabled:opacity-40 disabled:cursor-not-allowed">
+              🖨️ كشف للإدارة
+            </button>
+          </div>
+          <DistributionCard title={`${selected.period_name} — كشف التوزيع`} result={detail}
+            detail={selected.voyage_detail} />
+        </div>
+      )}
+
+      {printing && selected && detail && (
+        <DistributionReport
+          periodName={selected.period_name}
+          dateFrom={selected.date_from}
+          dateTo={selected.date_to}
+          result={detail}
+          detail={selected.voyage_detail}
+          onClose={() => setPrinting(false)}
+        />
       )}
 
       {showModal && (
