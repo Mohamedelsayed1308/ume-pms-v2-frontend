@@ -233,6 +233,11 @@ export default function ProfitDistributionPage() {
           (next as any)[`${k}_sd_base`] = v.sdBase ?? 0;
           (next as any)[`${k}_fuel`] = v.bunker ?? 0;
           (next as any)[`${k}_liquidity`] = v.liquidity ?? 0;
+          // الخزينة — يحسبها دفتر المركب منذ أغسطس ٢٠٢٦
+          (next as any)[`${k}_cash_duba`] = v.cashDuba ?? 0;
+          (next as any)[`${k}_net_collected`] = v.cashSafaga ?? 0;
+          (next as any)[`${k}_over_pax`] = v.overPax ?? 0;
+          (next as any)[`${k}_off_hire`] = v.offHire ?? 0;
         }
         // العمولة الإجمالية القديمة — تُحدَّث لأنّها معروضة، ولا تدخل الحساب
         next.commission_amount =
@@ -245,18 +250,6 @@ export default function ProfitDistributionPage() {
     } finally {
       setFetchingSheet(false);
     }
-  }
-
-  /** ينقل سيولة الدفتر إلى نقد ضبا — اقتراحاً يبقى قابلاً للتحرير. */
-  function applyLiquiditySuggestion() {
-    setForm((prev) => {
-      const next = { ...prev };
-      for (const k of VESSEL_KEYS) {
-        const liq = num((prev as any)[`${k}_liquidity`]);
-        if (liq) (next as any)[`${k}_cash_duba`] = liq;
-      }
-      return next;
-    });
   }
 
   async function handleSave() {
@@ -519,65 +512,58 @@ export default function ProfitDistributionPage() {
               </div>
             </Section>
 
-            {/* ── مدخلات الخزينة ── */}
-            <Section title="من الخزينة — لا يعرفها دفتر الرحلات">
+            {/* ── الخزينة ── */}
+            <Section title="الخزينة — من دفتر المركب، لا تُدخَل يداً">
               <div className="overflow-x-auto">
                 <table className="w-full text-xs min-w-[560px]">
                   <thead className="text-gray-500">
                     <tr>
                       <th className="text-right py-1 font-medium">المركب</th>
-                      <th className="text-right py-1 font-medium">نقد ضبا *</th>
-                      <th className="text-right py-1 font-medium">صافي التحصيل — صفاجا</th>
-                      <th className="text-right py-1 font-medium">Over Pax — كما نشأ</th>
-                      <th className="text-right py-1 font-medium">سيولة الدفتر</th>
+                      <th className="text-right py-1 font-medium">نقد ضبا</th>
+                      <th className="text-right py-1 font-medium">تحصيل صفاجا</th>
+                      <th className="text-right py-1 font-medium">Over Pax</th>
+                      <th className="text-right py-1 font-medium">تسوية الإيقاف</th>
                     </tr>
                   </thead>
                   <tbody>
                     {VESSEL_KEYS.map((k) => {
-                      const liq = num((form as any)[`${k}_liquidity`]);
                       const duba = num((form as any)[`${k}_cash_duba`]);
-                      const gap = liq && duba ? liq - duba : null;
+                      const sfg = num((form as any)[`${k}_net_collected`]);
+                      const op = num((form as any)[`${k}_over_pax`]);
+                      const oh = num((form as any)[`${k}_off_hire`]);
+                      const active = num((form as any)[`${k}_voyages`]) > 0;
+                      const empty = active && !duba && !sfg;
                       return (
                         <tr key={k} className="border-t">
-                          <td className="py-1.5 pe-2 font-medium text-gray-700 whitespace-nowrap">{VESSEL_NAMES[k]}</td>
-                          <td className="py-1.5 pe-2">
-                            <MoneyInput value={duba}
-                              onChange={(v) => setNum(`${k}_cash_duba` as keyof Form, v)} />
-                          </td>
-                          <td className="py-1.5 pe-2">
-                            <MoneyInput value={num((form as any)[`${k}_net_collected`])}
-                              onChange={(v) => setNum(`${k}_net_collected` as keyof Form, v)} />
-                          </td>
-                          <td className="py-1.5 pe-2">
-                            <MoneyInput value={num((form as any)[`${k}_over_pax`])}
-                              onChange={(v) => setNum(`${k}_over_pax` as keyof Form, v)} />
-                          </td>
-                          <td className="py-1.5 pe-2 font-mono text-gray-400">
-                            {liq ? fmt(liq) : '—'}
-                            {gap != null && Math.abs(gap) > 0.5 && (
-                              <span className="text-amber-600 ms-1">({paren(gap)})</span>
+                          <td className="py-1.5 pe-2 font-medium text-gray-700 whitespace-nowrap">
+                            {VESSEL_NAMES[k]}
+                            {empty && (
+                              <span className="ms-1.5 text-[10px] bg-amber-100 text-amber-800 px-1 py-0.5 rounded">
+                                لم تصل
+                              </span>
                             )}
                           </td>
+                          <ReadCell value={duba} />
+                          <ReadCell value={sfg} />
+                          <ReadCell value={op} dim={!op} />
+                          <ReadCell value={oh} dim={!oh} />
                         </tr>
                       );
                     })}
                   </tbody>
                 </table>
               </div>
-              <div className="flex items-center justify-between gap-2 mt-2 flex-wrap">
-                <p className="text-[11px] text-gray-500 max-w-lg">
-                  نقد ضبا أساس التوزيع كلّه، وهو رصيد خزينةٍ فعليّ لا يُشتقّ من الدفتر.
-                  سيولة الدفتر تقاربه — طابقته مرّةً بسنتٍ واحد وزادت عليه في غيرها بآلافٍ
-                  قليلة — فهي اقتراحٌ لا بديل.
-                  <br />
-                  و Over Pax يُدخَل <b>كما نشأ على المركب</b> لا كما آل إلى الشريك — القسمة
-                  ٦٦.٦٧٪ / ٣٣.٣٣٪ يُجريها النظام.
-                </p>
-                <button type="button" onClick={applyLiquiditySuggestion}
-                  className="text-[11px] border border-gray-300 rounded px-2 py-1 hover:bg-gray-50 whitespace-nowrap">
-                  انقل السيولة اقتراحاً
-                </button>
-              </div>
+              <p className="text-[11px] text-gray-500 mt-2 max-w-2xl">
+                هذه الأرقام يحسبها دفتر المركب ويجلبها الشيت — فلا تُكتب هنا. تصحيحها
+                يكون في الدفتر، ثمّ إعادة الجلب.
+                <br />
+                و Over Pax يُقرأ <b>كما نشأ على المركب</b> لا كما آل إلى الشريك — والقسمة
+                ٦٦.٦٧٪ لبدوي و ٣٣.٣٣٪ للاتحاد يُجريها النظام.
+                <br />
+                <span className="text-amber-700">
+                  «لم تصل» تعني رحلاتٍ في الفترة لم تُملأ أعمدة خزينتها في الدفتر بعد.
+                </span>
+              </p>
             </Section>
 
             {/* ── التعديلات اليدوية ── */}
@@ -589,7 +575,6 @@ export default function ProfitDistributionPage() {
                       <th className="text-right py-1 font-medium">المركب</th>
                       <th className="text-right py-1 font-medium">تعديل الأساس</th>
                       <th className="text-right py-1 font-medium">تعديل الوقود</th>
-                      <th className="text-right py-1 font-medium">تسوية الإيقاف</th>
                       <th className="text-right py-1 font-medium">الأثر</th>
                     </tr>
                   </thead>
@@ -608,10 +593,6 @@ export default function ProfitDistributionPage() {
                           <td className="py-1.5 pe-2">
                             <MoneyInput value={num((form as any)[`${k}_fuel_adjust`])}
                               onChange={(v) => setNum(`${k}_fuel_adjust` as keyof Form, v)} />
-                          </td>
-                          <td className="py-1.5 pe-2">
-                            <MoneyInput value={num((form as any)[`${k}_off_hire`])}
-                              onChange={(v) => setNum(`${k}_off_hire` as keyof Form, v)} muted />
                           </td>
                           <td className="py-1.5 pe-2 font-mono text-[11px]">
                             {touched
@@ -854,6 +835,20 @@ function Stat({ label, value, muted }: { label: string; value: string; muted?: b
       <p className="text-gray-500">{label}</p>
       <p className={`font-bold font-mono mt-0.5 ${muted ? 'text-gray-500' : 'text-gray-800'}`}>{value}</p>
     </div>
+  );
+}
+
+/**
+ * خليّةُ عرضٍ لرقمٍ يأتي من الشيت.
+ *
+ * لا حقلَ إدخالٍ هنا عمداً: الرقم يحسبه دفتر المركب، وحقلٌ قابل للكتابة يدعو
+ * إلى تصحيحٍ في الشاشة يضيع عند أوّل إعادة جلب — ويبقى الدفتر على خطئه.
+ */
+function ReadCell({ value, dim }: { value: number; dim?: boolean }) {
+  return (
+    <td className={`py-1.5 pe-2 font-mono ${dim ? 'text-gray-300' : 'text-gray-800'}`}>
+      {value ? fmt(value) : '—'}
+    </td>
   );
 }
 
