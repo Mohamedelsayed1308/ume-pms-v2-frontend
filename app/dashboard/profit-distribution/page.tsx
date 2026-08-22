@@ -458,9 +458,23 @@ export default function ProfitDistributionPage() {
                       شراكةُ {DISTRIBUTION_LINE} وحده
                     </p>
                   )}
-                  <p className="text-emerald-700 pt-0.5">
-                    نقد ضبا وتحصيل صفاجا لا يأتيان من الشيت — أدخلهما يدوياً
-                  </p>
+                  {(() => {
+                    // رحلاتٌ لها نشاطٌ ولم تُملأ أعمدة خزينتها في الدفتر —
+                    // يُبلَّغ بها هنا لا في الجدول وحده، فالجدول قد لا يُقرأ
+                    const short = VESSEL_KEYS
+                      .map((k) => ({ k, n: num(sheetInfo[k]?.treasuryMissing) }))
+                      .filter((x) => x.n > 0);
+                    return short.length ? (
+                      <p className="text-red-700 font-semibold pt-0.5">
+                        ⚠ خزينةٌ ناقصة في الدفتر —{' '}
+                        {short.map((x) => `${VESSEL_NAMES[x.k]}: ${x.n} رحلة`).join(' · ')}
+                      </p>
+                    ) : (
+                      <p className="text-emerald-700 pt-0.5">
+                        ✓ الخزينة وصلت كاملةً — نقد ضبا وتحصيل صفاجا من دفتر المركب
+                      </p>
+                    );
+                  })()}
                 </div>
               )}
             </div>
