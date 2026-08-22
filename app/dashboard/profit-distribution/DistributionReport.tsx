@@ -124,6 +124,9 @@ export default function DistributionReport({
 }: Props) {
   const vs = result.vessels;
   const totalDue = vs.reduce((a, v) => a + v.dueToAccount, 0);
+  const gainers = vs.filter((v) => v.partnershipGain > 0.005);
+  const losers = vs.filter((v) => v.partnershipGain < -0.005);
+  const moved = gainers.reduce((a, v) => a + v.partnershipGain, 0);
 
   /** صفٌّ في سلسلة التوزيع — بندٌ واحد بقيمةٍ لكل شريك أو بقيمةٍ مشتركة. */
   const Chain = ({ label, note, get, shared, tone }: {
@@ -318,6 +321,70 @@ export default function DistributionReport({
               </>
             )}
           </div>
+
+          {/*
+            * أثر الشراكة — في نهاية الفترة لا في أوّلها.
+            *
+            * سؤالٌ إداريّ لا محاسبيّ: ماذا كان يجني المركب لو عمل وحده؟ ويُوضع
+            * بعد الكشف لأنّه تحليلٌ عليه، لا مدخلٌ إليه. والمجموع صفريّ دائماً:
+            * الشراكة تنقل ولا تخلق — فالرقم يقول من يدعم من، وبكم.
+            */}
+          {vs.length > 1 && result.missing.length === 0 && (
+            <>
+              <h2>أثر الشراكة <span>— لو عمل كلّ مركبٍ وحده</span></h2>
+              <table>
+                <thead>
+                  <tr>
+                    <th>البند</th>
+                    {vs.map((v) => <th key={v.key} className="n">{v.name}</th>)}
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td className="lbl">
+                      منفرداً
+                      <span style={{ color: '#94a3b8', fontWeight: 400 }}>
+                        {' '}· نقده وتحصيله − إيجاره ووقوده وعمولته
+                      </span>
+                    </td>
+                    {vs.map((v) => <td key={v.key} className="n">{f2(v.standalone)}</td>)}
+                  </tr>
+                  <tr>
+                    <td className="lbl">
+                      شراكةً
+                      <span style={{ color: '#94a3b8', fontWeight: 400 }}>
+                        {' '}· التوزيع مع تحصيله
+                      </span>
+                    </td>
+                    {vs.map((v) => <td key={v.key} className="n">{f2(v.partnered)}</td>)}
+                  </tr>
+                  <tr className="sum">
+                    <td className="lbl">أثر الشراكة</td>
+                    {vs.map((v) => (
+                      <td key={v.key} className={`n ${v.partnershipGain >= 0 ? 'pos' : 'neg'}`}>
+                        {v.partnershipGain >= 0 ? '+' : '−'}{f2(Math.abs(v.partnershipGain))}
+                      </td>
+                    ))}
+                  </tr>
+                </tbody>
+              </table>
+              <div className="note">
+                {gainers.length > 0 && losers.length > 0 ? (
+                  <>
+                    <b>في هذه الفترة</b> نقلت الشراكة <b>${f2(moved)}</b> من{' '}
+                    <b>{losers.map((v) => v.name).join(' و')}</b> إلى{' '}
+                    <b>{gainers.map((v) => v.name).join(' و')}</b>.{' '}
+                  </>
+                ) : (
+                  <><b>في هذه الفترة</b> تعادلت المراكب فلم تنقل الشراكة شيئاً بينها. </>
+                )}
+                والشراكة <b>تنقل ولا تخلق</b> — فمجموع الأرقام أعلاه صفر. وسببُ النقل
+                أنّ الأعباء تُقسم بالتساوي: من كان وقوده أو إيجاره أعلى من المتوسّط
+                تحمّلت الشراكة عنه فرقَه، ومن كان أقلّ حمل عن غيره. والرقم يقول
+                <b> من يدعم من وبكم</b>، لا أنّ الشراكة رابحةٌ أو خاسرة.
+              </div>
+            </>
+          )}
 
           <div className="sign">
             <div>المُعِدّ</div>

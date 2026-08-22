@@ -832,6 +832,9 @@ function DistributionCard({ title, result, compact, detail }: {
         </div>
       )}
 
+      {/* أثر الشراكة — من يدعم من، وبكم */}
+      {vs.length > 1 && !blocked && <PartnershipEffect result={result} />}
+
       {/* تفصيل الرحلات — طيّةٌ لكلّ مركب */}
       {vs.length > 0 && detail && (
         <div className="mt-4 pt-3 border-t">
@@ -868,6 +871,87 @@ function DistributionCard({ title, result, compact, detail }: {
             value={fmt(vs.reduce((a, v) => a + v.dueToAccount, 0))} />
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * أثر الشراكة — ماذا كان يجني كلّ مركبٍ لو عمل وحده؟
+ *
+ * المجموع صفريّ: ما تكسبه سفينةٌ تخسره الأخرى بالضبط. فالجدول لا يقول
+ * «الشراكة رابحة» — يقول **من يدعم من، وبكم**. وذلك سؤالُ الإدارة لا سؤال
+ * المحاسبة، ولهذا تسبقه جملةٌ تشرحه لا أرقامٌ وحدها.
+ */
+function PartnershipEffect({ result }: { result: ModelResult }) {
+  const vs = result.vessels;
+  const gainers = vs.filter((v) => v.partnershipGain > 0.005);
+  const losers = vs.filter((v) => v.partnershipGain < -0.005);
+  const moved = gainers.reduce((a, v) => a + v.partnershipGain, 0);
+
+  return (
+    <div className="mt-4 pt-3 border-t">
+      <p className="text-xs font-semibold text-gray-500 mb-2">
+        أثر الشراكة — لو عمل كلّ مركبٍ وحده
+      </p>
+
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm" style={{ minWidth: 120 + vs.length * 150 }}>
+          <thead>
+            <tr className="text-gray-500 text-xs">
+              <th className="text-right font-medium pb-2" />
+              {vs.map((v) => (
+                <th key={v.key} className="text-left font-semibold pb-2 text-gray-700">{v.name}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="font-mono">
+            <tr className="border-t border-gray-100">
+              <td className="py-1.5 pe-3 font-sans text-gray-600 whitespace-nowrap">
+                منفرداً
+                <span className="text-gray-400"> · نقده وتحصيله − إيجاره ووقوده وعمولته</span>
+              </td>
+              {vs.map((v) => (
+                <td key={v.key} className="py-1.5 text-left text-gray-700">{fmt(v.standalone)}</td>
+              ))}
+            </tr>
+            <tr className="border-t border-gray-100">
+              <td className="py-1.5 pe-3 font-sans text-gray-600 whitespace-nowrap">
+                شراكةً
+                <span className="text-gray-400"> · التوزيع مع تحصيله</span>
+              </td>
+              {vs.map((v) => (
+                <td key={v.key} className="py-1.5 text-left text-gray-700">{fmt(v.partnered)}</td>
+              ))}
+            </tr>
+            <tr className="border-t-2 border-gray-300">
+              <td className="py-2 pe-3 font-sans font-bold text-gray-800 whitespace-nowrap">
+                أثر الشراكة
+              </td>
+              {vs.map((v) => (
+                <td key={v.key} className={`py-2 text-left font-bold ${
+                  v.partnershipGain >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>
+                  {v.partnershipGain >= 0 ? '+' : '−'}{fmt(Math.abs(v.partnershipGain))}
+                </td>
+              ))}
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p className="text-[11px] text-gray-600 mt-2 bg-gray-50 border-s-2 border-gray-300 ps-2 py-1.5">
+        {gainers.length > 0 && losers.length > 0 ? (
+          <>
+            في هذه الفترة نقلت الشراكة <b>{fmt(moved)}</b> من{' '}
+            <b>{losers.map((v) => v.name).join(' و')}</b> إلى{' '}
+            <b>{gainers.map((v) => v.name).join(' و')}</b>.{' '}
+          </>
+        ) : (
+          <>في هذه الفترة تعادلت المراكب فلم تنقل الشراكة شيئاً بينها. </>
+        )}
+        والشراكة <b>تنقل ولا تخلق</b> — فمجموع الأرقام أعلاه صفر. وسببُ النقل أنّ
+        الأعباء تُقسم بالتساوي: من كان وقوده أو إيجاره أعلى من المتوسّط تحمّلت
+        الشراكة عنه فرقَه، ومن كان أقلّ حمل عن غيره.
+      </p>
     </div>
   );
 }
