@@ -795,7 +795,17 @@ function DistributionCard({ title, result, compact, detail, proposed }: {
   return (
     <div className={`bg-white rounded-xl shadow ${pad} mb-6 border ${blocked ? 'border-amber-300' : 'border-transparent'}`}>
       <div className="flex items-baseline justify-between gap-3 flex-wrap mb-3">
-        <h3 className="font-bold text-emerald-700">{title}</h3>
+        {/*
+         * شارةٌ تُسمّي الطريقة صراحةً. فالسلسلة أدناه هي المعتمدة، وتحتها طيّةٌ
+         * فيها المقترحة — ومن لا يعرف ذلك سلفاً يظنّ الظاهرة «هي الحساب» بلا
+         * اسم. والاسمان متقابلان الآن، فمن يعرض الشاشة لا يحتاج أن يشرحها.
+         */}
+        <div className="flex items-baseline gap-2 flex-wrap">
+          <h3 className="font-bold text-emerald-700">{title}</h3>
+          <span className="text-[10px] bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded font-semibold">
+            الطريقة المعتمدة
+          </span>
+        </div>
         <p className="text-xs text-gray-500">
           {result.days} يوم · {partnersLabel(result.partners)}
         </p>
