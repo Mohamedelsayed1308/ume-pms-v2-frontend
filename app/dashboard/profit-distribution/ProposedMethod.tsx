@@ -18,6 +18,9 @@ const fmt = (n: number) =>
 /** الأقواس للسالب — كما يكتبها المستند، وكما تكتبه بقيّة الشاشة. */
 const paren = (n: number) => (n < 0 ? `(${fmt(Math.abs(n))})` : fmt(n));
 
+/** ما دون نصف سنتٍ صفرٌ في العرض — والأقواسُ حول صفرٍ تُقلق بلا سبب. */
+const near0 = (n: number) => Math.abs(n) < 0.005;
+
 type PVessel = ProposedResult['vessels'][number];
 
 export default function ProposedMethod({ result, proposed }: {
@@ -27,14 +30,37 @@ export default function ProposedMethod({ result, proposed }: {
   const [open, setOpen] = useState(false);
   const ps = proposed.vessels;
 
-  // الفرق يُقاس على «المستحقّ لحساب المركب» — آخر رقمٍ في الطريقتين
+  /*
+   * جسر التسوية — من المعتمدة إلى المقترحة، بنداً بنداً.
+   *
+   * الفرق بين الطريقتين يختزل رياضيّاً إلى بندين لا ثالث لهما. بفكّ
+   * السلسلتين لشريكين:
+   *
+   *   المقترحة − المعتمدة =
+   *       (حصّة العمولة − عمولة المركب)        ← المقترحة لا تذكر العمولة
+   *     + كسر التدوير                          ← المعتمدة تُنزل للدولار الصحيح
+   *     + (مجموع الصافي + البنكر − نقد ضبا − تحصيل صفاجا) ÷ ٢
+   *
+   * والحدّ الثالث **صفرٌ ما دام الدفتر متّسقاً**، لأنّ ضابط الخزينة يقول
+   * `نقد ضبا + صفاجا = BALANCE + البنكر` لكلّ رحلة. فإن ظهر رقمٌ فيه فليس
+   * خلافاً بين الطريقتين بل خللٌ في الدفتر — وهو نفسه ما يرصده `treasuryGap`
+   * في حارس النزاهة، لكن على مستوى الفترة لا الرحلة.
+   *
+   * ولهذا يُعرض الحدّ الثالث صراحةً ولا يُطوى في «الباقي»: صفرُه شهادةٌ،
+   * وظهورُه إنذار.
+   */
   const rows = ps.map((v) => {
-    const approved = result.vessels.find((x) => x.key === v.key);
-    const due = approved?.dueToAccount ?? 0;
-    return { v, approved: due, gap: v.total - due };
+    const av = result.vessels.find((x) => x.key === v.key);
+    const approved = av?.dueToAccount ?? 0;
+    const feeGap = result.feeShare - (av?.fee ?? 0);
+    const rounding = av?.remainingAtDuba ?? 0;
+    const residual = v.total - (approved + feeGap + rounding);
+    return { v, approved, feeGap, rounding, residual, gap: v.total - approved };
   });
-  const sumApproved = rows.reduce((a, r) => a + r.approved, 0);
-  const sumGap = rows.reduce((a, r) => a + r.gap, 0);
+  const sum = (f: (r: (typeof rows)[number]) => number) => rows.reduce((a, r) => a + f(r), 0);
+  const sumApproved = sum((r) => r.approved);
+  const sumGap = sum((r) => r.gap);
+  const ledgerBroken = rows.some((r) => Math.abs(r.residual) > 0.02);
   const diverges = proposed.available && Math.abs(sumGap) > 0.02;
 
   return (
@@ -106,8 +132,9 @@ export default function ProposedMethod({ result, proposed }: {
                 </table>
               </div>
 
-              {/* ── المقارنة: آخر رقمٍ في الطريقتين ── */}
-              <div className="mt-4 overflow-x-auto">
+              {/* ── جسر التسوية: من المعتمدة إلى المقترحة، بنداً بنداً ── */}
+              <p className="text-xs font-semibold text-gray-600 mt-5 mb-1.5">من أين جاء الفرق</p>
+              <div className="overflow-x-auto">
                 <table className="w-full text-sm" style={{ minWidth: 180 + (ps.length + 1) * 150 }}>
                   <thead>
                     <tr className="text-gray-500 text-xs">
@@ -119,22 +146,37 @@ export default function ProposedMethod({ result, proposed }: {
                     </tr>
                   </thead>
                   <tbody className="font-mono">
-                    <tr className="border-t">
-                      <td className="py-2 pe-3 font-sans text-emerald-800 whitespace-nowrap">المعتمدة</td>
+                    <tr className="border-t bg-emerald-50/60">
+                      <td className="py-2 pe-3 font-sans font-semibold text-emerald-800 whitespace-nowrap">
+                        المعتمدة
+                      </td>
                       {rows.map((r) => (
-                        <td key={r.v.key} className="py-2 text-left text-emerald-800">{fmt(r.approved)}</td>
+                        <td key={r.v.key} className="py-2 text-left font-bold text-emerald-800">
+                          {fmt(r.approved)}
+                        </td>
                       ))}
-                      <td className="py-2 text-left text-emerald-800">{fmt(sumApproved)}</td>
+                      <td className="py-2 text-left font-bold text-emerald-800">{fmt(sumApproved)}</td>
                     </tr>
-                    <tr className="border-t">
-                      <td className="py-2 pe-3 font-sans text-slate-700 whitespace-nowrap">المقترحة</td>
+                    <BridgeRow label="± فرق العمولة · حصّتها − عمولة المركب"
+                      rows={rows} pick={(r) => r.feeGap} total={sum((r) => r.feeGap)} />
+                    <BridgeRow label="+ كسر التدوير · ما أبقته المعتمدة في ضبا"
+                      rows={rows} pick={(r) => r.rounding} total={sum((r) => r.rounding)} />
+                    <BridgeRow label="± فرق الخزينة · يجب أن يكون صفراً"
+                      rows={rows} pick={(r) => r.residual} total={sum((r) => r.residual)}
+                      alarm={ledgerBroken} />
+                    <tr className="border-t-2 border-slate-500 bg-slate-50">
+                      <td className="py-2 pe-3 font-sans font-semibold text-slate-800 whitespace-nowrap">
+                        = المقترحة
+                      </td>
                       {rows.map((r) => (
-                        <td key={r.v.key} className="py-2 text-left text-slate-700">{fmt(r.v.total)}</td>
+                        <td key={r.v.key} className="py-2 text-left font-bold text-slate-800">
+                          {fmt(r.v.total)}
+                        </td>
                       ))}
-                      <td className="py-2 text-left text-slate-700">{fmt(proposed.grandTotal)}</td>
+                      <td className="py-2 text-left font-bold text-slate-800">{fmt(proposed.grandTotal)}</td>
                     </tr>
-                    <tr className="border-t-2 border-gray-300">
-                      <td className="py-2 pe-3 font-sans font-semibold text-gray-700 whitespace-nowrap">الفرق</td>
+                    <tr className="border-t border-gray-200">
+                      <td className="py-2 pe-3 font-sans text-gray-600 whitespace-nowrap">الفرق جملةً</td>
                       {rows.map((r) => (
                         <td key={r.v.key}
                           className={`py-2 text-left font-bold ${
@@ -151,22 +193,28 @@ export default function ProposedMethod({ result, proposed }: {
                 </table>
               </div>
 
-              <p className="text-[11px] text-gray-500 mt-3 max-w-3xl leading-relaxed">
-                <b>أين يفترق الطريقان.</b> المعتمدة تبدأ من <b>نقد ضبا</b> الفعليّ،
-                والمقترحة من <b>صافي الإيراد</b> المشتقّ من الدفتر.
-                <br />
-                والمعتمدة تخصم <b>عمولة التوكيل</b> مناصفةً ثمّ تردّ لكلّ مركبٍ عمولته،
-                والمقترحة لا تذكرها — فمن عمولته أعلى من المتوسّط يكسب في المعتمدة
-                ويخسره في المقترحة.
-                <br />
-                والمعتمدة <b>تُنزل التوزيع إلى الدولار الصحيح</b> وتُبقي الكسر رصيداً في
-                ضبا، والمقترحة تُبقي الكسور.
-                <br />
-                <span className="text-gray-400">
-                  وفرقُ المجموع ليس مالاً ضائعاً ما دام قريباً من الصفر — هو انتقالٌ
-                  بين الشريكين لا غير.
-                </span>
-              </p>
+              <div className="text-[11px] text-gray-500 mt-3 max-w-3xl leading-relaxed space-y-1.5">
+                <p>
+                  <b>فرق العمولة</b> هو البند الحقيقيّ. المعتمدة تخصم عمولة التوكيل
+                  مناصفةً ثمّ تردّ لكلّ مركبٍ عمولته، والمقترحة لا تذكرها — فمن عمولته
+                  أعلى من المتوسّط يكسب في المعتمدة ويخسره في المقترحة، والعكس.
+                  <b> ولا يتغيّر المجموع:</b> ما يخسره أحدهما يكسبه الآخر.
+                </p>
+                <p>
+                  <b>وكسر التدوير</b> ليس فرقاً في المعادلة. المعتمدة تُنزل التوزيع إلى
+                  الدولار الصحيح وتُبقي الكسر رصيداً في ضبا كما يفعل المستند الورقيّ،
+                  والمقترحة تُبقي الكسور. فالمال واحدٌ ومكانه يختلف.
+                </p>
+                <p className={ledgerBroken ? 'text-rose-700' : ''}>
+                  <b>وفرق الخزينة يجب أن يكون صفراً.</b> فالمعتمدة تبدأ من نقد ضبا
+                  والمقترحة من صافي الإيراد، وهما طريقان إلى الرقم نفسه ما دام الدفتر
+                  متّسقاً:{' '}
+                  <span className="font-mono">نقد ضبا + صفاجا = الصافي + البنكر</span>.
+                  {ledgerBroken
+                    ? ' وقد ظهر فيه رقمٌ — فالخلل في الدفتر لا في الطريقتين، وراجع حارس النزاهة أعلاه.'
+                    : ' وصفرُه هنا شهادةٌ بأنّ الطريقتين لا تفترقان إلا في العمولة والتدوير.'}
+                </p>
+              </div>
             </>
           )}
         </div>
@@ -199,6 +247,37 @@ function PRow({ label, ps, pick, signed, bold }: {
           </td>
         );
       })}
+    </tr>
+  );
+}
+
+/** صفٌّ في جسر التسوية — بندٌ ينقل من المعتمدة إلى المقترحة. */
+function BridgeRow({ label, rows, pick, total, alarm }: {
+  label: string;
+  rows: { v: { key: string } }[];
+  pick: (r: any) => number;
+  total: number;
+  alarm?: boolean;
+}) {
+  const tone = (x: number) =>
+    Math.abs(x) <= 0.02 ? 'text-gray-400' : alarm ? 'text-rose-700' : 'text-gray-700';
+  return (
+    <tr className="border-t border-gray-100">
+      <td className={`py-2 pe-3 font-sans whitespace-nowrap text-xs ${
+        alarm ? 'text-rose-700 font-semibold' : 'text-gray-500'}`}>
+        {label}
+      </td>
+      {rows.map((r) => {
+        const x = pick(r);
+        return (
+          <td key={r.v.key} className={`py-2 text-left ${tone(x)}`}>
+            {near0(x) ? fmt(0) : (x > 0 ? '+' : '') + paren(x)}
+          </td>
+        );
+      })}
+      <td className={`py-2 text-left ${tone(total)}`}>
+        {near0(total) ? fmt(0) : (total > 0 ? '+' : '') + paren(total)}
+      </td>
     </tr>
   );
 }
