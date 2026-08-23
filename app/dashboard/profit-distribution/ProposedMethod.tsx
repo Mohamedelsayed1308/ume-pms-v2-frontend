@@ -15,6 +15,9 @@ import type { ModelResult, ProposedResult } from '@/lib/profitModel';
 const fmt = (n: number) =>
   new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n || 0);
 
+/** الأقواس للسالب — كما يكتبها المستند، وكما تكتبه بقيّة الشاشة. */
+const paren = (n: number) => (n < 0 ? `(${fmt(Math.abs(n))})` : fmt(n));
+
 type PVessel = ProposedResult['vessels'][number];
 
 export default function ProposedMethod({ result, proposed }: {
@@ -137,11 +140,11 @@ export default function ProposedMethod({ result, proposed }: {
                           className={`py-2 text-left font-bold ${
                             Math.abs(r.gap) <= 0.02 ? 'text-gray-400'
                               : r.gap > 0 ? 'text-blue-700' : 'text-rose-700'}`}>
-                          {r.gap > 0 ? '+' : ''}{fmt(r.gap)}
+                          {r.gap > 0 ? '+' : ''}{paren(r.gap)}
                         </td>
                       ))}
                       <td className="py-2 text-left font-bold text-gray-600">
-                        {sumGap > 0 ? '+' : ''}{fmt(sumGap)}
+                        {sumGap > 0 ? '+' : ''}{paren(sumGap)}
                       </td>
                     </tr>
                   </tbody>
@@ -192,7 +195,7 @@ function PRow({ label, ps, pick, signed, bold }: {
             className={`py-2 text-left ${
               bold ? 'font-bold text-gray-800'
                 : signed && x < 0 ? 'text-rose-700' : 'text-gray-700'}`}>
-            {fmt(x)}
+            {signed ? paren(x) : fmt(x)}
           </td>
         );
       })}
