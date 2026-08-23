@@ -284,7 +284,7 @@ export default function DistributionReport({
                 note={`${f2(result.totalCashDuba)} ÷ ${result.partners}`}
                 shared={result.baseShare} />
               {result.totalOverPax !== 0 && (
-                <Chain label="+ حصّة Over Pax" note="٦٦.٦٧٪ / ٣٣.٣٣٪"
+                <Chain label="+ حصّة Over Pax" note="٦٦.٦٧٪ لبدوي · ٣٣.٣٣٪ للاتحاد"
                   get={(v) => v.overPaxShare} tone="pos" />
               )}
               <tr className="sum">
