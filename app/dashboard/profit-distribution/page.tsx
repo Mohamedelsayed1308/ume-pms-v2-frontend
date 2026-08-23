@@ -7,7 +7,7 @@ import {
   VESSEL_KEYS, VESSEL_NAMES, DEFAULT_DAILY_RATE,
   type ModelResult, type VesselKey,
 } from '@/lib/profitModel';
-import type { VoyageRow, VoyageDetail } from '@/lib/voyageDetail';
+import { integrityIssues, type VoyageRow, type VoyageDetail } from '@/lib/voyageDetail';
 import DistributionReport from './DistributionReport';
 
 /*
@@ -832,6 +832,9 @@ function DistributionCard({ title, result, compact, detail }: {
         </div>
       )}
 
+      {/* حارسا النزاهة — قبل الأرقام لا بعدها */}
+      {detail && <IntegrityBanner detail={detail} />}
+
       {/* أثر الشراكة — من يدعم من، وبكم */}
       {vs.length > 1 && !blocked && <PartnershipEffect result={result} />}
 
@@ -869,6 +872,49 @@ function DistributionCard({ title, result, compact, detail }: {
           <Stat label="متوسّط التحصيل" value={fmt(result.avgNetCollected)} muted />
           <Stat label="مجموع المستحقّ"
             value={fmt(vs.reduce((a, v) => a + v.dueToAccount, 0))} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * حارسا النزاهة — رحلاتٌ لا يتّسق فيها الدفتر مع نفسه.
+ *
+ * يُنبّه ولا يمنع، عن قصد: رحلة بوسيدون ٧٨ رصيدها يبدو **سليماً** والخطأ في
+ * خليّتَي الميناء (٩٩٬٠٠٠ و٢٥٣٬٠٠٠ بينما جارتها ٤٬٥٠٠ و١١٬٥٠٠). فالمنع كان
+ * سيوقف توزيعاً صحيحاً بسبب خطأٍ في تقريرٍ جانبيّ.
+ *
+ * لكنّ تنبيهاً يُتجاهَل تنبيهٌ ضائع — فيحمل **رقم الرحلة ومقدار الفرق**، لا
+ * جملةً عامّة يمرّ عليها النظر.
+ */
+function IntegrityBanner({ detail }: { detail: VoyageDetail }) {
+  const { balance, treasury } = integrityIssues(detail);
+  if (!balance.length && !treasury.length) return null;
+
+  const line = (x: { name: string; ref: number | null; gap: number }) =>
+    `${VESSEL_NAMES[x.name as VesselKey] ?? x.name} ${x.ref ?? '—'} · ${paren(x.gap)}`;
+
+  return (
+    <div className="mt-4 space-y-2">
+      {balance.length > 0 && (
+        <div className="text-xs bg-red-50 border border-red-300 text-red-800 rounded-lg px-3 py-2">
+          <b>⚠ رصيدٌ لا يساوي بنوده — {balance.length} رحلة</b>
+          <div className="font-mono mt-1">{balance.map(line).join('   ·   ')}</div>
+          <p className="mt-1 text-red-700">
+            عمود <code>BALANCE</code> في الدفتر يخالف الإيراد ناقص العمولة والمصاريف.
+            وعليه يقوم نقد ضبا وتحصيل صفاجا — فراجع الدفتر قبل اعتماد التوزيع.
+          </p>
+        </div>
+      )}
+      {treasury.length > 0 && (
+        <div className="text-xs bg-red-50 border border-red-300 text-red-800 rounded-lg px-3 py-2">
+          <b>⚠ خزينةٌ لا تُطابق الرصيد — {treasury.length} رحلة</b>
+          <div className="font-mono mt-1">{treasury.map(line).join('   ·   ')}</div>
+          <p className="mt-1 text-red-700">
+            المنتظر أنّ <b>نقد ضبا + تحصيل صفاجا = BALANCE + البنكر</b>. واختلافه
+            يعني صيغةً دِيست بقيمةٍ مكتوبة في الدفتر.
+          </p>
         </div>
       )}
     </div>

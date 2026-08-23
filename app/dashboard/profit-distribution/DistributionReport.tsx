@@ -3,7 +3,7 @@ import {
   VESSEL_KEYS, VESSEL_NAMES,
   type ModelResult, type VesselKey,
 } from '@/lib/profitModel';
-import type { VoyageDetail, VoyageRow } from '@/lib/voyageDetail';
+import { integrityIssues, type VoyageDetail, type VoyageRow } from '@/lib/voyageDetail';
 
 /**
  * ── كشف توزيع الأرباح — نسخة الإدارة ──
@@ -127,6 +127,9 @@ export default function DistributionReport({
   const gainers = vs.filter((v) => v.partnershipGain > 0.005);
   const losers = vs.filter((v) => v.partnershipGain < -0.005);
   const moved = gainers.reduce((a, v) => a + v.partnershipGain, 0);
+  const issues = integrityIssues(detail);
+  const nameOf = (k: string) =>
+    vs.find((v) => v.key === k)?.name ?? VESSEL_NAMES[k as VesselKey] ?? k;
 
   /** صفٌّ في سلسلة التوزيع — بندٌ واحد بقيمةٍ لكل شريك أو بقيمةٍ مشتركة. */
   const Chain = ({ label, note, get, shared, tone }: {
@@ -191,6 +194,39 @@ export default function DistributionReport({
           {result.missing.length > 0 && (
             <div className="note warn">
               <b>مدخلاتٌ ناقصة — الكشف غير مكتمل:</b> {result.missing.join(' · ')}
+            </div>
+          )}
+
+          {/*
+            * تحفّظُ نزاهةٍ في وجه الورقة لا في ذيلها.
+            *
+            * رحلةٌ رصيدها لا يساوي بنوده تُبنى عليها أرقام هذا الكشف. والمجلس
+            * يعتمد ما يقرأ، فيقرأ التحفّظ قبل الأرقام لا بعدها.
+            */}
+          {(issues.balance.length > 0 || issues.treasury.length > 0) && (
+            <div className="note warn">
+              <b>⚠ تحفّظ:</b> الدفتر لا يتّسق مع نفسه في{' '}
+              <b>{issues.balance.length + issues.treasury.length} رحلة</b> من رحلات هذه الفترة.
+              {issues.balance.length > 0 && (
+                <>
+                  <br />
+                  <b>رصيدٌ يخالف بنوده:</b>{' '}
+                  {issues.balance
+                    .map((x) => `${nameOf(x.name)} ${x.ref ?? '—'} (${f2(x.gap)})`)
+                    .join(' · ')}
+                </>
+              )}
+              {issues.treasury.length > 0 && (
+                <>
+                  <br />
+                  <b>خزينةٌ لا تطابق الرصيد:</b>{' '}
+                  {issues.treasury
+                    .map((x) => `${nameOf(x.name)} ${x.ref ?? '—'} (${f2(x.gap)})`)
+                    .join(' · ')}
+                </>
+              )}
+              <br />
+              والأرقام أدناه محسوبةٌ على ما في الدفتر — تُراجَع قبل الاعتماد.
             </div>
           )}
 
