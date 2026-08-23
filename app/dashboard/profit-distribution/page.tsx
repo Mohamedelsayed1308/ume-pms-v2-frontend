@@ -243,8 +243,17 @@ export default function ProfitDistributionPage() {
           // الخزينة — يحسبها دفتر المركب منذ أغسطس ٢٠٢٦
           (next as any)[`${k}_cash_duba`] = v.cashDuba ?? 0;
           (next as any)[`${k}_net_collected`] = v.cashSafaga ?? 0;
-          (next as any)[`${k}_over_pax`] = v.overPax ?? 0;
-          (next as any)[`${k}_off_hire`] = v.offHire ?? 0;
+          /*
+           * Over Pax وتسوية الإيقاف يدويّان — فلا يُصفّرهما الجلب.
+           *
+           * عمودهما في الدفتر فارغٌ اليوم، فالجلب يُرجع صفراً. ولو كُتب الصفر
+           * فوق ما أدخله المستخدم لمُحي عمله عند أوّل «جلب من الشيت» — بلا
+           * رسالة، ولا يُلاحَظ إلا في التوزيع.
+           *
+           * فالقاعدة: الدفتر يملأ حين يحمل قيمة، ويسكت حين لا يحمل.
+           */
+          if (Number(v.overPax)) (next as any)[`${k}_over_pax`] = v.overPax;
+          if (Number(v.offHire)) (next as any)[`${k}_off_hire`] = v.offHire;
         }
         // العمولة الإجمالية القديمة — تُحدَّث لأنّها معروضة، ولا تدخل الحساب
         next.commission_amount =
@@ -562,7 +571,7 @@ export default function ProfitDistributionPage() {
             </Section>
 
             {/* ── الخزينة ── */}
-            <Section title="الخزينة — من دفتر المركب، لا تُدخَل يداً">
+            <Section title="الخزينة — النقد من الدفتر · و Over Pax يدويّ">
               <div className="overflow-x-auto">
                 <table className="w-full text-xs min-w-[560px]">
                   <thead className="text-gray-500">
@@ -594,8 +603,22 @@ export default function ProfitDistributionPage() {
                           </td>
                           <ReadCell value={duba} />
                           <ReadCell value={sfg} />
-                          <ReadCell value={op} dim={!op} />
-                          <ReadCell value={oh} dim={!oh} />
+                          {/*
+                            * Over Pax وتسوية الإيقاف يُدخَلان يداً — بالاتّفاق.
+                            *
+                            * عمودهما في الدفتر موجودٌ وفارغ، فلو بقي الحقل مقفلاً
+                            * لما وُجد سبيلٌ لإدخالهما أصلاً. والجلب يملؤهما من
+                            * الدفتر حين يجد فيه قيمة، ولا يمحو ما كُتب هنا حين
+                            * يجده فارغاً.
+                            */}
+                          <td className="py-1.5 pe-2">
+                            <MoneyInput value={op}
+                              onChange={(v) => setNum(`${k}_over_pax` as keyof Form, v)} />
+                          </td>
+                          <td className="py-1.5 pe-2">
+                            <MoneyInput value={oh}
+                              onChange={(v) => setNum(`${k}_off_hire` as keyof Form, v)} muted />
+                          </td>
                         </tr>
                       );
                     })}
@@ -603,10 +626,13 @@ export default function ProfitDistributionPage() {
                 </table>
               </div>
               <p className="text-[11px] text-gray-500 mt-2 max-w-2xl">
-                هذه الأرقام يحسبها دفتر المركب ويجلبها الشيت — فلا تُكتب هنا. تصحيحها
-                يكون في الدفتر، ثمّ إعادة الجلب.
+                <b>نقد ضبا وتحصيل صفاجا</b> يحسبهما دفتر المركب ويجلبهما الشيت — فلا
+                يُكتبان هنا. تصحيحهما يكون في الدفتر، ثمّ إعادة الجلب.
                 <br />
-                و Over Pax يُقرأ <b>كما نشأ على المركب</b> لا كما آل إلى الشريك — والقسمة
+                <b>و Over Pax وتسوية الإيقاف يُدخَلان هنا يداً.</b> والجلب لا يمحوهما:
+                يملؤهما من الدفتر إن وجد فيه قيمة، ويترك ما كتبتَه إن وجده فارغاً.
+                <br />
+                و Over Pax يُكتب <b>كما نشأ على المركب</b> لا كما آل إلى الشريك — والقسمة
                 ٦٦.٦٧٪ لبدوي و ٣٣.٣٣٪ للاتحاد يُجريها النظام.
                 <br />
                 <span className="text-amber-700">
