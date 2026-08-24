@@ -1,7 +1,7 @@
 'use client';
 import { useState } from 'react';
 import api from '@/lib/api';
-import { calculateDistribution, toModelInput, type ModelResult } from '@/lib/profitModel';
+import type { ModelResult, ProposedResult } from '@/lib/profitModel';
 
 /*
  * المصادقة — تجميد الرقم الذي يُحوَّل إلى البنك.
@@ -13,6 +13,10 @@ import { calculateDistribution, toModelInput, type ModelResult } from '@/lib/pro
  *
  * فالمصادقة تُجمّد الرقم وتُقفل الفترة، والسحب بعدها يُقارَن بالمُجمَّد لا يدهسه،
  * والفرق يُقيَّد في دفتر الفروق ويُسوّى في المصادقة التالية.
+ *
+ * ── والرقم يخرج من الطريقة المعتمدة ──
+ * بقرار المالك في ٢٤ أغسطس ٢٠٢٦. وسلسلة المستند تبقى لاكتمال المدخلات
+ * وللمقارنة، لكنّ **ما يُجمَّد** هو `proposed.partnerTransfer`.
  */
 
 const fmt = (n: number) =>
@@ -25,9 +29,12 @@ const when = (v: string | null | undefined) =>
 
 type Period = Record<string, any> & { id: string; period_name: string };
 
-export default function RatificationPanel({ period, result, onChanged }: {
+export default function RatificationPanel({ period, result, proposed, onChanged }: {
   period: Period;
+  /** سلسلة المستند — منها اكتمالُ المدخلات وحدها */
   result: ModelResult;
+  /** الطريقة المعتمدة — ومنها الرقم الذي يُجمَّد ويُحوَّل */
+  proposed: ProposedResult;
   onChanged: () => void;
 }) {
   const [busy, setBusy] = useState('');
@@ -97,8 +104,10 @@ export default function RatificationPanel({ period, result, onChanged }: {
 
         {!ratified ? (
           <button type="button" onClick={() => act('ratify')}
-            disabled={!!busy || result.missing.length > 0}
-            title={result.missing.length > 0 ? 'مدخلاتٌ ناقصة — لا يُجمَّد رقمٌ غير مكتمل' : ''}
+            disabled={!!busy || result.missing.length > 0 || !proposed.available}
+            title={result.missing.length > 0
+              ? 'مدخلاتٌ ناقصة — لا يُجمَّد رقمٌ غير مكتمل'
+              : !proposed.available ? (proposed.reason || '') : ''}
             className="bg-indigo-700 text-white text-sm px-4 py-2 rounded-lg hover:bg-indigo-800 disabled:opacity-40 disabled:cursor-not-allowed">
             {busy === 'ratify' ? '…' : '✓ المصادقة تمّت'}
           </button>
@@ -138,6 +147,38 @@ export default function RatificationPanel({ period, result, onChanged }: {
         <p className="text-xs bg-rose-50 border border-rose-200 text-rose-800 rounded px-2 py-1.5 mt-3">
           {error}
         </p>
+      )}
+
+      {/*
+        * ما سيُجمَّد — يُعرض قبل الضغط لا بعده.
+        *
+        * فمن يُصادق يرى الرقم أوّلاً. والرصيد المحمول لا يظهر هنا لأنّه يُقرأ
+        * من الخادم لحظةَ المصادقة — ويُكتب في اللوحة بعدها.
+        */}
+      {!ratified && proposed.available && (
+        <div className="mt-4 overflow-x-auto">
+          <table className="w-full text-sm" style={{ minWidth: 460 }}>
+            <tbody className="font-mono">
+              <tr className="border-t">
+                <td className="py-2 pe-3 font-sans text-gray-600 whitespace-nowrap">
+                  التحويل المحسوب — وهو ما سيُجمَّد
+                </td>
+                <td className="py-2 text-left font-bold text-indigo-900">
+                  {fmt(proposed.partnerTransfer.badawi)}
+                  <span className="block text-[10px] font-sans font-normal text-gray-500">UME · بدوي</span>
+                </td>
+                <td className="py-2 text-left font-bold text-indigo-900">
+                  {fmt(proposed.partnerTransfer.ittihad)}
+                  <span className="block text-[10px] font-sans font-normal text-gray-500">الاتحاد</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <p className="text-[11px] text-gray-500 mt-2">
+            ويُضاف إليه — أو يُخصم منه — <b>الرصيد التراكميّ المعلّق</b> لحظةَ المصادقة،
+            فيصير هو المُحوَّل فعلاً. وتراه في اللوحة بعدها.
+          </p>
+        </div>
       )}
 
       {/* ── المُجمَّد · والمسحوب · والفرق ── */}

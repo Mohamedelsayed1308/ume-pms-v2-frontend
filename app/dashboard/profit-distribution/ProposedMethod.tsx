@@ -3,13 +3,16 @@ import { useState } from 'react';
 import type { ModelResult, ProposedResult } from '@/lib/profitModel';
 
 /*
- * الطريقة المقترحة — معروضةً بجوار المعتمدة.
+ * الطريقة المعتمدة للمصادقة — وعليها يُبنى التحويل البنكيّ والرصيد التراكميّ.
  *
- * لا تحلّ محلّ شيء ولا تُحفظ: تُحسب من مدخلات المعتمدة نفسها لحظةَ العرض.
- * والغرض أن يُرى الفرق بين الطريقتين **رقماً لا وصفاً** — فمن يقرّر بينهما
- * يقرّر على أرقام.
+ * ── قرارُ مالكٍ في ٢٤ أغسطس ٢٠٢٦ ──
+ * «تمّ اعتماد تلك الطريقة، وهي ما تُثبت الأرقام النهائيّة للمصادقة» — فحلّت
+ * محلّ سلسلة المستند في تحديد ما يُحوَّل إلى البنك.
  *
- * وتُطوى افتراضيّاً: المعتمدة هي ما يُوزَّع، وهذه للمقارنة وحدها.
+ * وسلسلة المستند تبقى في كشف التوزيع: منها التوزيع وحصص الأعباء وأثر الشراكة،
+ * ومنها المقارنة. لكنّ الرقم الذي يُجمَّد ويُحوَّل يخرج من هنا.
+ *
+ * والجسر تحتها يُظهر لماذا يفترقان — بنداً بنداً، ولا يُطوى منه شيء.
  */
 
 const fmt = (n: number) =>
@@ -57,8 +60,15 @@ export default function ProposedMethod({ result, proposed, alwaysOpen }: {
     const approved = av?.dueToAccount ?? 0;
     const feeGap = result.feeShare - (av?.fee ?? 0);
     const rounding = av?.remainingAtDuba ?? 0;
-    const residual = v.total - (approved + feeGap + rounding);
-    return { v, approved, feeGap, rounding, residual, gap: v.total - approved };
+    /*
+     * والبنكر بندٌ ثالثٌ في الجسر منذ اعتُمدت هذه الطريقة.
+     *
+     * سلسلة المستند تردّه في «المستحقّ لحساب المركب»، وهذه لا تردّه لأنّ صافي
+     * الإيراد يطرحه أصلاً في `المصاريف`. فردُّه مرّتين هو ما كان يفعله.
+     */
+    const bunker = av?.fuel ?? 0;
+    const residual = v.total - (approved - bunker + feeGap + rounding);
+    return { v, approved, feeGap, rounding, bunker, residual, gap: v.total - approved };
   });
   const sum = (f: (r: (typeof rows)[number]) => number) => rows.reduce((a, r) => a + f(r), 0);
   const sumApproved = sum((r) => r.approved);
@@ -72,7 +82,7 @@ export default function ProposedMethod({ result, proposed, alwaysOpen }: {
         className={`text-xs font-semibold flex items-center gap-1.5 ${
           alwaysOpen ? 'text-gray-700 cursor-default' : 'text-gray-600 hover:text-gray-900'}`}>
         {!alwaysOpen && <span className="text-gray-400">{open ? '▾' : '▸'}</span>}
-        الطريقة المقترحة — للمقارنة
+        الطريقة المعتمدة — وعليها تتمّ المصادقة
         {!proposed.available && (
           <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded font-normal">
             غير متاحة
@@ -80,7 +90,7 @@ export default function ProposedMethod({ result, proposed, alwaysOpen }: {
         )}
         {diverges && (
           <span className="text-[10px] bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded font-normal">
-            تفترق عن المعتمدة
+            تفترق عن سلسلة المستند
           </span>
         )}
       </button>
@@ -126,13 +136,14 @@ export default function ProposedMethod({ result, proposed, alwaysOpen }: {
                     )}
                     <PRow label="= الرصيد طرف البسّام" ps={ps} pick={(v) => v.balanceAtBassam} bold />
                     <PRow label="+ الإيجار" ps={ps} pick={(v) => v.rent} signed />
-                    <PRow label="+ البنكر" ps={ps} pick={(v) => v.fuel} signed />
-                    <tr className="border-t-2 border-slate-500 bg-slate-50">
-                      <td className="py-2.5 pe-3 font-sans font-bold text-slate-800 whitespace-nowrap">
-                        المستحقّ — الطريقة المقترحة
+                    <PRow label="+ Fuel Supply · سدادُ المورّد" ps={ps}
+                      pick={(v) => v.fuelSupply} signed />
+                    <tr className="border-t-2 border-indigo-600 bg-indigo-50">
+                      <td className="py-2.5 pe-3 font-sans font-bold text-indigo-900 whitespace-nowrap">
+                        التحويل إلى الحساب البنكيّ
                       </td>
                       {ps.map((v) => (
-                        <td key={v.key} className="py-2.5 text-left font-bold text-slate-800 text-base">
+                        <td key={v.key} className="py-2.5 text-left font-bold text-indigo-900 text-base">
                           {fmt(v.total)}
                         </td>
                       ))}
@@ -157,7 +168,7 @@ export default function ProposedMethod({ result, proposed, alwaysOpen }: {
                   <tbody className="font-mono">
                     <tr className="border-t bg-emerald-50/60">
                       <td className="py-2 pe-3 font-sans font-semibold text-emerald-800 whitespace-nowrap">
-                        المعتمدة
+                        سلسلة المستند
                       </td>
                       {rows.map((r) => (
                         <td key={r.v.key} className="py-2 text-left font-bold text-emerald-800">
@@ -170,12 +181,14 @@ export default function ProposedMethod({ result, proposed, alwaysOpen }: {
                       rows={rows} pick={(r) => r.feeGap} total={sum((r) => r.feeGap)} />
                     <BridgeRow label="+ كسر التدوير · ما أبقته المعتمدة في ضبا"
                       rows={rows} pick={(r) => r.rounding} total={sum((r) => r.rounding)} />
+                    <BridgeRow label="− البنكر · تردّه سلسلة المستند ولا تردّه المعتمدة"
+                      rows={rows} pick={(r) => -r.bunker} total={sum((r) => -r.bunker)} />
                     <BridgeRow label="± فرق الخزينة · يجب أن يكون صفراً"
                       rows={rows} pick={(r) => r.residual} total={sum((r) => r.residual)}
                       alarm={ledgerBroken} />
                     <tr className="border-t-2 border-slate-500 bg-slate-50">
                       <td className="py-2 pe-3 font-sans font-semibold text-slate-800 whitespace-nowrap">
-                        = المقترحة
+                        = المعتمدة · التحويل
                       </td>
                       {rows.map((r) => (
                         <td key={r.v.key} className="py-2 text-left font-bold text-slate-800">
@@ -204,7 +217,13 @@ export default function ProposedMethod({ result, proposed, alwaysOpen }: {
 
               <div className="text-[11px] text-gray-500 mt-3 max-w-3xl leading-relaxed space-y-1.5">
                 <p>
-                  <b>فرق العمولة</b> هو البند الحقيقيّ. المعتمدة تخصم عمولة التوكيل
+                  <b>والبنكر</b> تردّه سلسلة المستند في «المستحقّ لحساب المركب»، ولا تردّه
+                  الطريقة المعتمدة — لأنّ <b>صافي الإيراد يطرحه أصلاً</b> ضمن المصاريف.
+                  فردُّه بعد ذلك يحسبه مرّتين. والمستند الرسميّ يردّ <b>Fuel Supply</b>
+                  وحده، وهو سطرُ سدادِ المورّد.
+                </p>
+                <p>
+                  <b>فرق العمولة</b> بندٌ حقيقيّ كذلك. المعتمدة تخصم عمولة التوكيل
                   مناصفةً ثمّ تردّ لكلّ مركبٍ عمولته، والمقترحة لا تذكرها — فمن عمولته
                   أعلى من المتوسّط يكسب في المعتمدة ويخسره في المقترحة، والعكس.
                   <b> ولا يتغيّر المجموع:</b> ما يخسره أحدهما يكسبه الآخر.

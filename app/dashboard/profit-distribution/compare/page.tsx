@@ -8,16 +8,21 @@ import {
   type ModelResult, type ProposedResult,
 } from '@/lib/profitModel';
 import ProposedMethod from '../ProposedMethod';
+import RatificationPanel from '../RatificationPanel';
 
 /*
- * شاشة مقارنة الطرق — منفصلةٌ عن كشف التوزيع عمداً.
+ * شاشة الاعتماد والمصادقة.
  *
- * الكشف يعرض **ما يُوزَّع**، وهذه تعرض **ما لو وُزِّع بطريقةٍ أخرى**. وخلطهما
- * في صفحةٍ واحدة يجعل القارئ يظنّ الرقمين معتمدَين، فيُنقل إلى الإدارة ما لم
- * يُقرَّر بعد. فصُلا.
+ * ── ما تفعله ──
+ * تعرض **الطريقة المعتمدة** كاملةً — ومنها الرقم الذي يُحوَّل إلى البنك — ثمّ
+ * تُتيح المصادقة عليه فيُجمَّد. وتحتها جسرٌ يُظهر لماذا تفترق عن سلسلة المستند.
  *
- * ولا تحسب هذه الشاشة شيئاً بنفسها: المحرّك واحدٌ في `@/lib/profitModel`،
- * وهي تختار فترةً وتعرض.
+ * ── ولماذا منفصلةٌ عن كشف التوزيع ──
+ * الكشف يعرض سلسلة المستند: التوزيع وحصص الأعباء وأثر الشراكة — وهو ما يُطبع
+ * للإدارة. وهذه تعرض ما يُحوَّل. وخلطهما في صفحةٍ واحدة يجعل القارئ يظنّ
+ * الرقمين شيئاً واحداً وهما ليسا كذلك.
+ *
+ * ولا تحسب هذه الشاشة شيئاً بنفسها: المحرّك واحدٌ في `@/lib/profitModel`.
  */
 
 type Period = Record<string, unknown> & { id: string; period_name: string };
@@ -63,9 +68,9 @@ export default function ComparePage() {
     <div>
       <div className="flex items-start justify-between mb-4 gap-4 flex-wrap">
         <div>
-          <h1 className="text-2xl font-bold text-gray-800">مقارنة طرق الحساب</h1>
+          <h1 className="text-2xl font-bold text-gray-800">الاعتماد والمصادقة</h1>
           <p className="text-xs text-gray-500 mt-1">
-            الطريقة المقترحة بجوار المعتمدة — وجسرٌ يُظهر من أين جاء الفرق
+            الطريقة المعتمدة — منها التحويل البنكيّ، وعليها تتمّ المصادقة
           </p>
         </div>
         <Link href="/dashboard/profit-distribution"
@@ -78,9 +83,10 @@ export default function ComparePage() {
         * تذكيرٌ دائم: المعروض هنا ليس قراراً.
         * وهو أهمّ ما في الشاشة — لأنّ الأرقام تبدو نهائيّةً وليست كذلك.
         */}
-      <p className="text-xs bg-slate-50 border border-slate-200 text-slate-700 rounded-lg px-3 py-2 mb-4 max-w-3xl">
-        <b>ما يُوزَّع فعلاً هو الطريقة المعتمدة</b> — وهي في كشف التوزيع، وهي وحدها
-        ما يُطبع للإدارة. وهذه الشاشة للمقارنة والقرار، لا للاعتماد.
+      <p className="text-xs bg-indigo-50 border border-indigo-200 text-indigo-900 rounded-lg px-3 py-2 mb-4 max-w-3xl">
+        <b>الرقم الذي يُحوَّل إلى البنك يخرج من هذه الشاشة</b> — وعليه تتمّ المصادقة،
+        ومنه يُبنى الرصيد التراكميّ. وكشف التوزيع يعرض سلسلة المستند: التوزيع وحصص
+        الأعباء وأثر الشراكة.
       </p>
 
       {loading ? (
@@ -120,11 +126,19 @@ export default function ComparePage() {
 
               <ProposedMethod result={approved} proposed={proposed} alwaysOpen />
 
+              <div className="mt-6 pt-5 border-t">
+                <RatificationPanel period={selected as any} result={approved} proposed={proposed}
+                  onChanged={async () => {
+                    const fresh = await api.get(`/api/profit-periods/${selected.id}`);
+                    setPeriods((ps) => ps.map((x) => (x.id === fresh.data.id ? fresh.data : x)));
+                  }} />
+              </div>
+
               {proposed.available && (
                 <div className="mt-5 pt-4 border-t grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
-                  <Stat label="مجموع المعتمدة"
+                  <Stat label="مجموع التحويل · المعتمدة" value={fmt(proposed.grandTotal)} />
+                  <Stat label="مجموع سلسلة المستند" muted
                     value={fmt(approved.vessels.reduce((a, v) => a + v.dueToAccount, 0))} />
-                  <Stat label="مجموع المقترحة" value={fmt(proposed.grandTotal)} />
                   <Stat label="نقد ضبا" value={fmt(approved.totalCashDuba)} muted />
                   <Stat label="مجموع صافي الإيراد"
                     value={fmt(proposed.vessels.reduce((a, v) => a + v.netRevenue, 0))} muted />

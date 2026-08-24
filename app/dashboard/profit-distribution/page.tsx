@@ -10,7 +10,6 @@ import {
 } from '@/lib/profitModel';
 import { integrityIssues, type VoyageRow, type VoyageDetail } from '@/lib/voyageDetail';
 import DistributionReport from './DistributionReport';
-import RatificationPanel from './RatificationPanel';
 
 /*
  * شاشة توزيع الأرباح — مبنيّة على معادلة المستند المعتمد.
@@ -367,7 +366,7 @@ export default function ProfitDistributionPage() {
           </Link>
           <Link href="/dashboard/profit-distribution/compare"
             className="text-sm text-slate-700 hover:text-slate-900 border border-slate-300 rounded-lg px-3 py-2">
-            مقارنة الطرق ←
+            الاعتماد والمصادقة ←
           </Link>
           <button onClick={openAdd} className="bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700">
             + فترة جديدة
@@ -455,12 +454,6 @@ export default function ProfitDistributionPage() {
               🖨️ كشف للإدارة
             </button>
           </div>
-          <RatificationPanel period={selected as any} result={detail}
-            onChanged={async () => {
-              await load();
-              const fresh = await api.get(`/api/profit-periods/${selected.id}`);
-              setSelected(fresh.data);
-            }} />
           <DistributionCard title={`${selected.period_name} — كشف التوزيع`} result={detail}
             detail={selected.voyage_detail} />
         </div>
@@ -890,7 +883,7 @@ function DistributionCard({ title, result, compact, detail }: {
         <div className="flex items-baseline gap-2 flex-wrap">
           <h3 className="font-bold text-emerald-700">{title}</h3>
           <span className="text-[10px] bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded font-semibold">
-            الطريقة المعتمدة
+            سلسلة المستند
           </span>
         </div>
         <p className="text-xs text-gray-500">
