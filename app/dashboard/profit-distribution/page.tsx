@@ -4,7 +4,7 @@ import Link from 'next/link';
 import api from '@/lib/api';
 import { TableSkeleton } from '@/components/ui';
 import {
-  calculateDistribution, toModelInput, daysBetween,
+  calculateDistribution, calculateProposed, toModelInput, daysBetween,
   VESSEL_KEYS, VESSEL_NAMES, DEFAULT_DAILY_RATE,
   type ModelResult, type VesselKey,
 } from '@/lib/profitModel';
@@ -356,7 +356,7 @@ export default function ProfitDistributionPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-800">توزيع الأرباح</h1>
           <p className="text-xs text-gray-500 mt-1">
-            على معادلة المستند المعتمد — الأساس هو النقد المتاح في ضبا، لا الإيراد
+            التحويل المعتمد لكلّ شريك — وسلسلة المستند في الكشف تحته
           </p>
         </div>
         <div className="flex gap-2">
@@ -382,17 +382,24 @@ export default function ProfitDistributionPage() {
               <th scope="col" className="px-4 py-3">من</th>
               <th scope="col" className="px-4 py-3">إلى</th>
               <th scope="col" className="px-4 py-3 text-left">نقد ضبا</th>
-              <th scope="col" className="px-4 py-3 text-left">توزيع أمل</th>
-              <th scope="col" className="px-4 py-3 text-left">توزيع بوسيدون</th>
+              <th scope="col" className="px-4 py-3 text-left">تحويل الاتحاد</th>
+              <th scope="col" className="px-4 py-3 text-left">تحويل UME · بدوي</th>
               <th scope="col" className="px-4 py-3">إجراءات</th>
             </tr>
           </thead>
           <tbody>
             {periods.map((p) => {
+              /*
+               * القائمة تعرض **التحويل المعتمد** لا توزيع سلسلة المستند.
+               *
+               * فالمُصادَق عليه والمُحوَّل إلى البنك يخرج من الطريقة المعتمدة،
+               * وعرضُ رقمٍ آخر في أوّل شاشةٍ تُفتح يجعل من يقرأ يظنّه هو.
+               */
               const c = calculateDistribution(toModelInput(p as any));
-              const amal = c.vessels.find((v) => v.key === 'amal');
-              const pos = c.vessels.find((v) => v.key === 'poseidon');
-              const blocked = c.missing.length > 0;
+              const t = calculateProposed(toModelInput(p as any));
+              const blocked = c.missing.length > 0 || !t.available;
+              const why = c.missing[0] || t.reason || '';
+              const ratified = !!(p as any).ratified_at;
               return (
                 <tr key={p.id} className="border-t hover:bg-gray-50 cursor-pointer"
                   onClick={() => setSelected(selected?.id === p.id ? null : p)}>
@@ -403,21 +410,26 @@ export default function ProfitDistributionPage() {
                         مدخلات ناقصة
                       </span>
                     )}
+                    {ratified && (
+                      <span className="ms-2 text-[10px] bg-indigo-100 text-indigo-800 px-1.5 py-0.5 rounded">
+                        ✓ مُصادَقٌ عليها
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-gray-500">{p.date_from}</td>
                   <td className="px-4 py-3 text-gray-500">{p.date_to}</td>
                   <td className="px-4 py-3 text-left font-mono">{fmt(c.totalCashDuba)}</td>
                   {blocked ? (
                     <td className="px-4 py-3 text-left text-amber-700 text-xs" colSpan={2}>
-                      لا يُحتسب — {c.missing[0]}
+                      لا يُحتسب — {why}
                     </td>
                   ) : (
                     <>
-                      <td className="px-4 py-3 text-left font-mono font-semibold text-emerald-700">
-                        {fmt(amal?.dividendPayable ?? 0)}
+                      <td className="px-4 py-3 text-left font-mono font-semibold text-indigo-800">
+                        {fmt(t.partnerTransfer.ittihad)}
                       </td>
-                      <td className="px-4 py-3 text-left font-mono font-semibold text-emerald-700">
-                        {fmt(pos?.dividendPayable ?? 0)}
+                      <td className="px-4 py-3 text-left font-mono font-semibold text-indigo-800">
+                        {fmt(t.partnerTransfer.badawi)}
                       </td>
                     </>
                   )}
