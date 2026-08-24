@@ -10,6 +10,7 @@ import {
 } from '@/lib/profitModel';
 import { integrityIssues, type VoyageRow, type VoyageDetail } from '@/lib/voyageDetail';
 import DistributionReport from './DistributionReport';
+import RatificationPanel from './RatificationPanel';
 
 /*
  * شاشة توزيع الأرباح — مبنيّة على معادلة المستند المعتمد.
@@ -45,6 +46,11 @@ interface Period {
   /** Over Pax المحصَّل في صفاجا — لا يدخل وعاء ضبا */
   poseidon_over_pax_safaga: number; amal_over_pax_safaga: number;
   daleela_over_pax_safaga: number;
+  /** `Fuel Supply` — يُضاف للتحويل البنكيّ لسداد المورّد · غير بنكر الدفتر */
+  poseidon_fuel_supply: number; amal_fuel_supply: number; daleela_fuel_supply: number;
+  // ── المصادقة ──
+  ratified_at: string | null; ratified_by: string | null;
+  ratified_snapshot: any; latest_snapshot: any; latest_fetched_at: string | null;
 
   // ── مدخلات معادلة المستند ──
   poseidon_sd_base: number; poseidon_sd_adjust: number;
@@ -89,6 +95,9 @@ const emptyForm = (): Form => ({
   poseidon_voyages: 0, amal_voyages: 0, daleela_voyages: 0,
   poseidon_over_pax: 0, amal_over_pax: 0, daleela_over_pax: 0,
   poseidon_over_pax_safaga: 0, amal_over_pax_safaga: 0, daleela_over_pax_safaga: 0,
+  poseidon_fuel_supply: 0, amal_fuel_supply: 0, daleela_fuel_supply: 0,
+  ratified_at: null, ratified_by: null,
+  ratified_snapshot: null, latest_snapshot: null, latest_fetched_at: null,
 
   poseidon_sd_base: 0, poseidon_sd_adjust: 0,
   poseidon_fuel: 0, poseidon_fuel_adjust: 0,
@@ -246,7 +255,15 @@ export default function ProfitDistributionPage() {
           (next as any)[`${k}_revenue`] = v.revenue ?? 0;
           (next as any)[`${k}_voyages`] = v.voyages ?? 0;
           (next as any)[`${k}_sd_base`] = v.sdBase ?? 0;
-          (next as any)[`${k}_fuel`] = v.bunker ?? 0;
+          /*
+           * البنكر **لا يُجلَب** — بقرار المالك، وبعد حادثة.
+           *
+           * كان الجلب يكتبه دائماً حتّى بصفر، فمحا بنكر أمل ٣١٥٬٨٤١.٣٥ في
+           * فترة ١–١٥ أغسطس ٢٠٢٦، فاختفت حصّة الوقود وزاد التوزيع ١٥٧٬٩٢٠.٦٧
+           * لكلّ شريك. ولم يُكتشف إلا بحارس الخزينة.
+           *
+           * ويُعرض المسحوب للمقارنة في `sheetInfo` ولا يُكتب.
+           */
           (next as any)[`${k}_liquidity`] = v.liquidity ?? 0;
           // الخزينة — يحسبها دفتر المركب منذ أغسطس ٢٠٢٦
           (next as any)[`${k}_cash_duba`] = v.cashDuba ?? 0;
@@ -344,6 +361,10 @@ export default function ProfitDistributionPage() {
           </p>
         </div>
         <div className="flex gap-2">
+          <Link href="/dashboard/profit-distribution/balance"
+            className="text-sm text-indigo-700 hover:text-indigo-900 border border-indigo-300 rounded-lg px-3 py-2">
+            الرصيد التراكميّ ←
+          </Link>
           <Link href="/dashboard/profit-distribution/compare"
             className="text-sm text-slate-700 hover:text-slate-900 border border-slate-300 rounded-lg px-3 py-2">
             مقارنة الطرق ←
@@ -402,7 +423,11 @@ export default function ProfitDistributionPage() {
                     </>
                   )}
                   <td className="px-4 py-3 flex gap-2" onClick={(e) => e.stopPropagation()}>
-                    <button onClick={() => openEdit(p)} className="text-blue-600 hover:underline text-xs">تعديل</button>
+                    <button onClick={() => openEdit(p)} disabled={!!(p as any).ratified_at}
+                      title={(p as any).ratified_at ? 'مُصادَقٌ عليها ومُقفلة — فُكَّ المصادقة أوّلاً' : ''}
+                      className="text-blue-600 hover:underline text-xs disabled:text-gray-300 disabled:no-underline disabled:cursor-not-allowed">
+                      تعديل
+                    </button>
                     <button onClick={() => handleDelete(p.id, p.period_name)} className="text-red-500 hover:underline text-xs">حذف</button>
                   </td>
                 </tr>
@@ -430,6 +455,12 @@ export default function ProfitDistributionPage() {
               🖨️ كشف للإدارة
             </button>
           </div>
+          <RatificationPanel period={selected as any} result={detail}
+            onChanged={async () => {
+              await load();
+              const fresh = await api.get(`/api/profit-periods/${selected.id}`);
+              setSelected(fresh.data);
+            }} />
           <DistributionCard title={`${selected.period_name} — كشف التوزيع`} result={detail}
             detail={selected.voyage_detail} />
         </div>
@@ -605,9 +636,9 @@ export default function ProfitDistributionPage() {
             )}
 
             {/* ── الخزينة ── */}
-            <Section title="الخزينة — النقد من الدفتر · و Over Pax يدويّ">
+            <Section title="الخزينة — النقد من الدفتر · وما عداه يدويّ">
               <div className="overflow-x-auto">
-                <table className="w-full text-xs min-w-[680px]">
+                <table className="w-full text-xs min-w-[900px]">
                   <thead className="text-gray-500">
                     <tr>
                       <th className="text-right py-1 font-medium">المركب</th>
@@ -615,6 +646,8 @@ export default function ProfitDistributionPage() {
                       <th className="text-right py-1 font-medium">تحصيل صفاجا</th>
                       <th className="text-right py-1 font-medium">Over Pax · ضبا</th>
                       <th className="text-right py-1 font-medium">Over Pax · صفاجا</th>
+                      <th className="text-right py-1 font-medium">البنكر</th>
+                      <th className="text-right py-1 font-medium">Fuel Supply</th>
                       <th className="text-right py-1 font-medium">تسوية الإيقاف</th>
                     </tr>
                   </thead>
@@ -624,6 +657,8 @@ export default function ProfitDistributionPage() {
                       const sfg = num((form as any)[`${k}_net_collected`]);
                       const op = num((form as any)[`${k}_over_pax`]);
                       const ops = num((form as any)[`${k}_over_pax_safaga`]);
+                      const bnk = num((form as any)[`${k}_fuel`]);
+                      const fs = num((form as any)[`${k}_fuel_supply`]);
                       const oh = num((form as any)[`${k}_off_hire`]);
                       const active = num((form as any)[`${k}_voyages`]) > 0;
                       const empty = active && !duba && !sfg;
@@ -656,6 +691,14 @@ export default function ProfitDistributionPage() {
                               onChange={(v) => setNum(`${k}_over_pax_safaga` as keyof Form, v)} />
                           </td>
                           <td className="py-1.5 pe-2">
+                            <MoneyInput value={bnk}
+                              onChange={(v) => setNum(`${k}_fuel` as keyof Form, v)} />
+                          </td>
+                          <td className="py-1.5 pe-2">
+                            <MoneyInput value={fs}
+                              onChange={(v) => setNum(`${k}_fuel_supply` as keyof Form, v)} />
+                          </td>
+                          <td className="py-1.5 pe-2">
                             <MoneyInput value={oh}
                               onChange={(v) => setNum(`${k}_off_hire` as keyof Form, v)} muted />
                           </td>
@@ -680,6 +723,11 @@ export default function ProfitDistributionPage() {
                 ولكلٍّ مسارٌ مختلف: <b>ضبا</b> يدخل الوعاء المشترك، و<b>صفاجا</b> يبقى عند
                 حائزه ويُحوَّل نصيب الشريك الآخر ضمن تسوية صفاجا. وإدخال المبلغ كاملاً في
                 خانةٍ واحدة يُبالغ في نصيب أحدهما.
+                <br />
+                <b>والبنكر و Fuel Supply بندان مختلفان — كلاهما يدويّ ولا يُجلَبان.</b>{' '}
+                <b>البنكر</b> يُخصم مناصفةً في التوزيع، و<b>Fuel Supply</b> يُضاف إلى
+                التحويل البنكيّ لسداد المورّد. وقد يكونان مختلفين في الفترة نفسها:
+                في ١–١٥ أغسطس بنكر أمل ٣١٥٬٨٤١.٣٥ و Fuel Supply صفر.
                 <br />
                 <span className="text-amber-700">
                   «لم تصل» تعني رحلاتٍ في الفترة لم تُملأ أعمدة خزينتها في الدفتر بعد.
@@ -916,7 +964,27 @@ function DistributionCard({ title, result, compact, detail }: {
               </tr>
               <ChainRow label="المخصوم من ضبا" vs={vs} pick={(v) => v.deductedFromDuba} muted />
               <ChainRow label="المتبقّي في ضبا" vs={vs} pick={(v) => v.remainingAtDuba} muted />
-              <ChainRow label="المستحقّ لحساب المركب" vs={vs} pick={(v) => v.dueToAccount} />
+              <ChainRow label="المستحقّ لحساب المركب" vs={vs} pick={(v) => v.dueToAccount} muted />
+              {result.totalFuelSupply !== 0 && (
+                <ChainRow label="+ Fuel Supply · لسداد المورّد" vs={vs}
+                  pick={(v) => v.fuelSupply} signed muted />
+              )}
+              {/*
+                * سطر التحويل — وهو ما يُصادَق عليه ويُحوَّل إلى البنك.
+                *
+                * ينفرد عن «المستحقّ» بأمرين يقطع بهما المستند: يُردّ **حصّة**
+                * العمولة لا عمولة المركب، ولا يُردّ البنكر بل `Fuel Supply`.
+                */}
+              <tr className="border-t-2 border-indigo-600 bg-indigo-50">
+                <td className="py-2.5 pe-3 font-sans font-bold text-indigo-900 whitespace-nowrap">
+                  التحويل إلى الحساب البنكيّ
+                </td>
+                {vs.map((v) => (
+                  <td key={v.key} className="py-2.5 text-left font-bold text-indigo-900 text-base">
+                    {blocked ? '—' : fmt(v.transferToAccount)}
+                  </td>
+                ))}
+              </tr>
             </tbody>
           </table>
         </div>
