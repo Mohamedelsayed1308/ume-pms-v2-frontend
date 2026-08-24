@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import api from '@/lib/api';
 import { TableSkeleton } from '@/components/ui';
 import {
@@ -155,6 +156,7 @@ export default function ProfitDistributionPage() {
   const [sheetInfo, setSheetInfo] = useState<any>(null);
   const [error, setError] = useState('');
   const [selected, setSelected] = useState<Period | null>(null);
+  const router = useRouter();
   const [showLegacy, setShowLegacy] = useState(false);
   /** مراكبُ ملأ الجلبُ لها Over Pax — يقع في خانة ضبا، فيُراجَع */
   const [opFromSheet, setOpFromSheet] = useState<string[]>([]);
@@ -402,7 +404,9 @@ export default function ProfitDistributionPage() {
               const ratified = !!(p as any).ratified_at;
               return (
                 <tr key={p.id} className="border-t hover:bg-gray-50 cursor-pointer"
-                  onClick={() => setSelected(selected?.id === p.id ? null : p)}>
+                  title="افتح شاشة الاعتماد والمصادقة"
+                  onClick={() => router.push(
+                    `/dashboard/profit-distribution/compare?period=${p.id}`)}>
                   <td className="px-4 py-3 font-medium">
                     {p.period_name}
                     {blocked && (
@@ -434,6 +438,10 @@ export default function ProfitDistributionPage() {
                     </>
                   )}
                   <td className="px-4 py-3 flex gap-2" onClick={(e) => e.stopPropagation()}>
+                    <button onClick={() => setSelected(selected?.id === p.id ? null : p)}
+                      className="text-gray-600 hover:underline text-xs">
+                      {selected?.id === p.id ? 'إخفاء الكشف' : 'الكشف'}
+                    </button>
                     <button onClick={() => openEdit(p)} disabled={!!(p as any).ratified_at}
                       title={(p as any).ratified_at ? 'مُصادَقٌ عليها ومُقفلة — فُكَّ المصادقة أوّلاً' : ''}
                       className="text-blue-600 hover:underline text-xs disabled:text-gray-300 disabled:no-underline disabled:cursor-not-allowed">
@@ -459,6 +467,11 @@ export default function ProfitDistributionPage() {
 
       {selected && detail && (
         <div>
+          <p className="text-xs bg-emerald-50 border border-emerald-200 text-emerald-900 rounded-lg px-3 py-2 mb-2 max-w-3xl">
+            <b>هذا كشف سلسلة المستند</b> — التوزيع وحصص الأعباء وأثر الشراكة، وهو ما
+            يُطبع للإدارة. <b>والتحويل البنكيّ والمصادقة في شاشة «الاعتماد والمصادقة»</b>،
+            وأرقامها هي المعروضة في القائمة أعلاه.
+          </p>
           <div className="flex justify-end mb-2">
             <button onClick={() => setPrinting(true)} disabled={detail.missing.length > 0}
               title={detail.missing.length > 0 ? 'مدخلاتٌ ناقصة — لا يُطبع كشفٌ غير مكتمل' : ''}
@@ -970,26 +983,13 @@ function DistributionCard({ title, result, compact, detail }: {
               <ChainRow label="المخصوم من ضبا" vs={vs} pick={(v) => v.deductedFromDuba} muted />
               <ChainRow label="المتبقّي في ضبا" vs={vs} pick={(v) => v.remainingAtDuba} muted />
               <ChainRow label="المستحقّ لحساب المركب" vs={vs} pick={(v) => v.dueToAccount} muted />
-              {result.totalFuelSupply !== 0 && (
-                <ChainRow label="+ Fuel Supply · لسداد المورّد" vs={vs}
-                  pick={(v) => v.fuelSupply} signed muted />
-              )}
               {/*
-                * سطر التحويل — وهو ما يُصادَق عليه ويُحوَّل إلى البنك.
+                * ولا سطرَ تحويلٍ هنا.
                 *
-                * ينفرد عن «المستحقّ» بأمرين يقطع بهما المستند: يُردّ **حصّة**
-                * العمولة لا عمولة المركب، ولا يُردّ البنكر بل `Fuel Supply`.
+                * التحويل يخرج من **الطريقة المعتمدة** في شاشة الاعتماد، وكان
+                * هذا الكشف يعرض سطراً باسمه يُحسب من سلسلة المستند — فيظهر
+                * رقمان مختلفان بالاسم نفسه في شاشتين. فرُفع، وبقي مكانه رابط.
                 */}
-              <tr className="border-t-2 border-indigo-600 bg-indigo-50">
-                <td className="py-2.5 pe-3 font-sans font-bold text-indigo-900 whitespace-nowrap">
-                  التحويل إلى الحساب البنكيّ
-                </td>
-                {vs.map((v) => (
-                  <td key={v.key} className="py-2.5 text-left font-bold text-indigo-900 text-base">
-                    {blocked ? '—' : fmt(v.transferToAccount)}
-                  </td>
-                ))}
-              </tr>
             </tbody>
           </table>
         </div>

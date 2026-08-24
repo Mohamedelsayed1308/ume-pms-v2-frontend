@@ -53,6 +53,17 @@ export default function ComparePage() {
 
   useEffect(() => { load(); }, [load]);
 
+  /*
+   * فترةٌ مطلوبةٌ بالعنوان — تأتي من النقر في قائمة كشف التوزيع.
+   *
+   * وتُقرأ من `window.location` لا من `useSearchParams`: الثانية تُلزم
+   * حدّ Suspense في التصيير الساكن، وهذه لا تحتاج شيئاً وتقع بعد التحميل.
+   */
+  useEffect(() => {
+    const want = new URLSearchParams(window.location.search).get('period');
+    if (want) setSelectedId(want);
+  }, []);
+
   const selected = periods.find((p) => p.id === selectedId) || null;
 
   const approved: ModelResult | null = useMemo(
