@@ -111,7 +111,12 @@ export default function ProposedMethod({ result, proposed }: {
                         <td key={v.key} className="py-2 text-left text-gray-800">{fmt(proposed.pooled)}</td>
                       ))}
                     </tr>
-                    <PRow label="− تحصيل صفاجا" ps={ps} pick={(v) => -v.safaga} signed />
+                    <PRow label="− نقد صفاجا" ps={ps} pick={(v) => -v.safaga} signed />
+                    {/* ما حُصّل من Over Pax في صفاجا داخلٌ في السطر أعلاه — يُفرد ليُرى */}
+                    {ps.some((v) => v.safagaOverPax !== 0) && (
+                      <PRow label="منه · Over Pax محصَّلٌ في صفاجا" ps={ps}
+                        pick={(v) => v.safagaOverPax} signed />
+                    )}
                     {ps.some((v) => v.overPaxShare !== 0) && (
                       <PRow label="+ حصّة Over Pax" ps={ps} pick={(v) => v.overPaxShare} signed />
                     )}
