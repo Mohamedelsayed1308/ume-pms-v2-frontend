@@ -37,6 +37,7 @@ type Entry = {
 type Statement = {
   balances: Record<string, number>;
   partnerNames: Record<string, string>;
+  hasOpening: boolean;
   entries: Entry[];
 };
 
@@ -109,6 +110,11 @@ export default function BalancePage() {
             })}
           </div>
 
+          {/* ── الرصيد الافتتاحيّ — يُقيَّد مرّةً واحدة ── */}
+          {!data.hasOpening && (
+            <OpeningForm names={data.partnerNames} onSaved={load} />
+          )}
+
           {/* ── الدفتر ── */}
           <div className="bg-white rounded-xl shadow overflow-x-auto">
             <table className="w-full text-sm min-w-[820px]">
@@ -136,10 +142,11 @@ export default function BalancePage() {
                     <td className="px-4 py-3 text-xs">{data.partnerNames?.[e.partner] || e.partner}</td>
                     <td className="px-4 py-3">
                       <span className={`text-[10px] px-1.5 py-0.5 rounded ${
-                        e.kind === 'delta'
-                          ? 'bg-amber-100 text-amber-800'
+                        e.kind === 'delta' ? 'bg-amber-100 text-amber-800'
+                          : e.kind === 'opening' ? 'bg-slate-200 text-slate-800'
                           : 'bg-emerald-100 text-emerald-800'}`}>
-                        {e.kind === 'delta' ? 'فرقٌ معلّق' : 'تسوية'}
+                        {e.kind === 'delta' ? 'فرقٌ معلّق'
+                          : e.kind === 'opening' ? 'افتتاحيّ' : 'تسوية'}
                       </span>
                     </td>
                     <td className={`px-4 py-3 text-left font-mono font-semibold ${
@@ -171,6 +178,97 @@ export default function BalancePage() {
           </div>
         </>
       ) : null}
+    </div>
+  );
+}
+
+/**
+ * الرصيد الافتتاحيّ — ما تراكم قبل أن يوجد النظام.
+ *
+ * ── لماذا يُكتب في الشاشة لا في القاعدة ──
+ * الإشارة تُحدّد ربع مليون. فيُكتب الرقم هنا، ويُقرأ معناه **بالكلمات** تحته
+ * قبل الحفظ: «يُخصم من تحويله» أو «يُزاد عليه». ورقمٌ يُلصق في محرّر SQL لا
+ * يراجعه أحد ولا يعرف أحدٌ من كتبه.
+ *
+ * ويُقيَّد مرّةً واحدة — الباك يرفض الثاني، والخانة تختفي بعد الأوّل.
+ */
+function OpeningForm({ names, onSaved }: {
+  names: Record<string, string>;
+  onSaved: () => void;
+}) {
+  const [vals, setVals] = useState<Record<string, string>>({ badawi: '', ittihad: '' });
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  const num = (s: string) => {
+    const x = Number(String(s).replace(/[^\d.-]/g, ''));
+    return Number.isFinite(x) ? x : 0;
+  };
+  const any = PARTNERS.some((p) => Math.abs(num(vals[p])) > 0.02);
+
+  async function save() {
+    setBusy(true);
+    setError('');
+    try {
+      await api.post('/api/profit-periods/settlements/opening', {
+        entries: PARTNERS.map((p) => ({ partner: p, amount: num(vals[p]), note })),
+      });
+      onSaved();
+    } catch (e: any) {
+      setError(e?.response?.data?.message || 'تعذّر الحفظ');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="bg-white rounded-xl border border-slate-300 p-5 mb-6">
+      <h3 className="font-bold text-sm text-gray-800">الرصيد الافتتاحيّ</h3>
+      <p className="text-xs text-gray-500 mt-1 mb-4 max-w-2xl">
+        ما تراكم <b>قبل</b> أوّل مصادقة. يُقيَّد مرّةً واحدة ثمّ تختفي هذه الخانة —
+        وتصحيحه بعدها يكون بقيدٍ جديد لا بكتابةٍ فوقه.
+      </p>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {PARTNERS.map((p) => {
+          const v = num(vals[p]);
+          const on = Math.abs(v) > 0.02;
+          return (
+            <div key={p}>
+              <label className="block text-xs text-gray-600 mb-1">{names?.[p] || p}</label>
+              <input value={vals[p]} onChange={(e) => setVals({ ...vals, [p]: e.target.value })}
+                inputMode="decimal" placeholder="0.00"
+                className="w-full border rounded-lg px-3 py-2 text-sm font-mono text-left" dir="ltr" />
+              <p className={`text-[11px] mt-1.5 ${
+                !on ? 'text-gray-400' : v < 0 ? 'text-rose-700' : 'text-blue-700'}`}>
+                {!on ? 'لا رصيدَ افتتاحيّ.'
+                  : v < 0
+                    ? `عليه ${fmt(Math.abs(v))} — يُخصم من تحويله في المصادقة القادمة.`
+                    : `لصالحه ${fmt(v)} — يُزاد على تحويله في المصادقة القادمة.`}
+              </p>
+            </div>
+          );
+        })}
+      </div>
+
+      <label className="block text-xs text-gray-600 mt-4 mb-1">البيان — يُسجَّل في الدفتر</label>
+      <input value={note} onChange={(e) => setNote(e.target.value)}
+        className="w-full border rounded-lg px-3 py-2 text-sm"
+        placeholder="مثلاً: الرصيد قبل مصادقة ١–١٥ أغسطس ٢٠٢٦" />
+
+      {error && (
+        <p className="text-xs bg-rose-50 border border-rose-200 text-rose-800 rounded px-2 py-1.5 mt-3">
+          {error}
+        </p>
+      )}
+
+      <div className="flex justify-end mt-4">
+        <button type="button" onClick={save} disabled={!any || busy}
+          className="bg-slate-800 text-white text-sm px-4 py-2 rounded-lg hover:bg-black disabled:opacity-40 disabled:cursor-not-allowed">
+          {busy ? '…' : 'قيّد الرصيد الافتتاحيّ'}
+        </button>
+      </div>
     </div>
   );
 }
