@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import api from '@/lib/api';
+import Link from 'next/link';
 import CustomerStatement from './CustomerStatement';
 import { CURRENCIES } from '@/lib/currencies';
 import { TableSkeleton } from '@/components/ui';
@@ -81,6 +82,16 @@ export default function HireInvoicesPage() {
   const [error, setError] = useState('');
   const [viewInv, setViewInv] = useState<HireInvoice | null>(null);
   const [previewInv, setPreviewInv] = useState<HireInvoice | null>(null);
+  /*
+   * ملخّصُ عمولة البروكر لكلّ فاتورة — يُجلَب مرّةً في استعلامٍ واحد.
+   *
+   * ولا يُحسب في الشاشة: القاعدة (العميل × المركب × النسبة) تعيش في القاعدة
+   * ويُطبّقها الخادم، وحسابُها هنا نسخةٌ ثانية تنحرف مع أوّل تعديل.
+   */
+  const [brokerDue, setBrokerDue] =
+    useState<Record<string, { due: number; paid: number; outstanding: number }>>({});
+  const [brokerTotals, setBrokerTotals] =
+    useState<{ name: string; balance: number }[]>([]);
   const [payForm, setPayForm] = useState({ payment_date: '', amount: '', currency: 'EUR', reference: '', notes: '' });
   const [payLoading, setPayLoading] = useState(false);
   const [filterStatus, setFilterStatus] = useState('');
@@ -96,16 +107,24 @@ export default function HireInvoicesPage() {
   async function load() {
     setListLoading(true);
     try {
-      const [invRes, custRes, vesRes, compRes] = await Promise.all([
+      const [invRes, custRes, vesRes, compRes, brkRes, accRes] = await Promise.all([
         api.get('/api/hire-invoices'),
         api.get('/api/customers'),
         api.get('/api/vessels'),
         api.get('/api/shipping-companies'),
+        api.get('/api/brokers/invoice-summary').catch(() => ({ data: {} })),
+        api.get('/api/brokers/accounts').catch(() => ({ data: { accounts: [] } })),
       ]);
       setInvoices(invRes.data);
       setCustomers(custRes.data);
       setVessels(vesRes.data);
       setCompanies(compRes.data);
+      setBrokerDue(brkRes.data || {});
+      setBrokerTotals(
+        (accRes.data?.accounts || []).map((a: any) => ({
+          name: a.broker?.name || '—', balance: Number(a.balance) || 0,
+        })),
+      );
       setListError('');
     } catch {
       setListError('تعذّر تحميل مستندات الإيجار — حدّث الصفحة أو أعد المحاولة.');
@@ -475,8 +494,35 @@ export default function HireInvoicesPage() {
           <button onClick={() => openAdd('credit_note')} className="bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700">+ إشعار دائن</button>
           <button onClick={() => openAdd('debit_note')} className="bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700">+ إشعار مدين</button>
           <button onClick={() => setShowStmt(true)} className="bg-slate-700 text-white px-4 py-2 rounded-lg hover:bg-slate-800">📄 كشف حساب عميل</button>
+          <Link href="/dashboard/hire-invoices/brokers"
+            className="bg-orange-500 text-white px-4 py-2 rounded-lg hover:bg-orange-600">
+            🤝 حساب البروكر
+          </Link>
         </div>
       </div>
+
+      {/*
+        * مستحقُّ البروكرَين — في رأس الشاشة لا في طيّة.
+        *
+        * فالعمولة تُستحقّ بالإصدار ولا يراها أحدٌ إلا إن بحث عنها. ووضعُها
+        * حيث تقع العين هو الفارق بين متابعةٍ ونسيان.
+        */}
+      {brokerTotals.some((b) => Math.abs(b.balance) > 0.01) && (
+        <div className="mb-4 flex flex-wrap gap-3">
+          {brokerTotals.map((b) => (
+            <Link key={b.name} href="/dashboard/hire-invoices/brokers"
+              className={`rounded-xl border px-4 py-2.5 transition ${
+                Math.abs(b.balance) <= 0.01
+                  ? 'bg-white border-gray-200 text-gray-500'
+                  : 'bg-orange-50 border-orange-200 hover:border-orange-400'}`}>
+              <span className="block text-[11px] text-gray-600">مستحقٌّ لـ {b.name}</span>
+              <span className="block font-mono font-bold text-orange-800">
+                EUR {fmt(b.balance)}
+              </span>
+            </Link>
+          ))}
+        </div>
+      )}
 
       {/* Search by customer / vessel / number */}
       <div className="mb-3 relative max-w-md">
@@ -549,6 +595,19 @@ export default function HireInvoicesPage() {
                   {isNote && inv.related_invoice?.invoice_number && (
                     <div className="text-[10px] text-gray-400 font-sans">مقابل: {inv.related_invoice.invoice_number}</div>
                   )}
+                  {(() => {
+                    const b = brokerDue[inv.id];
+                    if (!b || b.due <= 0.01) return null;
+                    const open = b.outstanding > 0.01;
+                    return (
+                      <div className={`mt-1 inline-block text-[10px] font-sans px-1.5 py-0.5 rounded ${
+                        open ? 'bg-orange-100 text-orange-800' : 'bg-emerald-100 text-emerald-800'}`}>
+                        {open
+                          ? `عمولة بروكر ${fmt(b.outstanding)}`
+                          : 'عمولة البروكر سُدِّدت'}
+                      </div>
+                    );
+                  })()}
                 </td>
                 <td className="px-4 py-3">
                   <span className={`px-2 py-1 rounded-full text-[11px] font-medium ${DOC_TYPES[dt]?.badge || ''}`}>{DOC_TYPES[dt]?.ar || dt}</span>
