@@ -23,11 +23,14 @@ const near0 = (n: number) => Math.abs(n) < 0.005;
 
 type PVessel = ProposedResult['vessels'][number];
 
-export default function ProposedMethod({ result, proposed }: {
+export default function ProposedMethod({ result, proposed, alwaysOpen }: {
   result: ModelResult;
   proposed: ProposedResult;
+  /** في الشاشة المنفصلة لا طيّ: المقارنة هي غرضها كلّه */
+  alwaysOpen?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  const open = alwaysOpen || expanded;
   const ps = proposed.vessels;
 
   /*
@@ -64,10 +67,11 @@ export default function ProposedMethod({ result, proposed }: {
   const diverges = proposed.available && Math.abs(sumGap) > 0.02;
 
   return (
-    <div className="mt-4 pt-3 border-t">
-      <button type="button" onClick={() => setOpen(!open)}
-        className="text-xs font-semibold text-gray-600 hover:text-gray-900 flex items-center gap-1.5">
-        <span className="text-gray-400">{open ? '▾' : '▸'}</span>
+    <div className={alwaysOpen ? 'mt-2' : 'mt-4 pt-3 border-t'}>
+      <button type="button" onClick={() => setExpanded(!expanded)} disabled={alwaysOpen}
+        className={`text-xs font-semibold flex items-center gap-1.5 ${
+          alwaysOpen ? 'text-gray-700 cursor-default' : 'text-gray-600 hover:text-gray-900'}`}>
+        {!alwaysOpen && <span className="text-gray-400">{open ? '▾' : '▸'}</span>}
         الطريقة المقترحة — للمقارنة
         {!proposed.available && (
           <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded font-normal">

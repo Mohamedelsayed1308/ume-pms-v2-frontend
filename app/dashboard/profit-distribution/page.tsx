@@ -1,15 +1,15 @@
 'use client';
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import Link from 'next/link';
 import api from '@/lib/api';
 import { TableSkeleton } from '@/components/ui';
 import {
-  calculateDistribution, calculateProposed, toModelInput, daysBetween,
+  calculateDistribution, toModelInput, daysBetween,
   VESSEL_KEYS, VESSEL_NAMES, DEFAULT_DAILY_RATE,
-  type ModelResult, type ProposedResult, type VesselKey,
+  type ModelResult, type VesselKey,
 } from '@/lib/profitModel';
 import { integrityIssues, type VoyageRow, type VoyageDetail } from '@/lib/voyageDetail';
 import DistributionReport from './DistributionReport';
-import ProposedMethod from './ProposedMethod';
 
 /*
  * شاشة توزيع الأرباح — مبنيّة على معادلة المستند المعتمد.
@@ -325,13 +325,8 @@ export default function ProfitDistributionPage() {
   }
 
   const calc = useMemo(() => calculateDistribution(toModelInput(form as any)), [form]);
-  const calcProposed = useMemo(() => calculateProposed(toModelInput(form as any)), [form]);
   const detail = useMemo(
     () => (selected ? calculateDistribution(toModelInput(selected as any)) : null),
-    [selected],
-  );
-  const detailProposed = useMemo(
-    () => (selected ? calculateProposed(toModelInput(selected as any)) : null),
     [selected],
   );
   const hasAdjust = VESSEL_KEYS.some(
@@ -348,9 +343,15 @@ export default function ProfitDistributionPage() {
             على معادلة المستند المعتمد — الأساس هو النقد المتاح في ضبا، لا الإيراد
           </p>
         </div>
-        <button onClick={openAdd} className="bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700">
-          + فترة جديدة
-        </button>
+        <div className="flex gap-2">
+          <Link href="/dashboard/profit-distribution/compare"
+            className="text-sm text-slate-700 hover:text-slate-900 border border-slate-300 rounded-lg px-3 py-2">
+            مقارنة الطرق ←
+          </Link>
+          <button onClick={openAdd} className="bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700">
+            + فترة جديدة
+          </button>
+        </div>
       </div>
 
       <div className="bg-white rounded-xl shadow overflow-x-auto mb-6">
@@ -430,7 +431,7 @@ export default function ProfitDistributionPage() {
             </button>
           </div>
           <DistributionCard title={`${selected.period_name} — كشف التوزيع`} result={detail}
-            detail={selected.voyage_detail} proposed={detailProposed} />
+            detail={selected.voyage_detail} />
         </div>
       )}
 
@@ -760,7 +761,7 @@ export default function ProfitDistributionPage() {
 
             {/* ── المعاينة ── */}
             <DistributionCard title="معاينة التوزيع" result={calc} compact
-              detail={form.voyage_detail} proposed={calcProposed} />
+              detail={form.voyage_detail} />
 
             {/* ── حقول المعادلة السابقة ── */}
             <div className="mt-4">
@@ -822,9 +823,8 @@ export default function ProfitDistributionPage() {
  * ثمّ الخصومات الثلاثة ثمّ تسوية صفاجا ثمّ التوزيع. والسطر الأخير — المتبقّي
  * في ضبا — تحقّقٌ ذاتيّ: إن لم يقارب الصفر فثمّة خلل.
  * ══════════════════════════════════════════════════════════════════════════ */
-function DistributionCard({ title, result, compact, detail, proposed }: {
+function DistributionCard({ title, result, compact, detail }: {
   title: string; result: ModelResult; compact?: boolean; detail?: VoyageDetail | null;
-  proposed?: ProposedResult | null;
 }) {
   const vs = result.vessels;
   const blocked = result.missing.length > 0;
@@ -927,9 +927,6 @@ function DistributionCard({ title, result, compact, detail, proposed }: {
 
       {/* أثر الشراكة — من يدعم من، وبكم */}
       {vs.length > 1 && !blocked && <PartnershipEffect result={result} />}
-
-      {/* الطريقة المقترحة — تُعرض بجوار المعتمدة ولا تحلّ محلّها */}
-      {proposed && vs.length > 0 && <ProposedMethod result={result} proposed={proposed} />}
 
       {/* تفصيل الرحلات — طيّةٌ لكلّ مركب */}
       {vs.length > 0 && detail && (
