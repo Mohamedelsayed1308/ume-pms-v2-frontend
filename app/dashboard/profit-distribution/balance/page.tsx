@@ -34,8 +34,18 @@ type Entry = {
   kind: string; note: string; created_by: string;
 };
 
+type PartnerPair = { badawi: number; ittihad: number };
+
+type Transfer = {
+  id: string; period_name: string; date_from: string; date_to: string;
+  at: string; by: string | null;
+  computed: PartnerPair | null; carriedIn: PartnerPair | null;
+  paid: PartnerPair | null; runningPaid: PartnerPair;
+};
+
 type Statement = {
   balances: Record<string, number>;
+  transfers: { list: Transfer[]; totalPaid: PartnerPair };
   partnerNames: Record<string, string>;
   hasOpening: boolean;
   /** يُعدَّل ما لم تُصادَق فترةٌ بُنيت عليه */
@@ -87,31 +97,86 @@ export default function BalancePage() {
         <p className="text-sm bg-rose-50 border border-rose-200 text-rose-800 rounded-lg px-3 py-2">{error}</p>
       ) : data ? (
         <>
-          {/* ── الرصيد الجاري ── */}
+          {/*
+            * ── البطاقتان: ما حُوِّل، وما بقي معلّقاً ──
+            *
+            * المجموع المُحوَّل هو **حركة المال**، والرصيد المعلّق تصحيحاتٌ لم
+            * تُسوَّ بعد. وكان المعروض الرصيد وحده — فإذا سُوّي صار صفراً وبدت
+            * الشاشة خاليةً من المعنى، وهي أبعد ما تكون عنه.
+            */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
             {PARTNERS.map((p) => {
               const v = data.balances?.[p] ?? 0;
               const settled = Math.abs(v) <= 0.02;
+              const total = data.transfers?.totalPaid?.[p] ?? 0;
               return (
-                <div key={p} className={`rounded-xl border p-5 ${
-                  settled ? 'bg-white border-gray-200'
-                    : v > 0 ? 'bg-blue-50 border-blue-200' : 'bg-rose-50 border-rose-200'}`}>
+                <div key={p} className="rounded-xl border border-gray-200 bg-white p-5">
                   <div className="text-sm text-gray-600 mb-1">{data.partnerNames?.[p] || p}</div>
-                  <div className={`font-mono text-2xl font-bold ${
+                  <div className="font-mono text-2xl font-bold text-indigo-900">{fmt(total)}</div>
+                  <div className="text-[11px] text-gray-500 mt-1">
+                    مجموع ما حُوِّل إلى حسابه — من {data.transfers?.list?.length ?? 0} مصادقة
+                  </div>
+                  <div className={`mt-3 pt-3 border-t text-sm font-mono font-semibold ${
                     settled ? 'text-gray-400' : v > 0 ? 'text-blue-800' : 'text-rose-800'}`}>
                     {settled ? fmt(0) : (v > 0 ? '+' : '') + paren(v)}
-                  </div>
-                  <div className="text-[11px] text-gray-500 mt-2">
-                    {settled
-                      ? 'لا شيء معلّق — كلّ فرقٍ سُوّي.'
-                      : v > 0
-                        ? 'لصالحه — يُزاد على تحويله في المصادقة التالية.'
-                        : 'عليه — يُخصم من تحويله في المصادقة التالية.'}
+                    <span className="block text-[11px] font-sans font-normal text-gray-500 mt-0.5">
+                      {settled
+                        ? 'ولا فرقَ معلّقاً — كلّ تصحيحٍ سُوّي.'
+                        : v > 0
+                          ? 'فرقٌ لصالحه — يُزاد على تحويله في المصادقة التالية.'
+                          : 'فرقٌ عليه — يُخصم من تحويله في المصادقة التالية.'}
+                    </span>
                   </div>
                 </div>
               );
             })}
           </div>
+
+          {/* ── التحويلات المُصادَق عليها — حركةُ المال ── */}
+          {(data.transfers?.list?.length ?? 0) > 0 && (
+            <div className="bg-white rounded-xl shadow overflow-x-auto mb-6">
+              <p className="text-xs font-semibold text-gray-600 px-4 pt-4 pb-2">
+                التحويلات المُصادَق عليها
+              </p>
+              <table className="w-full text-sm min-w-[860px]">
+                <thead className="bg-gray-50 text-gray-600 text-right">
+                  <tr>
+                    <th scope="col" className="px-4 py-3">الفترة</th>
+                    <th scope="col" className="px-4 py-3">صُودق في</th>
+                    <th scope="col" className="px-4 py-3 text-left">المحسوب</th>
+                    <th scope="col" className="px-4 py-3 text-left">± المحمول</th>
+                    <th scope="col" className="px-4 py-3 text-left">المُحوَّل</th>
+                    <th scope="col" className="px-4 py-3 text-left">التراكميّ</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.transfers.list.map((t) => (
+                    <tr key={t.id} className="border-t align-top">
+                      <td className="px-4 py-3">
+                        {t.period_name}
+                        <span className="block text-[11px] text-gray-400">
+                          {t.date_from} → {t.date_to}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">
+                        {when(t.at)}
+                        {t.by ? <span className="block text-gray-400">{t.by}</span> : null}
+                      </td>
+                      <Pair v={t.computed} />
+                      <Pair v={t.carriedIn} signed />
+                      <Pair v={t.paid} bold />
+                      <Pair v={t.runningPaid} muted />
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <p className="text-[11px] text-gray-500 px-4 py-3 border-t">
+                كلّ خليّةٍ سطران: <b>UME · بدوي</b> فوق، و<b>الاتحاد</b> تحته.
+                و«المحمول» رصيدٌ من فتراتٍ سابقة دخل في هذه المصادقة —
+                فـ «المُحوَّل» هو ما خرج إلى البنك فعلاً.
+              </p>
+            </div>
+          )}
 
           {/* ── الرصيد الافتتاحيّ — يُعدَّل ما لم يُستهلك ── */}
           {data.openingEditable && (
@@ -291,5 +356,28 @@ function OpeningForm({ names, current, existing, onSaved }: {
         </button>
       </div>
     </div>
+  );
+}
+
+/** خليّةٌ بسطرين: بدوي فوق والاتحاد تحته — فالجدول يبقى قارئاً بلا عمودين لكلّ بند. */
+function Pair({ v, signed, bold, muted }: {
+  v: { badawi: number; ittihad: number } | null;
+  signed?: boolean; bold?: boolean; muted?: boolean;
+}) {
+  if (!v) return <td className="px-4 py-3 text-left text-gray-300">—</td>;
+  const cell = (x: number) => {
+    if (signed && Math.abs(x) <= 0.02) return fmt(0);
+    return signed ? (x > 0 ? '+' : '') + paren(x) : fmt(x);
+  };
+  const tone = (x: number) =>
+    muted ? 'text-gray-500'
+      : bold ? 'text-indigo-900 font-bold'
+      : signed ? (Math.abs(x) <= 0.02 ? 'text-gray-300' : x > 0 ? 'text-blue-700' : 'text-rose-700')
+      : 'text-gray-700';
+  return (
+    <td className="px-4 py-3 text-left font-mono whitespace-nowrap">
+      <span className={`block ${tone(v.badawi)}`}>{cell(v.badawi)}</span>
+      <span className={`block ${tone(v.ittihad)}`}>{cell(v.ittihad)}</span>
+    </td>
   );
 }
