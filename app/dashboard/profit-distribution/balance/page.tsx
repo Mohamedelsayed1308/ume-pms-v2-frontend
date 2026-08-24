@@ -38,6 +38,9 @@ type Statement = {
   balances: Record<string, number>;
   partnerNames: Record<string, string>;
   hasOpening: boolean;
+  /** يُعدَّل ما لم تُصادَق فترةٌ بُنيت عليه */
+  openingEditable: boolean;
+  opening: Record<string, number>;
   entries: Entry[];
 };
 
@@ -110,9 +113,16 @@ export default function BalancePage() {
             })}
           </div>
 
-          {/* ── الرصيد الافتتاحيّ — يُقيَّد مرّةً واحدة ── */}
-          {!data.hasOpening && (
-            <OpeningForm names={data.partnerNames} onSaved={load} />
+          {/* ── الرصيد الافتتاحيّ — يُعدَّل ما لم يُستهلك ── */}
+          {data.openingEditable && (
+            <OpeningForm names={data.partnerNames} current={data.opening}
+              existing={data.hasOpening} onSaved={load} />
+          )}
+          {!data.openingEditable && data.hasOpening && (
+            <p className="text-xs bg-slate-50 border border-slate-200 text-slate-600 rounded-lg px-3 py-2 mb-6">
+              الرصيد الافتتاحيّ <b>مُجمَّد</b> — صُودق على فترةٍ بُنيت عليه.
+              وتصحيحه بعد اليوم يكون بقيدٍ مقابل لا بكتابةٍ فوقه.
+            </p>
           )}
 
           {/* ── الدفتر ── */}
@@ -192,11 +202,16 @@ export default function BalancePage() {
  *
  * ويُقيَّد مرّةً واحدة — الباك يرفض الثاني، والخانة تختفي بعد الأوّل.
  */
-function OpeningForm({ names, onSaved }: {
+function OpeningForm({ names, current, existing, onSaved }: {
   names: Record<string, string>;
+  current: Record<string, number>;
+  existing: boolean;
   onSaved: () => void;
 }) {
-  const [vals, setVals] = useState<Record<string, string>>({ badawi: '', ittihad: '' });
+  const [vals, setVals] = useState<Record<string, string>>({
+    badawi: current?.badawi ? String(current.badawi) : '',
+    ittihad: current?.ittihad ? String(current.ittihad) : '',
+  });
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -224,10 +239,16 @@ function OpeningForm({ names, onSaved }: {
 
   return (
     <div className="bg-white rounded-xl border border-slate-300 p-5 mb-6">
-      <h3 className="font-bold text-sm text-gray-800">الرصيد الافتتاحيّ</h3>
+      <h3 className="font-bold text-sm text-gray-800">
+        {existing ? 'تعديل الرصيد الافتتاحيّ' : 'الرصيد الافتتاحيّ'}
+      </h3>
       <p className="text-xs text-gray-500 mt-1 mb-4 max-w-2xl">
-        ما تراكم <b>قبل</b> أوّل مصادقة. يُقيَّد مرّةً واحدة ثمّ تختفي هذه الخانة —
-        وتصحيحه بعدها يكون بقيدٍ جديد لا بكتابةٍ فوقه.
+        ما تراكم <b>قبل</b> أوّل مصادقة. ويُعدَّل ما دامت <b>لم تُصادَق فترةٌ بعد</b> —
+        فهو حتّى ذلك الحين مسوّدةٌ لم يُبنَ عليها تحويل. وأوّلُ مصادقةٍ تُجمّده،
+        فيصير التصحيح بقيدٍ مقابل.
+        {existing && (
+          <><br /><b>والكتابة تستبدل القيد القائم ولا تُضاف إليه.</b></>
+        )}
       </p>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -266,7 +287,7 @@ function OpeningForm({ names, onSaved }: {
       <div className="flex justify-end mt-4">
         <button type="button" onClick={save} disabled={!any || busy}
           className="bg-slate-800 text-white text-sm px-4 py-2 rounded-lg hover:bg-black disabled:opacity-40 disabled:cursor-not-allowed">
-          {busy ? '…' : 'قيّد الرصيد الافتتاحيّ'}
+          {busy ? '…' : existing ? 'استبدل القيد الافتتاحيّ' : 'قيّد الرصيد الافتتاحيّ'}
         </button>
       </div>
     </div>
