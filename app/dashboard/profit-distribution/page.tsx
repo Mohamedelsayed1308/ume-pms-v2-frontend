@@ -42,6 +42,9 @@ interface Period {
   poseidon_revenue: number; amal_revenue: number; daleela_revenue: number;
   poseidon_voyages: number; amal_voyages: number; daleela_voyages: number;
   poseidon_over_pax: number; amal_over_pax: number; daleela_over_pax: number;
+  /** Over Pax المحصَّل في صفاجا — لا يدخل وعاء ضبا */
+  poseidon_over_pax_safaga: number; amal_over_pax_safaga: number;
+  daleela_over_pax_safaga: number;
 
   // ── مدخلات معادلة المستند ──
   poseidon_sd_base: number; poseidon_sd_adjust: number;
@@ -85,6 +88,7 @@ const emptyForm = (): Form => ({
   poseidon_revenue: 0, amal_revenue: 0, daleela_revenue: 0,
   poseidon_voyages: 0, amal_voyages: 0, daleela_voyages: 0,
   poseidon_over_pax: 0, amal_over_pax: 0, daleela_over_pax: 0,
+  poseidon_over_pax_safaga: 0, amal_over_pax_safaga: 0, daleela_over_pax_safaga: 0,
 
   poseidon_sd_base: 0, poseidon_sd_adjust: 0,
   poseidon_fuel: 0, poseidon_fuel_adjust: 0,
@@ -144,6 +148,8 @@ export default function ProfitDistributionPage() {
   const [error, setError] = useState('');
   const [selected, setSelected] = useState<Period | null>(null);
   const [showLegacy, setShowLegacy] = useState(false);
+  /** مراكبُ ملأ الجلبُ لها Over Pax — يقع في خانة ضبا، فيُراجَع */
+  const [opFromSheet, setOpFromSheet] = useState<string[]>([]);
   const [printing, setPrinting] = useState(false);
 
   /*
@@ -231,6 +237,7 @@ export default function ProfitDistributionPage() {
         ...(Object.keys(ranges).length ? { ranges } : {}),
       });
       const d = res.data;
+      const filled: string[] = [];
       setForm((prev) => {
         const next = { ...prev };
         for (const k of VESSEL_KEYS) {
@@ -253,7 +260,18 @@ export default function ProfitDistributionPage() {
            *
            * فالقاعدة: الدفتر يملأ حين يحمل قيمة، ويسكت حين لا يحمل.
            */
-          if (Number(v.overPax)) (next as any)[`${k}_over_pax`] = v.overPax;
+          /*
+           * والدفتر لا يفرّق بين ضبا وصفاجا — عمودٌ واحد فيه.
+           *
+           * فما يملؤه الجلب يقع في خانة **ضبا** بالضرورة. وإن كان بعضه محصَّلاً
+           * في صفاجا فالرقم خطأ، ولا يظهر خطؤه إلا في التوزيع. ولهذا يُعلَن
+           * صراحةً بدل أن يمرّ صامتاً — وهو الخطأ الذي بولغ به في نصيب بوسيدون
+           * ٤٬٩٥٥ دولاراً في فترة ١–١٥ أغسطس ٢٠٢٦.
+           */
+          if (Number(v.overPax)) {
+            (next as any)[`${k}_over_pax`] = v.overPax;
+            filled.push(VESSEL_NAMES[k]);
+          }
           if (Number(v.offHire)) (next as any)[`${k}_off_hire`] = v.offHire;
         }
         // العمولة الإجمالية القديمة — تُحدَّث لأنّها معروضة، ولا تدخل الحساب
@@ -269,6 +287,7 @@ export default function ProfitDistributionPage() {
         return next;
       });
       setSheetInfo(d.source ? { ...d, source: d.source } : d);
+      setOpFromSheet(filled);
     } catch (e: any) {
       setError('فشل الجلب من الشيت: ' + (e?.response?.data?.message || e?.message));
     } finally {
@@ -576,16 +595,25 @@ export default function ProfitDistributionPage() {
               </div>
             </Section>
 
+            {opFromSheet.length > 0 && (
+              <p className="text-xs bg-amber-50 border border-amber-300 text-amber-900 rounded px-3 py-2 mb-3">
+                <b>الجلب ملأ Over Pax لـ {opFromSheet.join(' و')} — في خانة «ضبا».</b>{' '}
+                والدفتر عمودٌ واحد لا يفرّق بين المكانين. فراجع المستند: إن كان بعضه
+                محصَّلاً في صفاجا فانقله إلى خانته، وإلا بولغ في نصيب أحد الشريكين.
+              </p>
+            )}
+
             {/* ── الخزينة ── */}
             <Section title="الخزينة — النقد من الدفتر · و Over Pax يدويّ">
               <div className="overflow-x-auto">
-                <table className="w-full text-xs min-w-[560px]">
+                <table className="w-full text-xs min-w-[680px]">
                   <thead className="text-gray-500">
                     <tr>
                       <th className="text-right py-1 font-medium">المركب</th>
                       <th className="text-right py-1 font-medium">نقد ضبا</th>
                       <th className="text-right py-1 font-medium">تحصيل صفاجا</th>
-                      <th className="text-right py-1 font-medium">Over Pax</th>
+                      <th className="text-right py-1 font-medium">Over Pax · ضبا</th>
+                      <th className="text-right py-1 font-medium">Over Pax · صفاجا</th>
                       <th className="text-right py-1 font-medium">تسوية الإيقاف</th>
                     </tr>
                   </thead>
@@ -594,6 +622,7 @@ export default function ProfitDistributionPage() {
                       const duba = num((form as any)[`${k}_cash_duba`]);
                       const sfg = num((form as any)[`${k}_net_collected`]);
                       const op = num((form as any)[`${k}_over_pax`]);
+                      const ops = num((form as any)[`${k}_over_pax_safaga`]);
                       const oh = num((form as any)[`${k}_off_hire`]);
                       const active = num((form as any)[`${k}_voyages`]) > 0;
                       const empty = active && !duba && !sfg;
@@ -622,6 +651,10 @@ export default function ProfitDistributionPage() {
                               onChange={(v) => setNum(`${k}_over_pax` as keyof Form, v)} />
                           </td>
                           <td className="py-1.5 pe-2">
+                            <MoneyInput value={ops}
+                              onChange={(v) => setNum(`${k}_over_pax_safaga` as keyof Form, v)} />
+                          </td>
+                          <td className="py-1.5 pe-2">
                             <MoneyInput value={oh}
                               onChange={(v) => setNum(`${k}_off_hire` as keyof Form, v)} muted />
                           </td>
@@ -640,6 +673,12 @@ export default function ProfitDistributionPage() {
                 <br />
                 و Over Pax يُكتب <b>كما نشأ على المركب</b> لا كما آل إلى الشريك — والقسمة
                 ٦٦.٦٧٪ لبدوي و ٣٣.٣٣٪ للاتحاد يُجريها النظام.
+                <br />
+                <b>وافصل ضبا عن صفاجا.</b> المستند يكتبهما مفصولين
+                (<span className="font-mono">Dub</span> و<span className="font-mono">Saf</span>)،
+                ولكلٍّ مسارٌ مختلف: <b>ضبا</b> يدخل الوعاء المشترك، و<b>صفاجا</b> يبقى عند
+                حائزه ويُحوَّل نصيب الشريك الآخر ضمن تسوية صفاجا. وإدخال المبلغ كاملاً في
+                خانةٍ واحدة يُبالغ في نصيب أحدهما.
                 <br />
                 <span className="text-amber-700">
                   «لم تصل» تعني رحلاتٍ في الفترة لم تُملأ أعمدة خزينتها في الدفتر بعد.
@@ -859,6 +898,14 @@ function DistributionCard({ title, result, compact, detail, proposed }: {
               <SharedRow label={`− حصّة العمولة (${fmt(result.totalFee)} ÷ ${result.partners})`}
                 value={-result.feeShare} cols={vs.length} />
               <ChainRow label="± تسوية صفاجا" vs={vs} pick={(v) => v.safagaAdjust} signed />
+              {/*
+                * المستند يطوي البندين في سطرٍ واحد، فيبقى السطر واحداً — ويُفرد
+                * المكوّن تحته حين يوجد، لأنّ من يراجع يحتاج أن يرى من أين جاء.
+                */}
+              {result.totalOverPaxSafaga !== 0 && (
+                <ChainRow label={`منه · Over Pax صفاجا (${fmt(result.totalOverPaxSafaga)})`}
+                  vs={vs} pick={(v) => v.safagaOverPaxShare} signed muted />
+              )}
               <tr className="border-t-2 border-emerald-600 bg-emerald-50">
                 <td className="py-2.5 pe-3 font-sans font-bold text-emerald-800 whitespace-nowrap">التوزيع المقترح</td>
                 {vs.map((v) => (

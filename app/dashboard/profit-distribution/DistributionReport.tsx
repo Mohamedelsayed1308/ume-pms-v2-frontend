@@ -300,7 +300,10 @@ export default function DistributionReport({
               <Chain label="− حصّة العمولة"
                 note={`${f2(result.totalFee)} ÷ ${result.partners}`}
                 shared={-result.feeShare} tone="neg" />
-              <Chain label="± تسوية صفاجا" note="متوسّط التحصيل − تحصيل المركب"
+              <Chain label="± تسوية صفاجا"
+                note={result.totalOverPaxSafaga !== 0
+                  ? `متوسّط التحصيل − تحصيل المركب · ومنه Over Pax صفاجا ${f2(result.totalOverPaxSafaga)}`
+                  : 'متوسّط التحصيل − تحصيل المركب'}
                 get={(v) => v.safagaAdjust} />
               <tr className="big">
                 <td className="lbl">التوزيع المقترح</td>
