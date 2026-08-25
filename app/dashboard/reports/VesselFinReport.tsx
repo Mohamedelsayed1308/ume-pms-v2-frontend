@@ -10,8 +10,13 @@ import { costSegments, type ExecData } from './VesselExecReport';
  * الأعلى و1.75 في الأعلى أيضاً، ولا يجد بينهما طريقاً.
  *
  * وهذه النسخة تبدأ بالطريق: قائمة دخلٍ متدرّجة تنزل من الإيراد إلى الصافي درجةً
- * درجة، كل درجة سطرٌ ونسبتها من الإيراد ورقم الملحق الذي يفصّلها. ثم الملاحق
- * بالترتيب نفسه، ثم التحليل والرسوم في الختام.
+ * درجة، كل درجة سطرٌ ونسبتها من الإيراد واسم القسم الذي يفصّلها. ثم الأقسام
+ * بالترتيب نفسه، ثم `Analysis` والرسوم في الختام.
+ *
+ * ── ولا «ملحق» في التقرير ──
+ * أمر المالك في ٢٥ أغسطس ٢٠٢٦: الكلمة تُوحي بأنّ ما تحتها هامشٌ يُتخطّى، وهي
+ * كشوفُ التفصيل التي يُراجَع بها كلّ رقمٍ في قائمة الدخل. فصار عمود الإحالة
+ * يُسمّي القسم لا يرقّمه.
  *
  * ── والأصل يبقى ──
  * لا يُلمس `#vp-doc`. هذه نافذةٌ منفصلة بزرٍّ خاصّ، فيُقارَن الشكلان على الورق
@@ -75,7 +80,7 @@ const CSS = `
   /*
    * لا فاصل صفحةٍ قسري.
    *
-   * كان كل ملحقٍ يبدأ ورقةً جديدة مهما قصُر، فخرج التقرير سبع ورقاتٍ كلٌّ منها
+   * كان كل قسمٍ يبدأ ورقةً جديدة مهما قصُر، فخرج التقرير سبع ورقاتٍ كلٌّ منها
    * ممتلئةٌ إلى ثُلثها. والمستند المالي يُقرأ متّصلاً: تُمنع الجداول من الانشطار
    * ويُمنع العنوان أن ينفصل عمّا تحته، ثم يقع الفاصل حيث تنتهي الورقة فعلاً.
    */
@@ -234,13 +239,13 @@ export default function VesselFinReport({
                 <td className="lbl">إجمالي الإيراد</td>
                 <td className="amt">{fmt(data.revenue)}</td>
                 <td className="shr">100.0%</td>
-                <td className="ref">ملحق ١</td>
+                <td className="ref">الإيرادات</td>
               </tr>
               <tr className="neg">
                 <td className="lbl">− مصروفات الوكلاء (صادر + وارد)</td>
                 <td className="amt">({fmt(agentExp)})</td>
                 <td className="shr">{pct(agentExp, R)}</td>
-                <td className="ref">ملحق ٣</td>
+                <td className="ref">مصروفات الوكالات</td>
               </tr>
               <tr className="sub">
                 <td className="lbl">= مجمل الربح</td>
@@ -252,13 +257,13 @@ export default function VesselFinReport({
                 <td className="lbl">− البنكر المستهلك</td>
                 <td className="amt">({fmt(data.bunkerCost)})</td>
                 <td className="shr">{pct(data.bunkerCost, R)}</td>
-                <td className="ref">ملحق ٤</td>
+                <td className="ref">البنكر والمرتبات</td>
               </tr>
               <tr className="neg">
                 <td className="lbl">− مرتبات الشهر</td>
                 <td className="amt">({fmt(data.salaries)})</td>
                 <td className="shr">{pct(data.salaries, R)}</td>
-                <td className="ref">ملحق ٤</td>
+                <td className="ref">البنكر والمرتبات</td>
               </tr>
               {hasGap && (
                 <tr className="gap">
@@ -275,10 +280,10 @@ export default function VesselFinReport({
                 <td className="ref"></td>
               </tr>
               <tr className="neg">
-                <td className="lbl">− مشتريات المركب (قسط الشهر)</td>
+                <td className="lbl">− مشتريات العبّارة / مصاريف أخرى (قسط الشهر)</td>
                 <td className="amt">({fmt(purchTotal)})</td>
                 <td className="shr">{pct(purchTotal, R)}</td>
-                <td className="ref">ملحق ٥</td>
+                <td className="ref">مشتريات العبّارة</td>
               </tr>
               <tr className="fin">
                 <td className="lbl">= صافي الربح النهائي</td>
@@ -306,9 +311,9 @@ export default function VesselFinReport({
             </div>
           )}
 
-          {/* ── ص٢ · ملحق ١ و٢ ── */}
+          {/* ── ص٢ · تحليل الإيرادات ── */}
           <div className="vf-sec">
-            <h2>ملحق ١ · الإيرادات</h2>
+            <h2>Analysis · الإيرادات</h2>
             <table>
               <thead><tr>
                 <th scope="col">البند</th>
@@ -342,39 +347,11 @@ export default function VesselFinReport({
               </tbody>
             </table>
 
-            <h2 style={{ marginTop: 18 }}>ملحق ٢ · المنقولات ومتوسطاتها</h2>
-            <table>
-              <thead><tr>
-                <th scope="col">البند</th>
-                <th scope="col">صادر</th><th scope="col">وارد</th><th scope="col">الإجمالي</th>
-                <th scope="col">متوسط صادر / رحلة</th><th scope="col">متوسط وارد / رحلة</th>
-              </tr></thead>
-              <tbody>
-                {([
-                  { label: 'شاحنات', e: data.E.truckC, i: data.I.truckC },
-                  { label: 'سيارات', e: data.E.vehC, i: data.I.vehC },
-                  { label: 'ركاب', e: data.E.passC, i: data.I.passC },
-                ] as const).map((r) => (
-                  <tr key={r.label}>
-                    <td>{r.label}</td>
-                    <td>{r.e.toLocaleString()}</td>
-                    <td>{r.i.toLocaleString()}</td>
-                    <td>{(r.e + r.i).toLocaleString()}</td>
-                    <td>{fmt(r.e / (data.count || 1))}</td>
-                    <td>{fmt(r.i / (data.count || 1))}</td>
-                  </tr>
-                ))}
-                {/*
-                  * لا سطر إجمالي هنا — بأمر المالك.
-                  * وجمعُ شاحنةٍ إلى راكبٍ إلى سيارة لا يُنتج كمّيةً ذات معنى أصلاً.
-                  */}
-              </tbody>
-            </table>
           </div>
 
-          {/* ── ص٣ · ملحق ٣ و٤ ── */}
+          {/* ── ص٣ · مصروفات الوكالات · والبنكر ── */}
           <div className="vf-sec">
-            <h2>ملحق ٣ · مصروفات الوكلاء</h2>
+            <h2>مصروفات الوكالات</h2>
             <div className="cols">
               <div>
                 <h3>الصادر — {cfg.agentExport}</h3>
@@ -402,7 +379,7 @@ export default function VesselFinReport({
               </div>
             </div>
 
-            <h2 style={{ marginTop: 18 }}>ملحق ٤ · البنكر والمرتبات والسيولة</h2>
+            <h2 style={{ marginTop: 18 }}>البنكر والمرتبات</h2>
             <h3>البنكر</h3>
             <table>
               <thead><tr>
@@ -422,25 +399,11 @@ export default function VesselFinReport({
             <h3>مرتبات الشهر</h3>
             <table><tbody><tr><td>مرتبات الطاقم المحمّلة</td><td>{fmt(data.salaries)}</td></tr></tbody></table>
 
-            <h3>السيولة عند الوكلاء</h3>
-            <table>
-              <thead><tr>
-                <th scope="col">{cfg.agentExport} (P−O)</th>
-                <th scope="col">{cfg.agentImport} (O)</th>
-                <th scope="col">إجمالي التحصيل (P)</th>
-              </tr></thead>
-              <tbody><tr>
-                <td>{fmt(data.liqIttihad)}</td><td>{fmt(data.liqBassam)}</td><td>{fmt(data.P)}</td>
-              </tr></tbody>
-            </table>
-            <div className="note">
-              السيولة رصيدٌ عند الوكيل لا مصروف — لا تدخل قائمة الدخل أعلاه.
-            </div>
           </div>
 
-          {/* ── ص٤ · ملحق ٥ · المشتريات ── */}
+          {/* ── ص٤ · مشتريات العبّارة ── */}
           <div className="vf-sec">
-            <h2>ملحق ٥ · المشتريات</h2>
+            <h2>مشتريات العبّارة / مصاريف أخرى</h2>
             <h3>الإجمالي حسب البند</h3>
             <table>
               <thead><tr><th scope="col">البند</th><th scope="col">قسط الشهر (USD)</th><th scope="col">٪ من المشتريات</th></tr></thead>
@@ -486,9 +449,59 @@ export default function VesselFinReport({
             )) : <p style={{ fontSize: '8.5pt', color: '#64748b' }}>لا توجد فواتير على المركب في هذا الشهر.</p>}
           </div>
 
-          {/* ── ص٥ · التحليل ── */}
+          {/*
+            * ── ص٥ · Analysis ──
+            *
+            * وإليه نُقلت **المنقولات ومتوسطاتها** و**السيولة عند الوكلاء** بأمر
+            * المالك في ٢٥ أغسطس ٢٠٢٦: كلتاهما قراءةٌ لا بندُ دخل، فموضعهما مع
+            * التحليل لا بين كشوف المصروفات. والمنقولات **قبل** هيكل التكاليف.
+            */}
           <div className="vf-sec">
-            <h2>التحليل</h2>
+            <h2>Analysis</h2>
+
+            <h3>المنقولات ومتوسطاتها</h3>
+            <table>
+              <thead><tr>
+                <th scope="col">البند</th>
+                <th scope="col">صادر</th><th scope="col">وارد</th><th scope="col">الإجمالي</th>
+                <th scope="col">متوسط صادر / رحلة</th><th scope="col">متوسط وارد / رحلة</th>
+              </tr></thead>
+              <tbody>
+                {([
+                  { label: 'شاحنات', e: data.E.truckC, i: data.I.truckC },
+                  { label: 'سيارات', e: data.E.vehC, i: data.I.vehC },
+                  { label: 'ركاب', e: data.E.passC, i: data.I.passC },
+                ] as const).map((r) => (
+                  <tr key={r.label}>
+                    <td>{r.label}</td>
+                    <td>{r.e.toLocaleString()}</td>
+                    <td>{r.i.toLocaleString()}</td>
+                    <td>{(r.e + r.i).toLocaleString()}</td>
+                    <td>{fmt(r.e / (data.count || 1))}</td>
+                    <td>{fmt(r.i / (data.count || 1))}</td>
+                  </tr>
+                ))}
+                {/*
+                  * لا سطر إجمالي هنا — بأمر المالك.
+                  * وجمعُ شاحنةٍ إلى راكبٍ إلى سيارة لا يُنتج كمّيةً ذات معنى أصلاً.
+                  */}
+              </tbody>
+            </table>
+
+            <h3>السيولة عند الوكلاء</h3>
+            <table>
+              <thead><tr>
+                <th scope="col">{cfg.agentExport} (P−O)</th>
+                <th scope="col">{cfg.agentImport} (O)</th>
+                <th scope="col">إجمالي التحصيل (P)</th>
+              </tr></thead>
+              <tbody><tr>
+                <td>{fmt(data.liqIttihad)}</td><td>{fmt(data.liqBassam)}</td><td>{fmt(data.P)}</td>
+              </tr></tbody>
+            </table>
+            <div className="note">
+              السيولة رصيدٌ عند الوكيل لا مصروف — لا تدخل قائمة الدخل أعلاه.
+            </div>
 
             <h3>هيكل التكاليف</h3>
             <div className="dn">
