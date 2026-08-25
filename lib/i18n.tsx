@@ -17,6 +17,83 @@ const DICT: Record<string, { ar: string; en: string }> = {
   'group.sivamar_qb': { ar: 'محاسبة سيفامار', en: 'Sivamar Accounting' },
   'group.admin': { ar: 'الإدارة والإعدادات', en: 'Administration & Settings' },
 
+  /*
+   * إعادة صياغة الإيميلات.
+   *
+   * الشاشة تعرض قوائم قيمها **إنجليزيّةٌ ثابتة** — `supplier` و`follow_up` —
+   * لأنّ الخادم يتحقّق منها بقوائم مغلقة. فالمفتاح هنا يترجم ما يراه المستخدم
+   * ولا يمسّ ما يُرسَل.
+   */
+  'email.title': { ar: 'إعادة صياغة الإيميلات', en: 'Email Rewrite' },
+  'email.subtitle': {
+    ar: 'اكتب مسودّتك كما تريد — والمساعد يُخرجها بأسلوب الشركة. لا يُرسِل شيئاً، ولا يخترع رقماً.',
+    en: 'Write your rough draft — the assistant returns it in the house style. It never sends, and never invents a number.',
+  },
+  'email.input.title': { ar: 'المدخلات', en: 'Input' },
+  'email.output.title': { ar: 'الصياغة', en: 'Rewrite' },
+  'email.output.empty': { ar: 'اكتب مسودّتك ثم اضغط «أعد الصياغة».', en: 'Write your draft, then press “Rewrite”.' },
+
+  'email.draft': { ar: 'المسودّة', en: 'Draft' },
+  'email.draft.placeholder': {
+    ar: 'اكتب ما تريد قوله بأي صيغة — نقاط، جُمل ناقصة، عربي أو إنجليزي.',
+    en: 'Write what you want to say in any form — bullets, half sentences, Arabic or English.',
+  },
+  'email.incoming': { ar: 'الإيميل اللي بترد عليه', en: 'The email you are replying to' },
+  'email.incoming.placeholder': {
+    ar: 'اختياري — الصق الإيميل الوارد هنا ليُبنى الردّ عليه.',
+    en: 'Optional — paste the incoming email here so the reply is built on it.',
+  },
+
+  'email.recipient': { ar: 'المستلم', en: 'Recipient' },
+  'email.recipient.supplier': { ar: 'مورّد', en: 'Supplier' },
+  'email.recipient.customer': { ar: 'عميل', en: 'Customer' },
+  'email.recipient.colleague': { ar: 'زميل', en: 'Colleague' },
+  'email.recipient.manager': { ar: 'مدير', en: 'Manager' },
+  'email.recipient.bank_auditor': { ar: 'بنك أو مدقّق', en: 'Bank or auditor' },
+
+  'email.purpose': { ar: 'الغرض', en: 'Purpose' },
+  'email.purpose.follow_up': { ar: 'متابعة', en: 'Follow-up' },
+  'email.purpose.payment_reminder': { ar: 'تذكير بسداد', en: 'Payment reminder' },
+  'email.purpose.document_request': { ar: 'طلب مستندات', en: 'Document request' },
+  'email.purpose.apology': { ar: 'اعتذار', en: 'Apology' },
+  'email.purpose.rejection': { ar: 'رفض', en: 'Rejection' },
+  'email.purpose.clarification': { ar: 'توضيح', en: 'Clarification' },
+  'email.purpose.escalation': { ar: 'تصعيد', en: 'Escalation' },
+  'email.purpose.other': { ar: 'غير ذلك', en: 'Other' },
+
+  'email.tone': { ar: 'النبرة', en: 'Tone' },
+  'email.tone.neutral_formal': { ar: 'محايدة رسميّة', en: 'Neutral formal' },
+  'email.tone.firm': { ar: 'حازمة', en: 'Firm' },
+  'email.tone.friendly': { ar: 'ودّية', en: 'Friendly' },
+
+  'email.language': { ar: 'اللغة', en: 'Language' },
+  'email.language.en': { ar: 'إنجليزيّة', en: 'English' },
+  'email.language.ar': { ar: 'عربيّة', en: 'Arabic' },
+  'email.language.both': { ar: 'الاثنتان', en: 'Both' },
+
+  'email.rewrite': { ar: 'أعد الصياغة', en: 'Rewrite' },
+  'email.subject': { ar: 'الموضوع', en: 'Subject' },
+  'email.body': { ar: 'المتن', en: 'Body' },
+  'email.copy.all': { ar: 'نسخ', en: 'Copy' },
+  'email.copy.body': { ar: 'نسخ النصّ فقط', en: 'Copy body only' },
+  'email.copied': { ar: 'تمّ النسخ', en: 'Copied' },
+  'email.missing': { ar: 'معلومات ناقصة سيبها المساعد بين أقواس', en: 'Missing details left in brackets by the assistant' },
+
+  'email.adjust': { ar: 'اضبط الصياغة', en: 'Adjust' },
+  'email.adjust.firmer': { ar: 'أحزم', en: 'Firmer' },
+  'email.adjust.softer': { ar: 'ألين', en: 'Softer' },
+  'email.adjust.shorter': { ar: 'أقصر', en: 'Shorter' },
+
+  'email.recents': { ar: 'آخر الصياغات', en: 'Recent rewrites' },
+  'email.recents.empty': { ar: 'لا شيء بعد', en: 'Nothing yet' },
+  'email.recents.untitled': { ar: 'بلا موضوع', en: 'No subject' },
+  'email.recents.clear': { ar: 'مسح السجلّ', en: 'Clear history' },
+  'email.localOnly': { ar: 'محفوظ على جهازك فقط — مش على السيرفر', en: 'Stored on your device only — not on the server' },
+
+  'email.error.connection': { ar: 'تعذّر الاتصال بالمساعد. حاول مرّة أخرى.', en: 'Could not reach the assistant. Please try again.' },
+  'email.error.limit': { ar: 'تجاوزت عدد الطلبات المسموح بها في الساعة، حاول بعد شوية', en: 'You have exceeded the hourly request limit, please try again shortly' },
+  'email.error.copy': { ar: 'تعذّر النسخ — انسخ يدويّاً.', en: 'Copy failed — please copy manually.' },
+
   'topbar.search': { ar: 'بحث…', en: 'Search…' },
   'topbar.searchHint': { ar: 'بحث عام (قريباً)', en: 'Global search (soon)' },
   'topbar.notifications': { ar: 'الإشعارات', en: 'Notifications' },
