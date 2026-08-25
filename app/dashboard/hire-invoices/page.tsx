@@ -32,7 +32,20 @@ const emptyForm = {
   currency: 'EUR', total_amount: '0', status: 'unpaid', notes: '',
   doc_type: 'invoice', related_invoice_id: '',
 };
-const emptyItem = { days: '', description: '', daily_hire: '', amount: '' };
+/*
+ * نوعُ البند — وعليه يقوم أساسُ عمولة البروكر.
+ *
+ * والافتراض `hire` لأنّه الغالب: كلّ فاتورةٍ فيها بند إيجارٍ واحدٌ على الأقلّ،
+ * وما عداه استثناء. ويُغيَّر من قائمةٍ في السطر نفسه، وأثرُه ظاهرٌ تحت الإجمالي
+ * فوراً — فلا يمرّ خطأٌ صامتاً كما مرّ في `ZA-26-08-02`.
+ */
+const ITEM_KINDS: { v: string; ar: string }[] = [
+  { v: 'hire', ar: 'Hire' },
+  { v: 'other', ar: 'Other' },
+  { v: 'off_hire', ar: 'Off Hire' },
+];
+
+const emptyItem = { days: '', description: '', daily_hire: '', amount: '', item_kind: 'hire' };
 
 const statusLabel: Record<string, string> = { unpaid: 'غير مسددة', partial: 'مسددة جزئياً', paid: 'مسددة', issued: 'صادر' };
 const statusColor: Record<string, string> = { unpaid: 'bg-red-100 text-red-700', partial: 'bg-yellow-100 text-yellow-700', paid: 'bg-green-100 text-green-700', issued: 'bg-blue-100 text-blue-700' };
@@ -179,7 +192,10 @@ export default function HireInvoicesPage() {
       notes: inv.notes || '',
     });
     setItems(inv.items?.length ? inv.items.map(it => ({
-      days: String(it.days || ''), description: it.description, daily_hire: String(it.daily_hire || ''), amount: String(it.amount)
+      days: String(it.days || ''), description: it.description,
+      daily_hire: String(it.daily_hire || ''), amount: String(it.amount),
+      // فاتورةٌ حُفظت قبل العمود تأتي بلا نوع — و`hire` هو ما كانت تُحسب عليه
+      item_kind: (it as any).item_kind || 'hire',
     })) : [{ ...emptyItem }]);
     setError('');
     setShowModal(true);
@@ -275,6 +291,8 @@ export default function HireInvoicesPage() {
           description: it.description,
           daily_hire: it.daily_hire ? parseFloat(it.daily_hire) : null,
           amount: effAmount(it),
+          // النوع يُرسَل كما اختير — وعليه يُحسب أساس عمولة البروكر في الخادم
+          item_kind: it.item_kind || 'hire',
           sort_order: i,
         })),
       };
@@ -797,9 +815,10 @@ export default function HireInvoicesPage() {
                 <div className="space-y-2">
                   <div className="grid grid-cols-12 gap-1 text-xs text-gray-500 px-1">
                     <span className="col-span-1">أيام</span>
-                    <span className="col-span-6">الوصف</span>
+                    <span className="col-span-5">الوصف</span>
+                    <span className="col-span-2">النوع</span>
                     <span className="col-span-2">Daily Hire</span>
-                    <span className="col-span-2">المبلغ</span>
+                    <span className="col-span-1">المبلغ</span>
                     <span className="col-span-1"></span>
                   </div>
                   {items.map((it, idx) => (
@@ -809,7 +828,14 @@ export default function HireInvoicesPage() {
                         className="col-span-1 border rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400" />
                       <input value={it.description} onChange={(e) => updateItem(idx, 'description', e.target.value)}
                         placeholder="MV-Wasa Express Hire for 15 Days..."
-                        className="col-span-6 border rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400" />
+                        className="col-span-5 border rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400" />
+                      <select value={it.item_kind || 'hire'}
+                        onChange={(e) => updateItem(idx, 'item_kind' as any, e.target.value)}
+                        title="بنود Hire وحدها تدخل أساس عمولة البروكر"
+                        className={`col-span-2 border rounded px-1 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400 ${
+                          (it.item_kind || 'hire') === 'hire' ? 'text-gray-800' : 'text-amber-700 bg-amber-50'}`}>
+                        {ITEM_KINDS.map((k) => <option key={k.v} value={k.v}>{k.ar}</option>)}
+                      </select>
                       <input value={it.daily_hire} onChange={(e) => updateItem(idx, 'daily_hire', e.target.value)}
                         placeholder="21,000" type="number"
                         className="col-span-2 border rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400" />
@@ -820,7 +846,7 @@ export default function HireInvoicesPage() {
                       }}
                         placeholder={effAmount(it) ? fmt(effAmount(it)) : '0.00'} type="number"
                         title={effAmount(it) && !it.amount ? `محسوب تلقائياً: ${fmt(effAmount(it))}` : ''}
-                        className="col-span-2 border rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400" />
+                        className="col-span-1 border rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400" />
                       <button type="button" onClick={() => setItems(items.filter((_, i) => i !== idx))}
                         className="col-span-1 text-red-400 hover:text-red-600 text-xs">✕</button>
                     </div>
@@ -829,6 +855,25 @@ export default function HireInvoicesPage() {
                 <div className="text-right mt-3 font-bold text-gray-700">
                   الإجمالي: {fmt(calcTotal())} {form.currency}
                 </div>
+                {/*
+                  * أساسُ العمولة ظاهرٌ لحظةَ الكتابة لا بعد الحفظ.
+                  *
+                  * فالخطأ الذي وقع في `ZA-26-08-02` — بندُ غسيلٍ سالبٌ أنقص
+                  * الأساس ١٥٬٠٠٠ — كان سيُرى هنا قبل أن يُحفظ.
+                  */}
+                {(() => {
+                  const hire = items.filter((x) => (x.item_kind || 'hire') === 'hire');
+                  const base = hire.reduce((sum, x) => sum + effAmount(x), 0);
+                  const skipped = items.length - hire.length;
+                  if (!items.length) return null;
+                  return (
+                    <div className="text-right mt-1 text-xs text-gray-500">
+                      أساس عمولة البروكر: <b className="text-orange-700 font-mono">{fmt(base)} {form.currency}</b>
+                      {' · '}{hire.length} بند Hire
+                      {skipped ? <span className="text-amber-700"> · استُبعد {skipped}</span> : null}
+                    </div>
+                  );
+                })()}
               </div>
 
               <div>
