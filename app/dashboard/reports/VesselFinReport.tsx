@@ -232,7 +232,7 @@ export default function VesselFinReport({
         <div id="vf-doc" dir="rtl" className="p-6 print:p-0">
           <Head />
 
-          <h2>قائمة الدخل — من الإيراد إلى صافي الربح</h2>
+          <h2>قائمة الدخل</h2>
           <table className="pl">
             <tbody>
               <tr>
