@@ -214,7 +214,14 @@ interface Side {
   truckC: number; truck: number; vehC: number; veh: number; passC: number; pass: number; houryaC: number; discharge: number;
   exp: Record<string, number>;
 }
-interface Voyage { ref: any; month: string | null; monthAlt: string | null; date?: string; E: Side; I: Side; bunker: number; net: number; O: number; P: number; bassamLiq: number; }
+interface Voyage { ref: any; month: string | null; monthAlt: string | null; date?: string; E: Side; I: Side; bunker: number; net: number; O: number; P: number; bassamLiq: number;
+  /*
+   * وسمُ الدفتر: «⚠️ راجعها».
+   *
+   * اختياريٌّ لأنّ الرحلات المحفوظة قبل اليوم لا تحمله — وغيابُه ليس براءة،
+   * بل يعني أنّها لم تُقرأ من الشيت منذ أن صرنا نقرأ الوسم. ويكفي «جلب وحفظ».
+   */
+  broken?: boolean; }
 const emptySide = (): Side => ({ truckC: 0, truck: 0, vehC: 0, veh: 0, passC: 0, pass: 0, houryaC: 0, discharge: 0, exp: {} });
 
 function parseWorkbook(wb: XLSX.WorkBook, cfg: VesselConfig): Voyage[] {
@@ -591,6 +598,17 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
   }, [voyages]);
   const sel = useMemo(() => voyages.filter((v) => v.month === month), [voyages, month]);
 
+  /*
+   * الرحلات التي وسَمَها الدفتر — في الشهر المعروض وفي المركب كلِّه.
+   *
+   * ── ولماذا الاثنان ──
+   * الشهرُ يُنبّه من يقرأ رقماً الآن. والمجموعُ يُنبّه من لم يفتح ذلك الشهر بعد:
+   * فسيولةُ يناير ٢٠٢٦ لبيلاجوس نقصت ١٦٧٬٥٥٣ شهوراً بلا أن يشعر أحد، لأنّ من
+   * فتح الشاشة كان ينظر إلى شهرٍ آخر.
+   */
+  const flaggedSel = useMemo(() => sel.filter((v) => v.broken), [sel]);
+  const flaggedAll = useMemo(() => voyages.filter((v) => v.broken), [voyages]);
+
   // فواتير البنكر للشهر (بند = Bunker) — بالدولار، تُحمّل كاملة في شهرها (بدون إهلاك)
   const bunkerInvoiceUSD = useMemo(() => {
     if (!cfg.linkInvoices || !month) return 0;
@@ -961,6 +979,43 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
       {!voyages.length && !error && (
         <div className="bg-white rounded-xl shadow p-8 text-center text-gray-400">
           ارفع ملف {cfg.vessel} عشان يظهر التقرير — صافي الربح والإيرادات والمصروفات والسيولة مقسومة صادر/وارد.
+        </div>
+      )}
+
+      {/*
+        * ── وسمُ الدفتر يُعرض ولا يُبتلع ──
+        *
+        * `broken` كان يصل الحمولة ولا يقرؤه أحد. فرحلةٌ سيولتها صفرٌ وصافيها
+        * سالبٌ كانت تُجمع بأمانةٍ تامّة والشاشة صامتة — واكتُشف النقص بعين
+        * المالك بعد شهور.
+        *
+        * ولا يُصلَح الرقم هنا: الصافي تحسبه الشاشة من مكوّناته فهي محصَّنةٌ منه،
+        * أمّا السيولة فمفهومٌ مستقلٌّ لا يُشتقّ — واختراعُ رقمٍ لها كذبٌ في دفتر.
+        * فالعلاج أن يُرى الوسم ويُصحَّح الدفتر.
+        */}
+      {(flaggedSel.length > 0 || flaggedAll.length > 0) && (
+        <div className="rounded-xl border-2 border-red-400 bg-red-50 px-4 py-3 print:hidden">
+          <p className="font-bold text-red-900">
+            ⚠️ {flaggedSel.length > 0
+              ? <>الدفتر وسَمَ {flaggedSel.length} رحلة في {monthLabel(month)} بـ«راجعها»</>
+              : <>الدفتر وسَمَ {flaggedAll.length} رحلة في هذا المركب بـ«راجعها» — في شهورٍ أخرى</>}
+          </p>
+          <ul className="mt-1.5 space-y-0.5 text-sm text-red-800">
+            {(flaggedSel.length > 0 ? flaggedSel : flaggedAll).map((v) => (
+              <li key={`${v.month}-${v.ref}`}>
+                <span className="font-mono">#{String(v.ref)}</span>
+                {v.date && <> · {v.date}</>}
+                {flaggedSel.length === 0 && v.month && <> · {monthLabel(v.month)}</>}
+                {' · '}الصافي <span className="font-mono">{fmt(v.net)}</span>
+                {' · '}السيولة <span className="font-mono">{fmt(v.bassamLiq)}</span>
+                {v.bassamLiq === 0 && <b> — صفر</b>}
+              </li>
+            ))}
+          </ul>
+          <p className="mt-1.5 text-xs text-red-700">
+            أرقام هذه الرحلات قد تكون ناقصة، والإجماليات أعلاه تجمعها كما هي.
+            <b> صحّح الصفّ في دفتر المركب</b> ثمّ اضغط «🔄 جلب وحفظ».
+          </p>
         </div>
       )}
 
