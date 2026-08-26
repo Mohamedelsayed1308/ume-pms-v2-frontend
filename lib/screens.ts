@@ -42,6 +42,7 @@ export const SCREENS: Screen[] = [
   { href: '/dashboard', label: 'الرئيسية', icon: '🏠', iconName: 'home', group: 'overview', always: true },
   { href: '/dashboard/reports', label: 'التقارير', icon: '📊', iconName: 'chart', group: 'overview' },
   { href: '/dashboard/ask-ume', label: 'اسأل UME', icon: '🤖', iconName: 'sparkle', group: 'overview', always: true },
+  { href: '/dashboard/email-rewrite', label: 'إعادة صياغة الإيميلات', icon: '✉️', iconName: 'file', group: 'overview', always: true },
 
   /*
    * دورة الشراء بترتيبها الواقعي: مورّد ← أمر شراء ← استلام ← فاتورة ← بنودها ← سداد.
