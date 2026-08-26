@@ -63,7 +63,7 @@ function parsePastedTransfers(text: string): Transfer[] {
 function Steps({ onReload, reloading }: { onReload: () => void; reloading: boolean }) {
   return (
     <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
-      <span className="text-amber-900">١· اقفل الكارت ← ٢· «🔄 إعادة القراءة» ثم «💾 حفظ» في شريط الشاشة ← ٣·</span>
+      <span className="text-amber-900">١· اقفل الكارت ← ٢· «🔄 جلب وحفظ» في شريط الشاشة ← ٣·</span>
       <button type="button" onClick={onReload} disabled={reloading}
         className="px-2.5 py-1 rounded-lg border border-amber-300 bg-white hover:bg-amber-100 disabled:opacity-50">
         {reloading ? 'جارٍ…' : '🔄 اقرأ الرحلات هنا'}
@@ -284,9 +284,9 @@ export default function BassamAccountCard({ vesselKey = 'Alcudia', storageKey = 
         * تُقرأ من شيت جوجل بزرّ «إعادة القراءة». فبقيت النصيحة تُرشد إلى بابٍ
         * مغلق، والمستخدم يبحث عن حقل لصقٍ لا وجود له.
         *
-        * والخطوتان تُذكران معاً وبترتيبهما، لأنّ الأولى وحدها لا تكتب شيئاً:
-        * «إعادة القراءة» تملأ الشاشة، و«حفظ» هو ما يُثبّت. ومن اكتفى بالأولى
-        * يرى الرحلات أمامه ويظنّها محفوظة.
+        * وكانت خطوتين — «إعادة القراءة» تملأ الشاشة و«حفظ» يُثبّت — فمن اكتفى
+        * بالأولى رأى الرحلات أمامه وظنّها محفوظة. فدُمجتا في «جلب وحفظ»
+        * بقرار المالك في ٢٦ أغسطس ٢٠٢٦، وزالت المصيدة من أصلها.
         */}
       {loaded && voyMeta && voyMeta.count === 0 && (
         <div className="bg-amber-50 border border-amber-200 text-amber-800 text-sm rounded-lg px-4 py-3">
