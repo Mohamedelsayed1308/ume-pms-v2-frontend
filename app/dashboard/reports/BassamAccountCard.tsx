@@ -16,6 +16,9 @@ const fmt = (n: number) => Number(n || 0).toLocaleString('en-US', { maximumFract
 // وترحيل البيانات القائمة — ولا يجوز الاكتفاء بتغيير التسميات.
 export const ACCOUNT_CURRENCY = 'USD';
 
+/** رحلةٌ وسَمَها الدفتر — رقمها وتاريخها يكفيان للعثور عليها في الدفتر. */
+interface FlaggedVoyage { ref: string | number; date?: string }
+
 interface Transfer { month: string; date: string; amount: string; note: string }
 interface Account { opening0: string; add: Record<string, string>; bunker: Record<string, string>; transfers: Transfer[] }
 
@@ -81,6 +84,14 @@ interface BassamAccountCardProps {
 
 export default function BassamAccountCard({ vesselKey = 'Alcudia', storageKey = 'BassamAccount', vesselLabel = 'الكوديا' }: BassamAccountCardProps = {}) {
   const [liqByMonth, setLiqByMonth] = useState<Record<string, number>>({});
+  /*
+   * الشهور التي فيها رحلةٌ وسَمَها الدفتر بـ«راجعها».
+   *
+   * هذا الكارت هو الذي ظهر فيه النقص أوّلاً: سيولة يناير ٢٠٢٦ لبيلاجوس
+   * ١٬٠٧٠٬٩٠٦.٠٨ والصواب ١٬٢٣٨٬٤٥٩.٥٠ — والفارق رحلةٌ واحدةٌ سيولتها صفر.
+   * فالرصيد التراكميّ يُبنى على شهرٍ ناقصٍ ويحمله إلى ما بعده.
+   */
+  const [flaggedMonths, setFlaggedMonths] = useState<Record<string, FlaggedVoyage[]>>({});
   // تشخيص مصدر السيولة: عدد الرحلات المحفوظة وكم منها فيه قيمة سيولة
   const [voyMeta, setVoyMeta] = useState<{ count: number; withLiq: number } | null>(null);
   const [acc, setAcc] = useState<Account>({ opening0: '', add: {}, bunker: {}, transfers: [] });
@@ -117,14 +128,17 @@ export default function BassamAccountCard({ vesselKey = 'Alcudia', storageKey = 
       const voyages = res.data?.voyages;
       if (Array.isArray(voyages)) {
         const m: Record<string, number> = {};
+        const flags: Record<string, FlaggedVoyage[]> = {};
         let withLiq = 0;
         for (const v of voyages) {
           if (!v.month) continue;
           const liq = Number(v.bassamLiq) || 0;
           if (liq !== 0) withLiq++;
           m[v.month] = (m[v.month] || 0) + liq;
+          if (v.broken) (flags[v.month] = flags[v.month] || []).push({ ref: v.ref, date: v.date });
         }
         setLiqByMonth(m);
+        setFlaggedMonths(flags);
         // تشخيص: نفرّق بين «مفيش رحلات محفوظة» و«رحلات محفوظة بلا عمود سيولة»
         setVoyMeta({ count: voyages.length, withLiq });
       } else {
@@ -304,6 +318,22 @@ export default function BassamAccountCard({ vesselKey = 'Alcudia', storageKey = 
         </div>
       )}
 
+      {Object.keys(flaggedMonths).length > 0 && (
+        <div className="bg-red-50 border-2 border-red-300 text-red-800 text-sm rounded-lg px-4 py-3">
+          <b>⚠️ الدفتر وسَمَ رحلاتٍ بـ«راجعها»</b> — وسيولة شهورها قد تكون ناقصة، والرصيد التراكميّ يحملها إلى ما بعدها.
+          <ul className="mt-1.5 space-y-0.5 text-xs">
+            {Object.keys(flaggedMonths).sort().map((m) => (
+              <li key={m}>
+                <b>{monthLabel(m)}</b>{' — '}
+                {flaggedMonths[m].map((v) => `#${v.ref}${v.date ? ' · ' + v.date : ''}`).join(' · ')}
+                {(liqByMonth[m] || 0) === 0 && <b> · سيولة الشهر صفر</b>}
+              </li>
+            ))}
+          </ul>
+          <p className="mt-1.5 text-xs">صحّح الصفّ في دفتر المركب ثمّ «🔄 جلب وحفظ» — أو أدخل الفارق يدويّاً في «إضافات يدوية».</p>
+        </div>
+      )}
+
       {/* الكشف الشهري */}
       <div className="bg-white rounded-xl shadow p-4 overflow-x-auto">
         <div className="flex items-center justify-between flex-wrap gap-3 mb-3">
@@ -373,7 +403,18 @@ export default function BassamAccountCard({ vesselKey = 'Alcudia', storageKey = 
               <tr key={r.m} className="border-t">
                 <td className="py-1.5 px-2 font-medium">{monthLabel(r.m)}</td>
                 <td className="py-1.5 px-2 text-gray-500">{fmt(r.opening)}</td>
-                <td className="py-1.5 px-2 text-emerald-700">{fmt(r.liq)}</td>
+                <td className="py-1.5 px-2 text-emerald-700">
+                  {fmt(r.liq)}
+                  {/*
+                    * العلامة في السطر نفسه لا في لافتةٍ فوق الجدول.
+                    * فمن يقرأ رقم شهرٍ بعينه يجب أن يرى الشكّ في موضع الرقم،
+                    * لا أن يربط بين تحذيرٍ عامٍّ وسطرٍ لم يُسمَّ.
+                    */}
+                  {flaggedMonths[r.m] && (
+                    <span title={`الدفتر وسَمَ: ${flaggedMonths[r.m].map((v) => `#${v.ref}${v.date ? ' · ' + v.date : ''}`).join(' · ')} — الرقم قد يكون ناقصاً`}
+                      className="ms-1 cursor-help text-red-600">⚠️</span>
+                  )}
+                </td>
                 <td className="py-1.5 px-2">
                   <input inputMode="decimal" value={acc.add[r.m] || ''} onChange={(e) => setAdd(r.m, e.target.value)}
                     placeholder="0" className="w-28 border rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400" />
