@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import api from '@/lib/api';
 import * as XLSX from 'xlsx';
-import VesselProfitReport, { PELAGOS, ALCUDIA } from './VesselProfitReport';
+import VesselProfitReport, { PELAGOS, ALCUDIA, POSEIDON } from './VesselProfitReport';
 import GubalProfitReport from './GubalProfitReport';
 import ExchangeRatesCard from './ExchangeRatesCard';
 import FleetDashboard from './FleetDashboard';
@@ -16,6 +16,7 @@ import { canHref } from '@/lib/profile';
 const REPORT_REQUIRES: Record<string, string> = {
   'fleet-dashboard': '/dashboard/vessels', 'vessel-profit': '/dashboard/vessels',
   'alcudia-profit': '/dashboard/vessels', 'gubal-profit': '/dashboard/vessels',
+  'poseidon-profit': '/dashboard/vessels',
   'vessel-suppliers': '/dashboard/vessels',
   'supplier-statement': '/dashboard/suppliers', 'unpaid-supplier': '/dashboard/suppliers',
   'due-alerts': '/dashboard/invoices', 'unpaid-vessel': '/dashboard/invoices',
@@ -26,7 +27,7 @@ const REPORT_REQUIRES: Record<string, string> = {
 const statusLabel: Record<string, string> = { unpaid: 'غير مدفوعة', partial: 'جزئي', paid: 'مدفوعة', cancelled: 'ملغاة' };
 const statusColor: Record<string, string> = { unpaid: 'bg-red-100 text-red-700', partial: 'bg-yellow-100 text-yellow-700', paid: 'bg-green-100 text-green-700', cancelled: 'bg-gray-100 text-gray-500' };
 
-type ReportType = 'fleet-dashboard' | 'supplier-statement' | 'unpaid-supplier' | 'unpaid-vessel' | 'vessel-suppliers' | 'due-alerts' | 'user-activity' | 'dept-delays' | 'vessel-profit' | 'alcudia-profit' | 'gubal-profit' | 'exchange-rates';
+type ReportType = 'fleet-dashboard' | 'supplier-statement' | 'unpaid-supplier' | 'unpaid-vessel' | 'vessel-suppliers' | 'due-alerts' | 'user-activity' | 'dept-delays' | 'vessel-profit' | 'alcudia-profit' | 'poseidon-profit' | 'gubal-profit' | 'exchange-rates';
 
 type CatKey = 'fleet' | 'suppliers' | 'cash' | 'ops' | 'tools';
 
@@ -47,6 +48,7 @@ const REPORTS: ReportMeta[] = [
   { id: 'fleet-dashboard', cat: 'fleet', icon: 'chart', title: { ar: 'لوحة الأسطول التنفيذية', en: 'Fleet Executive Dashboard' }, desc: { ar: 'مؤشرات ومقارنات وأعداد المنقولات لكل الأسطول + مساعد ذكي', en: 'Fleet-wide KPIs, comparisons, movement counts + AI assistant' } },
   { id: 'vessel-profit', cat: 'fleet', icon: 'coins', title: { ar: 'ربحية Pelagos', en: 'Pelagos Profitability' }, desc: { ar: 'إيرادات ومصروفات وسيولة بيلاجوس شهرياً', en: 'Monthly revenue, expenses & liquidity — Pelagos' } },
   { id: 'alcudia-profit', cat: 'fleet', icon: 'coins', title: { ar: 'ربحية Alcudia', en: 'Alcudia Profitability' }, desc: { ar: 'إيرادات ومصروفات ومشتريات الكوديا شهرياً', en: 'Monthly revenue, expenses & purchases — Alcudia' } },
+  { id: 'poseidon-profit', cat: 'fleet', icon: 'coins', title: { ar: 'ربحية Poseidon', en: 'Poseidon Profitability' }, desc: { ar: 'إيرادات ومصروفات بوسيدون شهرياً — تشغيلي، بلا توزيع الأرباح', en: 'Monthly revenue & expenses — Poseidon (operational, excludes profit distribution)' } },
   { id: 'gubal-profit', cat: 'fleet', icon: 'coins', title: { ar: 'ربحية Gubal', en: 'Gubal Profitability' }, desc: { ar: 'قائمة دخل شهرية / من فترة لفترة لمركب جوبال', en: 'Monthly / period income statement — Gubal' } },
 
   { id: 'supplier-statement', cat: 'suppliers', icon: 'receipt', title: { ar: 'كشف حساب مورد', en: 'Supplier Statement' }, desc: { ar: 'مدين / دائن / رصيد متراكم', en: 'Debit / credit / running balance' } },
@@ -242,7 +244,7 @@ export default function ReportsPage() {
   const needsVessel = ['unpaid-vessel', 'vessel-suppliers'].includes(reportType);
   const needsDays = reportType === 'due-alerts';
   const noFilter = reportType === 'user-activity' || reportType === 'dept-delays';
-  const selfContained = ['fleet-dashboard', 'vessel-profit', 'alcudia-profit', 'gubal-profit', 'exchange-rates'].includes(reportType);
+  const selfContained = ['fleet-dashboard', 'vessel-profit', 'alcudia-profit', 'poseidon-profit', 'gubal-profit', 'exchange-rates'].includes(reportType);
 
   const filteredSuppliers = suppliers.filter((s) =>
     (s.name || '').toLowerCase().includes(supplierSearch.toLowerCase()));
@@ -411,6 +413,7 @@ export default function ReportsPage() {
       {reportType === 'fleet-dashboard' && <FleetDashboard />}
       {reportType === 'vessel-profit' && <VesselProfitReport config={PELAGOS} />}
       {reportType === 'alcudia-profit' && <VesselProfitReport config={ALCUDIA} />}
+      {reportType === 'poseidon-profit' && <VesselProfitReport config={POSEIDON} />}
       {reportType === 'gubal-profit' && <GubalProfitReport />}
       {reportType === 'exchange-rates' && <ExchangeRatesCard />}
 

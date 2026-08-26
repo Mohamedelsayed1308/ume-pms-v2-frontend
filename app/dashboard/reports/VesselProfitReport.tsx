@@ -73,6 +73,73 @@ export interface VesselConfig {
   importExp: ExpItem[];
 }
 
+/*
+ * ═══════════════════════════════════════════════════════════════════════════
+ * بوسيدون — كارتٌ تشغيليٌّ بقرار المالك في ٢٦ أغسطس ٢٠٢٦
+ *
+ * ── ولماذا «تشغيليٌّ» وحدها ──
+ * بوسيدون ليس كألكوديا: هو مركب شراكةٍ على خطّ ضبا/سفاجا، وربحه يمرّ أصلاً في
+ * شاشة توزيع الأرباح — نقد ضبا وتحصيل صفاجا والـ Over Pax وحصص الشريكين.
+ *
+ * وهذا الكارت **لا يمسّ شيئاً من ذلك**. سؤالُه واحد: «كم ربح المركب هذا الشهر؟»
+ * فعرضُ رقمٍ واحدٍ في شاشتين يجعل من يقرأ إحداهما يظنّ الأخرى خطأً.
+ *
+ * ── والبنود مطابقةٌ لألكوديا ──
+ * لا نسخاً بالظنّ: قُورن رأسا الدفترين في الشيت الموحّد عموداً بعمود
+ * (`تقرير POSEIDON` و`تقرير ALCUDIA`) فتطابقا حرفاً بحرف.
+ *
+ * ── وسبعةُ بنودٍ صفرٌ في رحلاته الـ١٨٤ كلّها ──
+ * `Dis/Shi Order 60%` و`Frt Dep` و`Broker` و`Special Disc` وأخواتها. وتبقى
+ * معروضةً بصفرها: حذفُها يُخفي بنداً إن بدأ الدفتر يملؤه غداً.
+ *
+ * ── ولا كارت حساب بسّام ──
+ * بأمر المالك. فـ `bassamAccount` غائبٌ عمداً لا سهواً.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+export const POSEIDON: VesselConfig = {
+  vessel: 'Poseidon', sheetKey: 'POSEIDON', agentExport: 'وكيل بدوي', agentImport: 'وكيل البسّام',
+  /*
+   * خريطة الأعمدة منسوخةٌ من ألكوديا.
+   *
+   * وهي تخصّ **الرفع اليدويّ من إكسيل وحده** — وهو طريقٌ بديلٌ لم يعد يُسلك،
+   * فالشيت الموحّد هو المصدر. ولم تُجرَّب على ملفّ بوسيدون: فإن رُفع يوماً ملفٌّ
+   * يدويّاً وخرجت أرقامٌ غريبة، فهنا يُبدأ البحث.
+   */
+  col: { type: 0, ref: 1, date: 3, collection: 4, truckC: 5, truck: 6, vehC: 7, veh: 8, passC: 9, pass: 10, houryaC: 11, discharge: 12, O: 14, P: 15, bunker: 25, balance: 35, bassamLiq: 36 },
+  exportExp: [
+    { key: 'otherExpsE', label: 'Other EXPS', col: 24 },
+    { key: 'dischargeOrderTax', label: 'Discharge Order Tax', col: 26 },
+    { key: 'disShiOrder60', label: 'Dis/Shi Order 60%', col: 27 },
+    { key: 'frtDep', label: 'Frt Dep 6.5%+500', col: 28 },
+    { key: 'vehicle12', label: 'Vehicle 12%', col: 29 },
+    { key: 'pks12', label: 'PKS 12%', col: 30 },
+    { key: 'broker', label: 'Broker Commission', col: 31 },
+    { key: 'egyPort', label: 'ميناء مصر', col: 33 },
+    /*
+     * ── وهنا يفترق عن ألكوديا ──
+     * `ميناء السعودية` مقروءٌ من رِجل الوارد وحدها هناك، وهو صحيحٌ لها: `pk_E`
+     * صفرٌ في رحلات ألكوديا وبيلاجوس كلّها (٤١٣ رحلة).
+     *
+     * وبوسيدون يسجّل منه على رِجل الصادر **١١٦٬٦٤٣.٧٠ في ١٦ رحلة** — فنسخُ
+     * الخريطة حرفيّاً كان يُسقطها صامتةً، ويُظهر مصروفاتٍ أقلّ وربحاً أعلى.
+     */
+    { key: 'ksaPortE', label: 'ميناء السعودية', col: 32 },
+  ],
+  importExp: [
+    { key: 'comm10', label: 'عمولة 10%', col: 17 },
+    { key: 'commVehicle', label: 'Commission Vehicle', col: 18 },
+    { key: 'comm20', label: 'عمولة 20%', col: 19 },
+    { key: 'fw', label: 'F.W', col: 20 },
+    { key: 'specialDisc', label: 'Special Disc', col: 21 },
+    { key: 'elbassam', label: 'البسّام', col: 22 },
+    { key: 'telcome', label: 'Telcome', col: 23 },
+    { key: 'otherExpsI', label: 'Other EXPS', col: 24 },
+    { key: 'ksaPort', label: 'ميناء السعودية', col: 32 },
+    // وبالمثل في الاتّجاه الآخر: صفرٌ اليوم، فلا يسقط غداً.
+    { key: 'egyPortI', label: 'ميناء مصر', col: 33 },
+  ],
+};
+
 export const PELAGOS: VesselConfig = {
   vessel: 'Pelagos', sheetKey: 'PELAGOS', agentExport: 'وكيل الاتحاد', agentImport: 'وكيل البسّام',
   bassamAccount: true, bassamStorageKey: 'BassamAccountPelagos',
