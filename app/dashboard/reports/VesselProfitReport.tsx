@@ -213,6 +213,12 @@ function aggSide(voyages: Voyage[], key: 'E' | 'I'): Side {
 }
 const sideRevenue = (s: Side) => s.truck + s.veh + s.pass + s.discharge;
 
+/** يقرأ رمز الحالة والسبب من خطأ axios بلا `any` — لا يمسّ حالةً، فمكانه هنا. */
+function apiError(e: unknown) {
+  const err = e as { response?: { status?: number; data?: { message?: string } }; message?: string };
+  return { status: err?.response?.status, why: err?.response?.data?.message || err?.message || 'سبب غير معروف' };
+}
+
 export default function VesselProfitReport({ config }: { config: VesselConfig }) {
   const cfg = config;
   /*
@@ -249,6 +255,18 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
   const [manual, setManual] = useState<Record<string, { opening: string; closing: string; salaries: string }>>({});
   const [saving, setSaving] = useState(false);
   const [savedMsg, setSavedMsg] = useState('');
+  /*
+   * هل قُرئت القيم اليدويّة من السيرفر بنجاح؟
+   *
+   * الحفظ `PUT` **يستبدل** `manual` كاملاً. وحين يفشل نداءُ القراءة تصير `{}`
+   * في الذاكرة — فحفظٌ بعده يكتب الفراغ فوق الحقيقيّ. وقد وقع ذلك فعلاً في
+   * ١٨ أغسطس ٢٠٢٦ ومُحيت بيانات ألكوديا اليدويّة.
+   *
+   * فلا يُكتب شيءٌ ما لم يُعرف أنّ ما بين يدينا هو المحفوظ لا فراغُ فشلٍ.
+   */
+  const [manualLoaded, setManualLoaded] = useState(false);
+  /* حفظٌ مُنع لأنّ العدد نقص — ينتظر إذناً صريحاً */
+  const [pendingSave, setPendingSave] = useState<{ list: Voyage[]; savedCount: number } | null>(null);
   const [showExec, setShowExec] = useState(false);
   // النسخة المالية — نافذة مستقلّة بجوار الأصل، فيُقارَن الشكلان قبل الاستغناء عن أحدهما
   const [showFin, setShowFin] = useState(false);
@@ -312,6 +330,69 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
     setMonth((m) => (m && ms.includes(m) ? m : ms[ms.length - 1] || ''));
   }, []);
 
+  /** الكتابة إلى السيرفر — نقطةٌ واحدة، فالحرّاس قبلها لا داخلها. */
+  const persist = useCallback(async (list: Voyage[]) => {
+    setSaving(true);
+    try {
+      await api.put(`/api/vessel-profit/${cfg.vessel}`, { voyages: list, manual });
+      setSavedMsg(`تم الجلب والحفظ ✅ — ${list.length} رحلة`);
+      setTimeout(() => setSavedMsg(''), 4000);
+      return true;
+    } catch (e: unknown) {
+      const { status, why } = apiError(e);
+      const detail = status === 413
+        ? `الحمولة أكبر من حدّ الخادم (${Math.round(JSON.stringify({ voyages: list, manual }).length / 1024)} ك.ب)`
+        : why;
+      setError(`فشل الحفظ — ${status ? status + ' · ' : ''}${detail}`);
+      return false;
+    } finally { setSaving(false); }
+  }, [cfg.vessel, manual]);
+
+  /**
+   * جلبٌ ثمّ حفظ — فعلٌ واحدٌ مقصود.
+   *
+   * ── لماذا صارا واحداً ──
+   * كان الزرّ يقرأ الشيت إلى الذاكرة ولا يكتب، والكتابةُ زرٌّ آخر. فمن قرأ
+   * ورأى الرحلات أمامه ظنّها محفوظة — وكارت البسّام يقرأ **المحفوظ** لا
+   * المعروض، فيبقى يشكو ولا يُفهم لماذا.
+   *
+   * ── ولماذا لا يُحفظ الجلب التلقائيّ ──
+   * الشاشة تقرأ الشيت عند كلّ فتح. فلو حفظت معه لصار مجرّدُ تصفّح التقرير
+   * كتابةً على الإنتاج، يفعلها كلُّ من يفتحه بلا قصد.
+   *
+   * ── والحرّاس ثلاثة ──
+   * صفرُ رحلاتٍ يُرمى قبل أن يصل هنا · والقيم اليدويّة يجب أن تكون مقروءةً
+   * لا مفترضة · والعدد الناقص يُوقف الكتابة ويسأل.
+   */
+  const fetchAndSave = useCallback(async () => {
+    setSheetBusy(true); setError(''); setSavedMsg(''); setPendingSave(null);
+    try {
+      const res = await api.get(`/api/vessel-profit/${cfg.vessel}/from-sheet`);
+      const list = (res.data?.voyages || []) as Voyage[];
+      if (!list.length) throw new Error('لا رحلات لهذا المركب في الشيت');
+
+      applyVoyages(list);
+      setSource('sheet');
+      setSyncedAt(res.data?.fetchedAt || '');
+      setFileName('');
+
+      // حارس ١ — لا يُكتب فوق قيمٍ يدويّةٍ لم تُقرأ
+      if (!manualLoaded) {
+        setError('الجلب تمّ ولم يُحفظ: القيم اليدويّة لم تُقرأ من السيرفر، والحفظ كان سيمحوها. حدّث الصفحة ثم أعد المحاولة.');
+        return;
+      }
+
+      // حارس ٢ — العدد الناقص يُوقف الكتابة ويسأل
+      const saved = await api.get(`/api/vessel-profit/${cfg.vessel}`).catch(() => null);
+      const savedCount = Array.isArray(saved?.data?.voyages) ? saved!.data.voyages.length : 0;
+      if (savedCount > list.length) { setPendingSave({ list, savedCount }); return; }
+
+      await persist(list);
+    } catch (e: unknown) {
+      setError(apiError(e).why || 'تعذّرت القراءة من الشيت');
+    } finally { setSheetBusy(false); }
+  }, [cfg.vessel, applyVoyages, manualLoaded, persist]);
+
   /*
    * الشيت أولاً، والمحفوظ عند تعذّره.
    *
@@ -342,12 +423,12 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
   // reset + الشيت أولاً، فإن تعذّر فالمحفوظ
   useEffect(() => {
     let alive = true;
-    setVoyages([]); setMonth(''); setFileName(''); setError(''); setSource('none'); setSyncedAt('');
+    setVoyages([]); setMonth(''); setFileName(''); setError(''); setSource('none'); setSyncedAt(''); setManualLoaded(false); setPendingSave(null);
     (async () => {
       try {
         const saved = await api.get(`/api/vessel-profit/${cfg.vessel}`);
-        if (alive) setManual(saved.data?.manual || {});
-      } catch { if (alive) setManual({}); }
+        if (alive) { setManual(saved.data?.manual || {}); setManualLoaded(true); }
+      } catch { if (alive) { setManual({}); setManualLoaded(false); } }
 
       const ok = await loadFromSheet(true);
       if (!alive || ok) return;
@@ -700,9 +781,10 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
                   {' · '}تُحدَّث ثلاث مرّات يومياً
                 </p>
               </div>
-              <button type="button" onClick={() => loadFromSheet(false)} disabled={sheetBusy}
+              <button type="button" onClick={fetchAndSave} disabled={sheetBusy || saving}
+                title="يقرأ الشيت ويحفظ النتيجة في السيرفر — فما تراه هو ما تقرؤه بقيّة الشاشات"
                 className="ms-auto shrink-0 text-xs bg-emerald-600 text-white px-3 py-1.5 rounded-lg hover:bg-emerald-700 disabled:opacity-50">
-                {sheetBusy ? 'جارٍ…' : '🔄 إعادة القراءة'}
+                {sheetBusy || saving ? 'جارٍ…' : '🔄 جلب وحفظ'}
               </button>
             </div>
           )}
@@ -726,9 +808,9 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
                   المصدر المعتمد هو الشيت الموحّد.
                 </p>
               </div>
-              <button type="button" onClick={() => loadFromSheet(false)} disabled={sheetBusy}
+              <button type="button" onClick={fetchAndSave} disabled={sheetBusy || saving}
                 className="ms-auto shrink-0 text-xs bg-emerald-600 text-white px-3 py-1.5 rounded-lg hover:bg-emerald-700 disabled:opacity-50">
-                {sheetBusy ? 'جارٍ…' : '🔄 التحويل للشيت'}
+                {sheetBusy || saving ? 'جارٍ…' : '🔄 جلب وحفظ من الشيت'}
               </button>
             </div>
           )}
@@ -737,10 +819,43 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
             <div className="flex items-center gap-3 rounded-xl border-2 border-gray-300 bg-gray-50 px-4 py-2.5">
               <span className="text-xl leading-none shrink-0">⏳</span>
               <p className="font-semibold text-gray-600">لا مصدر بيانات بعد</p>
-              <button type="button" onClick={() => loadFromSheet(false)} disabled={sheetBusy}
+              <button type="button" onClick={fetchAndSave} disabled={sheetBusy || saving}
                 className="ms-auto shrink-0 text-xs bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 disabled:opacity-50">
-                {sheetBusy ? 'جارٍ…' : '🔄 من الشيت'}
+                {sheetBusy || saving ? 'جارٍ…' : '🔄 جلب وحفظ من الشيت'}
               </button>
+            </div>
+          )}
+
+          {/*
+            * الحفظ مُنع — والسؤال قبل الكتابة لا بعدها.
+            *
+            * `PUT` يستبدل الرحلات كلَّها، فقراءةٌ جزئيّةٌ من الشيت تمحو ما لا
+            * تحمله. والشاشة تعرض الجديد، **والمحفوظ لم يُمسّ** — فالتراجع
+            * إغلاقُ الصفحة لا أكثر.
+            */}
+          {pendingSave && (
+            <div className="rounded-xl border-2 border-red-400 bg-red-50 px-4 py-3">
+              <p className="font-bold text-red-900">⛔ الحفظ مُنع — عدد الرحلات نقص</p>
+              <p className="text-sm text-red-800 mt-1">
+                الشيت أعطى <b className="font-mono">{pendingSave.list.length}</b> رحلة،
+                والمحفوظ <b className="font-mono">{pendingSave.savedCount}</b> —
+                فالحفظ الآن يفقد <b className="font-mono">{pendingSave.savedCount - pendingSave.list.length}</b>.
+              </p>
+              <p className="text-xs text-red-700 mt-1">
+                الشاشة تعرض ما جاء من الشيت الآن، <b>والمحفوظ في السيرفر لم يتغيّر</b>.
+                راجع الشيت قبل أن تقرّر — قد تكون قراءةً ناقصة.
+              </p>
+              <div className="flex gap-2 mt-2">
+                <button type="button" disabled={saving}
+                  onClick={() => { const pend = pendingSave; setPendingSave(null); persist(pend.list); }}
+                  className="text-xs bg-red-600 text-white px-3 py-1.5 rounded-lg hover:bg-red-700 disabled:opacity-50">
+                  {saving ? 'جارٍ…' : 'احفظ رغم ذلك'}
+                </button>
+                <button type="button" onClick={() => setPendingSave(null)}
+                  className="text-xs border border-red-300 bg-white text-red-800 px-3 py-1.5 rounded-lg hover:bg-red-100">
+                  ألغِ
+                </button>
+              </div>
             </div>
           )}
         </div>

@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import api from '@/lib/api';
 
 const MONTH_AR = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
@@ -51,6 +51,28 @@ function parsePastedTransfers(text: string): Transfer[] {
   return out;
 }
 
+/**
+ * الخطوات الثلاث — تُعرض تحت أيّ لافتة شكوى.
+ *
+ * والثالثة هي الزرّ نفسه: فبعد الحفظ يبقى الكارت على قراءته الأولى، وإعادة
+ * الفتح تُصلحه لكنّ أحداً لا يعرف ذلك. فالزرّ يجعل الأثر فوريّاً ومرئيّاً.
+ *
+ * ومعرَّفٌ خارج الكارت عمداً: مكوّنٌ يُنشأ أثناء التصيير يُعاد تركيبه في كلّ
+ * رسمة، فيومض ويفقد أيّ حالةٍ فيه.
+ */
+function Steps({ onReload, reloading }: { onReload: () => void; reloading: boolean }) {
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+      <span className="text-amber-900">١· اقفل الكارت ← ٢· «🔄 جلب وحفظ» في شريط الشاشة ← ٣·</span>
+      <button type="button" onClick={onReload} disabled={reloading}
+        className="px-2.5 py-1 rounded-lg border border-amber-300 bg-white hover:bg-amber-100 disabled:opacity-50">
+        {reloading ? 'جارٍ…' : '🔄 اقرأ الرحلات هنا'}
+      </button>
+      <span className="text-amber-700">أو أدخل القيم يدوياً في «إضافات يدوية» تحت.</span>
+    </div>
+  );
+}
+
 interface BassamAccountCardProps {
   vesselKey?: string;   // مفتاح رحلات المركب في /api/vessel-profit (مصدر السيولة الشهرية)
   storageKey?: string;  // مفتاح تخزين بيانات الحساب اليدوية (مستقل لكل مركب)
@@ -65,6 +87,7 @@ export default function BassamAccountCard({ vesselKey = 'Alcudia', storageKey = 
   const [saving, setSaving] = useState(false);
   const [savedMsg, setSavedMsg] = useState('');
   const [loaded, setLoaded] = useState(false);
+  const [reloading, setReloading] = useState(false);
   /*
    * `loaded` يخصّ نداء الرحلات وحده. وبيانات الحساب المحفوظة تأتي من نداء ثانٍ
    * مستقلّ، فكانت «لا توجد تحويلات» تُعرض قبل أن يردّ — نفيٌ قبل أن يُسأل.
@@ -80,9 +103,17 @@ export default function BassamAccountCard({ vesselKey = 'Alcudia', storageKey = 
   const [pasteBunkText, setPasteBunkText] = useState('');
   const [showPasteBunk, setShowPasteBunk] = useState(false);
 
-  useEffect(() => {
-    // السيولة طرف البسّام لكل شهر من رحلات المركب المحفوظة (مجموع عمود bassamLiq)
-    api.get(`/api/vessel-profit/${vesselKey}`).then((res) => {
+  /**
+   * قراءة رحلات المركب — السيولة الشهريّة مجموع عمود `bassamLiq`.
+   *
+   * ── ولماذا دالّةٌ لا أثرٌ فقط ──
+   * كان النداء داخل `useEffect` بلا مخرجٍ منه، فيقرأ مرّةً عند فتح الكارت ولا
+   * يُعاد أبداً. ومن يفتح الكارت فيشكو، ثمّ يُغلقه ويقرأ الشيت ويحفظ، **يعود
+   * فيجد الشكوى نفسها** — لأنّ الكارت يُعاد تركيبه فعلاً، لكن لا شيء في الشاشة
+   * يقول له ذلك، فيظنّ الحفظ لم يُفلح. والزرّ يُنهي الظنّ.
+   */
+  const loadVoyages = useCallback(() => api.get(`/api/vessel-profit/${vesselKey}`)
+    .then((res) => {
       const voyages = res.data?.voyages;
       if (Array.isArray(voyages)) {
         const m: Record<string, number> = {};
@@ -99,13 +130,26 @@ export default function BassamAccountCard({ vesselKey = 'Alcudia', storageKey = 
       } else {
         setVoyMeta({ count: 0, withLiq: 0 });
       }
-    }).catch(() => setVoyMeta(null)).finally(() => setLoaded(true));
+    })
+    .catch(() => setVoyMeta(null))
+    .finally(() => { setLoaded(true); setReloading(false); }), [vesselKey]);
+
+  /*
+   * المؤشّر يُضبط عند الضغط لا داخل `loadVoyages`.
+   *
+   * فالدالّة تُنادى أيضاً من أثرٍ عند فتح الكارت، وضبطُ حالةٍ **متزامناً** داخل
+   * أثرٍ يُطلق رسمةً متتالية. فبقي جسمها بلا setState متزامن، ودخل المؤشّر هنا.
+   */
+  const reload = useCallback(() => { setReloading(true); loadVoyages(); }, [loadVoyages]);
+
+  useEffect(() => {
+    loadVoyages();
     // بيانات حساب البسّام المحفوظة (مفتاح مستقل لكل مركب)
     api.get(`/api/vessel-profit/${storageKey}`).then((res) => {
       const man = res.data?.manual;
       if (man && typeof man === 'object') setAcc({ opening0: man.opening0 || '', add: man.add || {}, bunker: man.bunker || {}, transfers: Array.isArray(man.transfers) ? man.transfers : [] });
     }).catch(() => {}).finally(() => setAccLoaded(true));
-  }, [vesselKey, storageKey]);
+  }, [vesselKey, storageKey, loadVoyages]);
 
   // الشهور = اتحاد كل المصادر (سيولة + إضافات + بنكر + تحويلات) عشان أي قيمة مُدخلة تظهر وتأثّر في الرصيد ولا تتبلع بصمت
   const months = useMemo(() => {
@@ -214,24 +258,49 @@ export default function BassamAccountCard({ vesselKey = 'Alcudia', storageKey = 
             <p className="text-xs text-gray-500">الرصيد الحالي عند البسّام (USD)</p>
             <p className="text-2xl font-bold text-indigo-700">{fmt(currentBalance)} <span className="text-sm font-semibold text-indigo-400">USD</span></p>
           </div>
+          {/*
+            * إعادة قراءة الرحلات متاحةٌ دائماً لا عند الشكوى فقط: الأرقام قد
+            * تتغيّر والكارت مفتوح، ولا سبيل لتحديثها إلا بإغلاقه.
+            *
+            * و«حفظ» هنا يخصّ بيانات الحساب اليدويّة (الافتتاحيّ والإضافات
+            * والبنكر والتحويلات) — لا الرحلات. فهما زرّان لا يتنافسان.
+            */}
+          <button type="button" onClick={reload} disabled={reloading}
+            title="يُعيد قراءة رحلات المركب المحفوظة — السيولة الشهرية تتحدّث فوراً"
+            className="border text-gray-600 text-sm px-3 py-2 rounded-lg hover:bg-gray-50 disabled:opacity-50">
+            {reloading ? 'جارٍ…' : '🔄 الرحلات'}
+          </button>
           <button onClick={save} disabled={saving} className="bg-blue-600 text-white text-sm px-5 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50">
             {saving ? '...' : '💾 حفظ'}
           </button>
         </div>
       </div>
 
-      {/* تشخيص مصدر السيولة — لا تُعرض أصفار بصمت */}
+      {/*
+        * تشخيص مصدر السيولة — لا تُعرض أصفار بصمت.
+        *
+        * ── ونصيحةٌ ماتت فاستُبدلت ──
+        * كانت اللافتة تقول «الصق بيانات الشيت» — وهو طريقٌ لم يعد يُسلك: الرحلات
+        * تُقرأ من شيت جوجل بزرّ «إعادة القراءة». فبقيت النصيحة تُرشد إلى بابٍ
+        * مغلق، والمستخدم يبحث عن حقل لصقٍ لا وجود له.
+        *
+        * وكانت خطوتين — «إعادة القراءة» تملأ الشاشة و«حفظ» يُثبّت — فمن اكتفى
+        * بالأولى رأى الرحلات أمامه وظنّها محفوظة. فدُمجتا في «جلب وحفظ»
+        * بقرار المالك في ٢٦ أغسطس ٢٠٢٦، وزالت المصيدة من أصلها.
+        */}
       {loaded && voyMeta && voyMeta.count === 0 && (
         <div className="bg-amber-50 border border-amber-200 text-amber-800 text-sm rounded-lg px-4 py-3">
-          مفيش رحلات محفوظة لمركب {vesselLabel} — الصق بيانات الشيت واحفظها في كارت ربح {vesselKey} أولاً عشان السيولة الشهرية تظهر هنا، أو أضف القيم يدوياً كإضافات.
+          <b>مفيش رحلات محفوظة لمركب {vesselLabel}.</b> السيولة الشهرية بتتحسب من رحلات المركب المحفوظة.
+          <Steps onReload={reload} reloading={reloading} />
         </div>
       )}
       {loaded && voyMeta && voyMeta.count > 0 && voyMeta.withLiq === 0 && (
         <div className="bg-amber-50 border border-amber-200 text-amber-800 text-sm rounded-lg px-4 py-3">
-          <b>السيولة مش ظاهرة:</b> فيه {voyMeta.count} رحلة محفوظة لمركب {vesselLabel}، لكن مفيش ولا واحدة فيها قيمة في عمود سيولة البسّام.
+          <b>السيولة مش ظاهرة:</b> فيه {voyMeta.count} رحلة محفوظة لمركب {vesselLabel}، لكن مفيش ولا واحدة فيها قيمة سيولة.
           <span className="block mt-1 text-xs">
-            السيولة بتتقرا من عمود مستقل في الشيت الملصوق. لو البيانات اتلصقت قبل إضافة العمود ده، افتح كارت ربح {vesselKey} والصق الشيت من جديد واحفظه — أو أدخل القيم يدوياً في عمود «إضافات يدوية» تحت.
+            غالباً الرحلات دي اتحفظت قبل ما المحلّل يشتقّ عمود السيولة — فلازم تتقرا وتتحفظ من جديد.
           </span>
+          <Steps onReload={reload} reloading={reloading} />
         </div>
       )}
 
