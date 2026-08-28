@@ -75,7 +75,14 @@ const CHIP = (on: boolean) =>
       : 'bg-transparent text-white/70 border-white/30 hover:border-white/60'
   }`;
 
-export default function FleetDashboard() {
+/**
+ * نطاق الفتح الافتراضيّ.
+ *
+ * `all` — كلّ ما في الدفتر، وهو ما كانت عليه في شاشة التقارير ويبقى.
+ * `currentYear` — من يناير السنة الجارية، بأمر المالك للصفحة الرئيسيّة:
+ * فالرئيسيّة تُفتح كلّ صباح، وسنتان وأربعة أشهر حملٌ لا يُبرَّر عند كلّ فتحة.
+ */
+export default function FleetDashboard({ scope = 'all' }: { scope?: 'all' | 'currentYear' } = {}) {
   const [data, setData] = useState<FleetData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -99,13 +106,31 @@ export default function FleetDashboard() {
       const res = await api.get(`/api/fleet/dashboard${refresh ? '?refresh=1' : ''}`);
       const d: FleetData = res.data;
       setData(d);
-      if (d.months.length) { setFrom((f) => f || d.months[0]); setTo((t) => t || d.months[d.months.length - 1]); }
+      if (d.months.length) {
+        /*
+         * الحدّ الأدنى يُقصّ ولا يُخترع: `يناير` السنة الجارية إن كان في الدفتر
+         * شهرٌ عنده أو بعده، وإلا فأوّل ما في الدفتر. فمركبٌ بدأ العام الماضي
+         * ولم يُبحر هذا العام يظهر بشهوره لا بشاشةٍ فارغة.
+         */
+        const first = scope === 'currentYear'
+          ? (d.months.find((m: string) => m >= `${new Date().getFullYear()}-01`) || d.months[0])
+          : d.months[0];
+        setFrom((f) => f || first);
+        setTo((t) => t || d.months[d.months.length - 1]);
+      }
       if (d.vessels.length) setSelVessels((s) => s.length ? s : d.vessels);
       if (d.lines?.length) setSelLines((s) => s.length ? s : d.lines!);
     } catch (e: any) {
       setError(e?.response?.data?.message || 'تعذّر تحميل بيانات الأسطول');
     } finally { setLoading(false); setRefreshing(false); }
   }
+  /*
+   * مرّةً واحدةً عند التركيب.
+   *
+   * و`load` تُغلق على `scope` — وهي خاصّيّةٌ ثابتةٌ لا تتغيّر بعد التركيب،
+   * فإدراجُها في الاعتماديّات لا يمنع خطأً ويُعيد الجلب بلا سبب.
+   */
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { load(false); }, []);
 
   const months = data?.months || [];
