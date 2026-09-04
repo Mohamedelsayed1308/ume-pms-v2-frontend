@@ -25,7 +25,7 @@ import { Icon, Spinner, cx } from '@/components/ui';
 const fmt = (v: unknown) =>
   Number(v || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-type TabKey = 'parent' | 'investment' | 'bank' | 'items' | 'vessels' | 'interest';
+type TabKey = 'parent' | 'investment' | 'bank' | 'items' | 'vessels' | 'interest' | 'reports';
 
 /*
  * عقد ما يردّه الخادم.
@@ -34,6 +34,10 @@ type TabKey = 'parent' | 'investment' | 'bank' | 'items' | 'vessels' | 'interest
  * لا خطأً يظهر. فالنوع هو ما يمنع ذلك عند الترجمة.
  */
 interface Money { amount_usd: string }
+interface FundReportView {
+  as_of: string; fund_size_usd: number; fund_called_usd: number | null;
+  result_period_usd: number | null; result_cumulative_usd: number; vessels_count: number | null; source: string;
+}
 interface RoundView {
   id: string; round_no: number; commitment: number; status: string;
   contributed: number; contributed_pct: number; over_commitment: number;
@@ -41,6 +45,37 @@ interface RoundView {
   net_confirmed: number; net_if_all: number;
   funded_by_parent: number; unfunded_gap: number; suspect_count: number;
   fund_calls: { as_of: string; fund_called_usd: number; pct: number }[];
+  capital_returned: number; capital_at_stone: number; realized_gain: number;
+  bee_share_pct: number | null; fund_report: FundReportView | null;
+  book_result_share: number | null; book_value: number | null;
+}
+interface FundReportRow {
+  id: string; round_id: string; as_of: string; fund_size_usd: string; fund_called_usd: string | null;
+  result_period_usd: string | null; result_cumulative_usd: string; fund_repatriated_usd: string | null;
+  vessels_count: number | null; source: string; note: string;
+}
+interface Narrative {
+  title: string; headline: string; overview: string; round7: string; round8: string;
+  returns: string; risks: string[]; next_steps: string[];
+}
+interface ManagementReport {
+  generated_at: string; lang: 'ar' | 'en'; model: string;
+  figures: {
+    as_of: string; basis: string;
+    parent_loan: { funded: number; repaid: number; outstanding: number; interest_rate_pct: number | null };
+    totals: {
+      invested: number; returned_confirmed: number; returned_announced: number;
+      capital_at_stone: number; realized_gain: number; book_result_share: number | null; book_value: number | null;
+    };
+    rounds: {
+      round_no: number; commitment: number; contributed: number; contributed_pct: number;
+      funded_by_parent: number; repat_confirmed: number; repat_announced: number;
+      capital_at_stone: number; realized_gain: number; bee_share_pct: number | null;
+      book_result_share: number | null; fund_report: FundReportView | null;
+    }[];
+  };
+  narrative: Narrative;
+  guard: { ok: boolean; unmatched: string[]; retried: boolean };
 }
 interface ParentRow extends Money {
   id: string; occurred_at: string; direction: 'funding' | 'repayment';
@@ -79,6 +114,7 @@ interface Card {
     invested_in_stone: number; returned_confirmed: number; returned_announced: number;
     interest_accrued: number; interest_paid: number; interest_outstanding: number;
     interest_has_terms: boolean; interest_agreed: boolean;
+    realized_gain: number; book_result_share: number | null; book_value: number | null;
   };
   interest_slices: Slice[];
   rounds: RoundView[];
@@ -88,6 +124,7 @@ interface Card {
   vessels: VesselRow[];
   open_items: ItemRow[];
   interest_terms: TermRow[];
+  fund_reports: FundReportRow[];
   alerts: Alert[];
 }
 
@@ -98,7 +135,41 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: 'items', label: 'البنود المفتوحة' },
   { key: 'vessels', label: 'السفن' },
   { key: 'interest', label: 'الفائدة' },
+  { key: 'reports', label: 'تقارير الصندوق' },
 ];
+
+/*
+ * طباعة تقرير الإدارة — A4 واحدة.
+ *
+ * على نمط `VesselBoardReport`: كلّ الصفحة تُخفى إلا `#stone-doc`، والخلفيات
+ * تُطبع (`print-color-adjust`) وإلا خرجت الترويسات بيضاء.
+ */
+const DOC_CSS = `
+@media print {
+  @page { size: A4 portrait; margin: 10mm 9mm; }
+  body * { visibility: hidden !important; }
+  #stone-doc, #stone-doc * { visibility: visible !important; }
+  #stone-doc { position:absolute; left:0; top:0; width:100%; }
+  #stone-doc, #stone-doc * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+  #stone-doc tr, #stone-doc li, #stone-doc .blk { break-inside: avoid; page-break-inside: avoid; }
+}
+#stone-doc { color:#0f172a; font-size:9.5pt; line-height:1.5; background:#fff; }
+#stone-doc .hd { display:flex; align-items:flex-end; justify-content:space-between; border-bottom:3pt solid #0f2c5c; padding-bottom:6px; margin-bottom:8px; }
+#stone-doc .hd .ttl { font-size:15pt; font-weight:800; color:#0f2c5c; line-height:1.2; }
+#stone-doc .hd .ttl small { display:block; font-size:8.5pt; font-weight:600; color:#64748b; }
+#stone-doc .hd .br { font-size:13pt; font-weight:800; color:#0f2c5c; text-align:end; }
+#stone-doc .hd .br small { display:block; font-size:7pt; font-weight:600; color:#94a3b8; letter-spacing:1pt; }
+#stone-doc .head { background:#f1f5f9; border-inline-start:3pt solid #0f2c5c; padding:6px 10px; margin-bottom:8px; font-size:10pt; font-weight:600; color:#1e293b; }
+#stone-doc h2 { font-size:10.5pt; font-weight:800; color:#fff; background:#0f2c5c; padding:4px 10px; border-radius:3px; margin:8px 0 5px; }
+#stone-doc table { width:100%; border-collapse:collapse; margin-bottom:6px; }
+#stone-doc th { font-size:8pt; color:#475569; background:#f8fafc; padding:3px 6px; text-align:start; border-bottom:1pt solid #cbd5e1; }
+#stone-doc td { padding:3px 6px; border-bottom:0.5pt solid #e2e8f0; }
+#stone-doc td.n { text-align:end; font-family:ui-monospace,Consolas,monospace; font-variant-numeric:tabular-nums; white-space:nowrap; }
+#stone-doc p { margin:0 0 5px; text-align:justify; }
+#stone-doc ul { margin:0 0 5px; padding-inline-start:16px; }
+#stone-doc .ft { margin-top:8px; border-top:1pt solid #cbd5e1; padding-top:4px; font-size:7.5pt; color:#64748b; }
+#stone-doc .warn { background:#fef3c7; border:1pt solid #f59e0b; color:#92400e; padding:5px 8px; margin-bottom:8px; font-size:8.5pt; }
+`;
 
 const AR = {
   funding: 'تغذية', repayment: 'سداد',
@@ -120,6 +191,9 @@ export default function InvestmentsPage() {
   const [tab, setTab] = useState<TabKey>('parent');
   const [busy, setBusy] = useState(false);
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
+  const [report, setReport] = useState<ManagementReport | null>(null);
+  const [reportBusy, setReportBusy] = useState<'ar' | 'en' | null>(null);
+  const [reportErr, setReportErr] = useState('');
 
   /*
    * الدور يُقرأ من المتصفّح — ولا يوجد أثناء التصيير على الخادم.
@@ -152,6 +226,20 @@ export default function InvestmentsPage() {
     } catch (e) {
       setErr((e as { response?: { data?: { message?: string } } })?.response?.data?.message || 'تعذّر الحفظ');
     } finally { setBusy(false); }
+  }
+
+  /**
+   * تقرير الإدارة — عند الطلب، لا يُخزَّن.
+   * الأرقام يبنيها الخادم من الكارت الحيّ، والنموذج يكتب السرد، والحارس يفحصه.
+   */
+  async function generateReport(lang: 'ar' | 'en') {
+    setReportBusy(lang); setReportErr('');
+    try {
+      const r = await api.post('/api/investments/stone/report', { lang });
+      setReport(r.data as ManagementReport);
+    } catch (e) {
+      setReportErr((e as { response?: { data?: { message?: string } } })?.response?.data?.message || 'تعذّر توليد التقرير — حاول مرّة أخرى');
+    } finally { setReportBusy(null); }
   }
 
   async function setItemStatus(id: string, status: string) {
@@ -238,6 +326,38 @@ export default function InvestmentsPage() {
         </div>
       )}
 
+      {/* ── تقرير الإدارة · عند الطلب ── */}
+      <div className="no-print rounded-2xl border border-navy-900/10 bg-white p-4 shadow-sm">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="me-auto">
+            <h3 className="font-bold text-gray-800">تقرير الإدارة</h3>
+            <p className="text-xs text-gray-500">
+              الأرقام من الكارت الحيّ · السرد يكتبه الذكاء الاصطناعيّ ويُفحص رقماً رقماً · صفحة A4 للطباعة
+            </p>
+          </div>
+          <button type="button" disabled={reportBusy !== null} onClick={() => generateReport('ar')}
+            className="rounded-lg bg-navy-900 px-4 py-2 text-sm font-medium text-white hover:bg-navy-800 disabled:opacity-50">
+            {reportBusy === 'ar' ? 'يُولَّد…' : 'تقرير بالعربيّة'}
+          </button>
+          <button type="button" disabled={reportBusy !== null} onClick={() => generateReport('en')}
+            className="rounded-lg border border-navy-900 px-4 py-2 text-sm font-medium text-navy-900 hover:bg-navy-50 disabled:opacity-50">
+            {reportBusy === 'en' ? 'Generating…' : 'Report in English'}
+          </button>
+          {report && (
+            <button type="button" onClick={() => window.print()}
+              className="rounded-lg bg-gray-700 px-3 py-2 text-sm text-white hover:bg-gray-800">🖨️ طباعة / PDF</button>
+          )}
+        </div>
+        {reportErr && <p className="mt-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{reportErr}</p>}
+        {s.book_result_share == null && (
+          <p className="mt-2 text-[11px] text-amber-700">
+            لا تقرير صندوقٍ مُدخَل — فالمكسب الدفتريّ سيظهر «لا تقرير». أدخل نتائج CTM من تبويب «تقارير الصندوق».
+          </p>
+        )}
+      </div>
+
+      {report && <ReportDoc r={report} />}
+
       {/* ── الجولات ── */}
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
         {data.rounds.map((r: RoundView) => (
@@ -255,6 +375,9 @@ export default function InvestmentsPage() {
                   ['عاد مؤكَّداً', fmt(r.repat_confirmed), ''],
                   ['عاد مُعلَناً', fmt(r.repat_announced), r.repat_announced > 0 ? '⚠' : ''],
                   ['الصافي (بالمؤكَّد)', fmt(r.net_confirmed), ''],
+                  ['مكسبٌ محقَّق', fmt(r.realized_gain), ''],
+                  ['نصيبٌ دفتريّ من نتيجة الصندوق', r.book_result_share == null ? 'لا تقرير' : fmt(r.book_result_share),
+                    r.fund_report ? `${r.bee_share_pct}% · ${r.fund_report.as_of}` : ''],
                 ].map(([a, b, c]) => (
                   <tr key={a as string} className="border-t border-gray-50">
                     <td className="py-1 text-sm text-gray-600">{a}</td>
@@ -543,6 +666,142 @@ export default function InvestmentsPage() {
           )}
         </Section>
       )}
+      {/* ── تقارير الصندوق الربعيّة ── */}
+      {tab === 'reports' && (
+        <Section title="تقارير الصندوق الربعيّة — من CTM"
+          note="حجم الصندوق ونتيجته التراكميّة مطلوبان: بهما يُحسب نصيب Bee والمكسب الدفتريّ. والنتيجة قد تكون سالبة. تقريرٌ واحدٌ لكلّ جولةٍ في التاريخ.">
+          <form className="mb-3 grid grid-cols-2 gap-2 md:grid-cols-6" onSubmit={(e) => {
+            e.preventDefault(); const f = e.currentTarget; const d = new FormData(f);
+            post('fund-report', {
+              round_id: d.get('round_id'), as_of: d.get('as_of'),
+              fund_size_usd: d.get('fund_size_usd'), fund_called_usd: d.get('fund_called_usd') || null,
+              result_period_usd: d.get('result_period_usd') || null, result_cumulative_usd: d.get('result_cumulative_usd'),
+              fund_repatriated_usd: d.get('fund_repatriated_usd') || null, vessels_count: d.get('vessels_count') || null,
+              source: d.get('source'), note: d.get('note'),
+            }, f);
+          }}>
+            <select name="round_id" required className={IN}>
+              {data.rounds.map((r: RoundView) => <option key={r.id} value={r.id}>الجولة {r.round_no}</option>)}
+            </select>
+            <input name="as_of" type="date" required title="تاريخ التقرير" className={IN} />
+            <input name="fund_size_usd" type="number" step="0.01" min="1" required placeholder="حجم الصندوق" className={IN} />
+            <input name="fund_called_usd" type="number" step="0.01" placeholder="المسحوب على الصندوق" className={IN} />
+            <input name="result_period_usd" type="number" step="0.01" placeholder="نتيجة الفترة" className={IN} />
+            <input name="result_cumulative_usd" type="number" step="0.01" required placeholder="النتيجة التراكميّة" className={IN} />
+            <input name="fund_repatriated_usd" type="number" step="0.01" placeholder="مُستردٌّ على الصندوق" className={IN} />
+            <input name="vessels_count" type="number" min="0" placeholder="عدد السفن" className={IN} />
+            <input name="source" placeholder="المصدر — مثل CTM Q2 2026 report" className={cx(IN, 'md:col-span-2')} />
+            <input name="note" placeholder="ملاحظة" className={IN} />
+            <button disabled={busy} className="rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50">
+              {busy ? '…' : 'أضف تقريراً'}
+            </button>
+          </form>
+          <Table head={['الجولة', 'التاريخ', 'حجم الصندوق', 'المسحوب', 'نتيجة الفترة', 'التراكميّ', 'نصيب Bee', 'السفن', 'المصدر']}>
+            {data.fund_reports.map((fr: FundReportRow) => {
+              const r = data.rounds.find((x) => x.id === fr.round_id);
+              const share = r && Number(fr.fund_size_usd) > 0 ? r.commitment / Number(fr.fund_size_usd) : null;
+              return (
+                <tr key={fr.id} className="border-t border-gray-50">
+                  <td className={TD}>{r ? r.round_no : '—'}</td>
+                  <td className={TD}>{fr.as_of}</td>
+                  <td className={cx(TD, 'text-end font-mono tabular-nums')}>{fmt(fr.fund_size_usd)}</td>
+                  <td className={cx(TD, 'text-end font-mono tabular-nums')}>{fr.fund_called_usd ? fmt(fr.fund_called_usd) : '—'}</td>
+                  <td className={cx(TD, 'text-end font-mono tabular-nums')}>{fr.result_period_usd ? fmt(fr.result_period_usd) : '—'}</td>
+                  <td className={cx(TD, 'text-end font-mono tabular-nums', Number(fr.result_cumulative_usd) < 0 ? 'text-red-700' : 'text-emerald-700')}>{fmt(fr.result_cumulative_usd)}</td>
+                  <td className={cx(TD, 'text-end font-mono tabular-nums')}>{share == null ? '—' : `${fmt(Number(fr.result_cumulative_usd) * share)} (${(share * 100).toFixed(1)}%)`}</td>
+                  <td className={TD}>{fr.vessels_count ?? '—'}</td>
+                  <td className={cx(TD, 'text-xs text-gray-500')}>{fr.source}</td>
+                </tr>
+              );
+            })}
+          </Table>
+        </Section>
+      )}
+    </div>
+  );
+}
+
+/**
+ * مستند التقرير — A4 واحدة، أرقامٌ من المحرّك ثمّ سردٌ مفحوص.
+ *
+ * الجداول تُبنى هنا من `figures` لا من السرد: فلو أخطأ النموذج بقي الجدول
+ * صحيحاً، والحارس يُظهر تحذيراً فوق السرد يسمّي ما لم يُطابق.
+ */
+function ReportDoc({ r }: { r: ManagementReport }) {
+  const en = r.lang === 'en';
+  const t = (ar: string, eng: string) => (en ? eng : ar);
+  const f = r.figures;
+  const money = (v: number | null | undefined) => (v == null ? t('لا تقرير', 'no report') : fmt(v));
+  return (
+    <div dir={en ? 'ltr' : 'rtl'} className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+      <style dangerouslySetInnerHTML={{ __html: DOC_CSS }} />
+      <div id="stone-doc">
+        <div className="hd">
+          <div className="ttl">
+            {r.narrative.title || t('تقرير الإدارة — استثمار Stone Shipping', 'Management Report — Stone Shipping Investment')}
+            <small>{t('Bee Shipping Ltd · بتمويلٍ من UME Holdings Ltd', 'Bee Shipping Ltd · funded by UME Holdings Ltd')}</small>
+          </div>
+          <div className="br">UME<small>{t('حتّى', 'as at')} {f.as_of}</small></div>
+        </div>
+        {!r.guard.ok && (
+          <div className="warn">
+            ⚠ {t('أرقامٌ في السرد لم تُطابق المحرّك — راجعها قبل الاعتماد:', 'Numbers in the narrative did not match the engine — review before relying on it:')} {r.guard.unmatched.join(' · ')}
+          </div>
+        )}
+        <div className="head">{r.narrative.headline}</div>
+
+        <h2>{t('الموقف بالأرقام', 'Position in numbers')} <span style={{ fontWeight: 400, opacity: 0.8 }}>USD</span></h2>
+        <table>
+          <thead><tr><th></th><th>{t('الجولة ٧', 'Round 7')}</th><th>{t('الجولة ٨', 'Round 8')}</th><th>{t('المجموع', 'Total')}</th></tr></thead>
+          <tbody>
+            {([
+              [t('الالتزام', 'Commitment'), (x: ManagementReport['figures']['rounds'][number]) => x.commitment, null],
+              [t('مدفوعٌ إلى Stone', 'Paid into Stone'), (x) => x.contributed, f.totals.invested],
+              [t('مموَّلٌ من UME Holdings', 'Funded by UME Holdings'), (x) => x.funded_by_parent, f.parent_loan.funded],
+              [t('مُستردٌّ — مستلَم', 'Repatriated — received'), (x) => x.repat_confirmed, f.totals.returned_confirmed],
+              [t('مُستردٌّ — مُعلَن', 'Repatriated — announced'), (x) => x.repat_announced, f.totals.returned_announced],
+              [t('رأس المال الباقي في Stone', 'Capital still at Stone'), (x) => x.capital_at_stone, f.totals.capital_at_stone],
+              [t('مكسبٌ محقَّق', 'Realized gain'), (x) => x.realized_gain, f.totals.realized_gain],
+              [t('نصيبٌ دفتريّ من نتيجة الصندوق', 'Book share of fund result'), (x) => x.book_result_share, f.totals.book_result_share],
+            ] as [string, (x: ManagementReport['figures']['rounds'][number]) => number | null, number | null][]).map(([label, pick, total]) => (
+              <tr key={label}>
+                <td>{label}</td>
+                {f.rounds.map((x) => <td key={x.round_no} className="n">{money(pick(x))}</td>)}
+                <td className="n"><b>{total == null ? (label.includes('Commitment') || label.includes('الالتزام') ? fmt(f.rounds.reduce((a, x) => a + x.commitment, 0)) : money(total)) : fmt(total)}</b></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <p style={{ fontSize: '8pt', color: '#64748b' }}>
+          {f.rounds.map((x) => x.fund_report
+            ? `${t('الجولة', 'Round')} ${x.round_no}: ${t('نصيب Bee', 'Bee share')} ${x.bee_share_pct}% · ${t('نتيجة الصندوق التراكميّة', 'fund cumulative result')} ${fmt(x.fund_report.result_cumulative_usd)} (${x.fund_report.source}, ${x.fund_report.as_of})`
+            : `${t('الجولة', 'Round')} ${x.round_no}: ${t('لا تقرير صندوقٍ مُدخَل', 'no fund report entered')}`).join(' · ')}
+        </p>
+
+        <h2>{t('الموقف', 'Overview')}</h2>
+        <p>{r.narrative.overview}</p>
+        <h2>{t('الجولة ٧', 'Round 7')}</h2>
+        <p>{r.narrative.round7}</p>
+        <h2>{t('الجولة ٨', 'Round 8')}</h2>
+        <p>{r.narrative.round8}</p>
+        <h2>{t('العائد', 'Returns')}</h2>
+        <p>{r.narrative.returns}</p>
+        {r.narrative.risks.length > 0 && (
+          <div className="blk">
+            <h2>{t('مخاطر وبنودٌ مفتوحة', 'Risks and open items')}</h2>
+            <ul>{r.narrative.risks.map((x, i) => <li key={i}>{x}</li>)}</ul>
+          </div>
+        )}
+        {r.narrative.next_steps.length > 0 && (
+          <div className="blk">
+            <h2>{t('الخطوات التالية', 'Next steps')}</h2>
+            <ul>{r.narrative.next_steps.map((x, i) => <li key={i}>{x}</li>)}</ul>
+          </div>
+        )}
+        <div className="ft">
+          MANAGEMENT ACCOUNTS — UNAUDITED · {t('الأرقام من محرّك كارت Stone؛ السرد مولَّدٌ بالذكاء الاصطناعيّ ومفحوصٌ رقماً رقماً مقابل المحرّك', 'Figures from the Stone card engine; narrative AI-generated and checked number by number against the engine')} · {r.model} · {r.generated_at.slice(0, 16).replace('T', ' ')} UTC
+        </div>
+      </div>
     </div>
   );
 }
