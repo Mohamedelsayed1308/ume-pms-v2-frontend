@@ -70,7 +70,7 @@ interface ManagementReport {
     rounds: {
       round_no: number; commitment: number; contributed: number; contributed_pct: number;
       funded_by_parent: number; repat_confirmed: number; repat_announced: number;
-      capital_at_stone: number; realized_gain: number; bee_share_pct: number | null;
+      capital_returned: number; capital_at_stone: number; realized_gain: number; bee_share_pct: number | null;
       book_result_share: number | null; fund_report: FundReportView | null;
     }[];
   };
@@ -169,6 +169,8 @@ const DOC_CSS = `
 #stone-doc ul { margin:0 0 5px; padding-inline-start:16px; }
 #stone-doc .ft { margin-top:8px; border-top:1pt solid #cbd5e1; padding-top:4px; font-size:7.5pt; color:#64748b; }
 #stone-doc .warn { background:#fef3c7; border:1pt solid #f59e0b; color:#92400e; padding:5px 8px; margin-bottom:8px; font-size:8.5pt; }
+#stone-doc .dia { margin:2px 0 6px; break-inside:avoid; page-break-inside:avoid; direction:ltr; }
+#stone-doc .dia svg { display:block; width:100%; height:auto; font-family:system-ui,Segoe UI,Arial,sans-serif; }
 `;
 
 const AR = {
@@ -778,6 +780,9 @@ function ReportDoc({ r }: { r: ManagementReport }) {
             : `${t('الجولة', 'Round')} ${x.round_no}: ${t('لا تقرير صندوقٍ مُدخَل', 'no fund report entered')}`).join(' · ')}
         </p>
 
+        <h2>{t('دورة المال وتقدّم الجولات', 'Money flow and round progress')}</h2>
+        <ReportDiagram f={f} />
+
         <h2>{t('الموقف', 'Overview')}</h2>
         <p>{r.narrative.overview}</p>
         <h2>{t('الجولة ٧', 'Round 7')}</h2>
@@ -802,6 +807,108 @@ function ReportDoc({ r }: { r: ManagementReport }) {
           MANAGEMENT ACCOUNTS — UNAUDITED · {t('الأرقام من محرّك كارت Stone؛ السرد مولَّدٌ بالذكاء الاصطناعيّ ومفحوصٌ رقماً رقماً مقابل المحرّك', 'Figures from the Stone card engine; narrative AI-generated and checked number by number against the engine')} · {r.model} · {r.generated_at.slice(0, 16).replace('T', ' ')} UTC
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * رسم التقرير — من أرقام المحرّك وحدها، بالإنجليزيّة في النسختين.
+ *
+ * ── لماذا لا يمرّ على النموذج ──
+ * السرد يكتبه النموذج ويفحصه الحارس رقماً رقماً. والرسم يُبنى هنا من `figures`
+ * نفسها التي أُعطيت للنموذج، فلا رقمَ فيه إلا ما في الجدول فوقه — ولا حارسَ
+ * يلزمه.
+ *
+ * ── ولماذا الإنجليزيّة دائماً ──
+ * بقرار المالك ٤ سبتمبر ٢٠٢٦: أسماء الشركات لاتينيّة، والرسم واحدٌ للنسختين.
+ * والألوان ثابتةٌ لا من السمة، لأنّ الصفحة تُطبع.
+ *
+ * ── الشكل ──
+ * صفّ أوّل: الجهات الثلاث وما جرى بينها. ثمّ شريطٌ لكلّ جولة بطول الالتزام:
+ * الباقي عند Stone كحلي، والعائد أخضر، والمُعلَن الذي لم يصل بإطارٍ متقطّع —
+ * مميّزٌ بالخطّ لا باللون وحده، فيبقى مقروءاً بالأسود.
+ */
+const NAVY = '#0f2c5c', GREEN = '#1D9E75', AMBER = '#BA7517', INK = '#0f172a', MUTED = '#64748b', LINE = '#94a3b8';
+
+function DiaBox({ x, title, sub }: { x: number; title: string; sub: string }) {
+  return (
+    <g>
+      <rect x={x} y={40} width={150} height={46} rx={4} fill="#f1f5f9" stroke={NAVY} strokeWidth={0.8} />
+      <text x={x + 75} y={59} textAnchor="middle" fontSize={12} fontWeight={600} fill={NAVY}>{title}</text>
+      <text x={x + 75} y={75} textAnchor="middle" fontSize={10} fill={MUTED}>{sub}</text>
+    </g>
+  );
+}
+
+function DiaArrow({ x1, x2, y, label, above }: { x1: number; x2: number; y: number; label: string; above: boolean }) {
+  return (
+    <g>
+      <line x1={x1} y1={y} x2={x2} y2={y} stroke={LINE} strokeWidth={1.2} markerEnd="url(#stone-arr)" />
+      <text x={(x1 + x2) / 2} y={above ? y - 5 : y + 13} textAnchor="middle" fontSize={10} fill={INK}>{label}</text>
+    </g>
+  );
+}
+
+function ReportDiagram({ f }: { f: ManagementReport['figures'] }) {
+  const W = 680, BAR_X = 40, BAR_W = 600, BAR_H = 16;
+  const rows = f.rounds;
+  const flowH = 118;
+  const rowH = 66;
+  const legendY = flowH + rows.length * rowH + 14;
+  const H = legendY + 26;
+  const share = (v: number, c: number) => (c > 0 ? Math.max(0, Math.min(1, v / c)) * BAR_W : 0);
+  /** بلا كسور — الرسم ضيّق، والجدول فوقه يحمل القروش. */
+  const k = (v: number) => Math.round(v || 0).toLocaleString('en-US');
+
+  return (
+    <div className="dia">
+      <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Money flow between UME Holdings, Bee Shipping and Stone Shipping, and progress of each round against its commitment">
+        <defs>
+          <marker id="stone-arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M2 1L8 5L2 9" fill="none" stroke={LINE} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
+          </marker>
+        </defs>
+
+        <DiaBox x={40} title="UME Holdings" sub="lender, interest-free" />
+        <DiaBox x={265} title="Bee Shipping" sub="investor of record" />
+        <DiaBox x={490} title="Stone Shipping" sub={`round${rows.length === 1 ? '' : 's'} ${rows.map((x) => x.round_no).join(' and ')}`} />
+        <DiaArrow x1={190} x2={263} y={52} label={k(f.parent_loan.funded)} above />
+        <DiaArrow x1={265} x2={192} y={76} label={k(f.parent_loan.repaid)} above={false} />
+        <DiaArrow x1={415} x2={488} y={52} label={k(f.totals.invested)} above />
+        <DiaArrow x1={490} x2={417} y={76} label={k(f.totals.returned_confirmed)} above={false} />
+        <text x={340} y={104} textAnchor="middle" fontSize={10} fill={MUTED}>upper arrows: money paid out · lower arrows: money coming back · USD</text>
+
+        {rows.map((x, i) => {
+          const y = flowH + i * rowH;
+          const atStone = share(x.capital_at_stone, x.commitment);
+          const returned = share(x.capital_returned, x.commitment);
+          const announced = share(x.repat_announced, x.commitment);
+          return (
+            <g key={x.round_no}>
+              <text x={BAR_X} y={y} fontSize={11} fontWeight={600} fill={INK}>{`Round ${x.round_no} · commitment ${k(x.commitment)}`}</text>
+              <text x={BAR_X + BAR_W} y={y} textAnchor="end" fontSize={10} fill={MUTED}>{`${x.contributed_pct}% called`}</text>
+              <rect x={BAR_X} y={y + 8} width={BAR_W} height={BAR_H} rx={3} fill="#f8fafc" stroke="#cbd5e1" strokeWidth={0.6} />
+              {atStone > 0 && <rect x={BAR_X} y={y + 8} width={atStone} height={BAR_H} rx={3} fill={NAVY} />}
+              {returned > 0 && <rect x={BAR_X + atStone} y={y + 8} width={returned} height={BAR_H} fill={GREEN} />}
+              {announced > 0 && announced <= atStone && (
+                <rect x={BAR_X + atStone - announced} y={y + 8} width={announced} height={BAR_H} fill="none" stroke={AMBER} strokeWidth={1.2} strokeDasharray="3 2" />
+              )}
+              <text x={BAR_X} y={y + 38} fontSize={10} fill={INK}>{`at Stone ${k(x.capital_at_stone)}`}</text>
+              <text x={BAR_X + BAR_W} y={y + 38} textAnchor="end" fontSize={10} fill={INK}>
+                {x.capital_returned > 0 ? `returned ${k(x.capital_returned)}` : 'nothing returned yet'}
+                {x.repat_announced > 0 ? ` · announced ${k(x.repat_announced)}` : ''}
+              </text>
+            </g>
+          );
+        })}
+
+        <rect x={BAR_X} y={legendY} width={10} height={10} rx={2} fill={NAVY} />
+        <text x={BAR_X + 16} y={legendY + 9} fontSize={10} fill={MUTED}>capital still at Stone</text>
+        <rect x={BAR_X + 170} y={legendY} width={10} height={10} rx={2} fill={GREEN} />
+        <text x={BAR_X + 186} y={legendY + 9} fontSize={10} fill={MUTED}>capital returned to Bee</text>
+        <rect x={BAR_X + 345} y={legendY} width={10} height={10} fill="none" stroke={AMBER} strokeWidth={1.2} strokeDasharray="3 2" />
+        <text x={BAR_X + 361} y={legendY + 9} fontSize={10} fill={MUTED}>announced, not yet received</text>
+      </svg>
     </div>
   );
 }
