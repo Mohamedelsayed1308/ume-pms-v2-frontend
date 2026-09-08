@@ -2,6 +2,7 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import * as XLSX from 'xlsx';
 import api from '@/lib/api';
+import { useI18n } from '@/lib/i18n';
 
 /*
  * ── خريطة الأعمدة تُقرأ من الملفّ لا تُثبَّت فيه ──
@@ -18,24 +19,31 @@ import api from '@/lib/api';
 const INCOME_SPAN: [number, number] = [2, 13];
 const COL = { incomeTotal: 14, costTotal: 197, net: 199 };
 const COST_GROUPS: { id: string; ar: string; en: string; a: number; b: number; color: string }[] = [
-  { id: 'bunker', ar: 'الوقود والزيوت', en: 'Bunker & lubricant', a: 16, b: 17, color: '#1e3a5f' },
-  { id: 'crew', ar: 'تكاليف الطاقم', en: 'Crew cost', a: 19, b: 23, color: '#5b9e77' },
-  { id: 'spare', ar: 'قطع الغيار', en: 'Spare parts', a: 107, b: 193, color: '#9cc3ac' },
-  { id: 'insurance', ar: 'التأمين والتصنيف', en: 'Insurance & class', a: 24, b: 29, color: '#3f5f8a' },
-  { id: 'ksa', ar: 'وكيل السعودية', en: 'KSA agent', a: 30, b: 43, color: '#c98b6b' },
-  { id: 'egypt', ar: 'وكيل مصر', en: 'Egypt agent', a: 47, b: 60, color: '#7a6ff0' },
-  { id: 'sudan', ar: 'وكيل السودان', en: 'Sudan agent', a: 44, b: 46, color: '#d4537e' },
-  { id: 'otherRel', ar: 'خدمات أخرى متعلقة', en: 'Other related services', a: 70, b: 106, color: '#63992a' },
+  { id: 'bunker', ar: 'الوقود والزيوت', en: 'Bunkers & Lubricants', a: 16, b: 17, color: '#1e3a5f' },
+  { id: 'crew', ar: 'تكاليف الطاقم', en: 'Crew Costs', a: 19, b: 23, color: '#5b9e77' },
+  { id: 'spare', ar: 'قطع الغيار', en: 'Spare Parts & Stores', a: 107, b: 193, color: '#9cc3ac' },
+  { id: 'insurance', ar: 'التأمين والتصنيف', en: 'Insurance & Classification', a: 24, b: 29, color: '#3f5f8a' },
+  { id: 'ksa', ar: 'وكيل السعودية', en: 'Port & Agency Expenses — KSA', a: 30, b: 43, color: '#c98b6b' },
+  { id: 'egypt', ar: 'وكيل مصر', en: 'Port & Agency Expenses — Egypt', a: 47, b: 60, color: '#7a6ff0' },
+  { id: 'sudan', ar: 'وكيل السودان', en: 'Port & Agency Expenses — Sudan', a: 44, b: 46, color: '#d4537e' },
+  { id: 'otherRel', ar: 'خدمات أخرى متعلقة', en: 'Other Related Services', a: 70, b: 106, color: '#63992a' },
   { id: 'depreciation', ar: 'الإهلاك', en: 'Depreciation', a: 18, b: 18, color: '#b07a2f' },
-  { id: 'menhali', ar: 'المنهالي (KSA)', en: 'EL-MENHALI', a: 64, b: 69, color: '#2f8f8f' },
-  { id: 'malta', ar: 'وسطاء مالطا', en: 'Malta shipbrokers', a: 62, b: 62, color: '#8f6f2f' },
-  { id: 'umeab', ar: 'UME Shipping AB', en: 'UME Shipping AB', a: 63, b: 63, color: '#6f8f2f' },
-  { id: 'masterSafe', ar: 'عهدة الكابتن', en: 'Master safe', a: 61, b: 61, color: '#996699' },
-  { id: 'others', ar: 'أخرى (إدارة/حوض جاف/دبي)', en: 'Others (mgmt/dry dock/office)', a: 194, b: 196, color: '#8a94a6' },
+  { id: 'menhali', ar: 'المنهالي (KSA)', en: 'El-Menhali Agency (KSA)', a: 64, b: 69, color: '#2f8f8f' },
+  { id: 'malta', ar: 'وسطاء مالطا', en: 'Brokerage Commission — Malta Shipbrokers', a: 62, b: 62, color: '#8f6f2f' },
+  { id: 'umeab', ar: 'UME Shipping AB', en: 'Management Fees — UME Shipping AB', a: 63, b: 63, color: '#6f8f2f' },
+  { id: 'masterSafe', ar: 'عهدة الكابتن', en: "Master's Cash Account", a: 61, b: 61, color: '#996699' },
+  { id: 'others', ar: 'أخرى (إدارة/حوض جاف/دبي)', en: 'Other Operating Expenses (Management / Dry Dock / Office)', a: 194, b: 196, color: '#8a94a6' },
 ];
 
 const MONTH_AR = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
-const monthLabel = (k: string) => { const [y, m] = k.split('-'); return `${MONTH_AR[+m - 1]} ${y}`; };
+const MONTH_EN = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const monthLabel = (k: string, en = false) => { const [y, m] = k.split('-'); return `${(en ? MONTH_EN : MONTH_AR)[+m - 1]} ${y}`; };
+/*
+ * أسماء بنود الإيراد كما يكتبها الملفّ (HIRE · Lashing Bonus) — بالإنجليزيّة تُعرض
+ * بمصطلحها المحاسبيّ المتداول، وبالعربيّة كما هي في الملفّ لأنّها هكذا تُقرأ في الشيت.
+ */
+const INCOME_EN: Record<string, string> = { hire: 'Charter Hire Revenue', 'lashing bonus': 'Lashing Bonus Revenue' };
+const incomeLabel = (l: string, en: boolean) => (en ? (INCOME_EN[l.trim().toLowerCase()] || l) : l);
 const num = (v: any) => (typeof v === 'number' ? v : 0);
 const fmt = (n: number) => Number(n || 0).toLocaleString('en-US', { maximumFractionDigits: 2 });
 const fmtAbbr = (n: number) => {
@@ -227,6 +235,18 @@ function aggregate(months: GubalMonth[]): GubalMonth | null {
 const grpMeta = (id: string) => COST_GROUPS.find((g) => g.id === id)!;
 
 export default function GubalProfitReport() {
+  /*
+   * ── نسختان بلغة الواجهة ──
+   * بأمر المالك ٨ سبتمبر ٢٠٢٦: نسخةٌ إنجليزيّةٌ بالمصطلحات المحاسبيّة المتداولة
+   * (Net Profit · Total Revenue · Total Operating Costs · Net Profit Margin …) تتبع زرّ
+   * اللغة في رأس الصفحة، وتشمل الشاشة ومستند الطباعة معاً حتّى لا يختلف الاسم
+   * بين الشاشة والورقة. والأرقام واحدة.
+   */
+  const { locale } = useI18n();
+  const en = locale === 'en';
+  const T = (ar: string, eng: string) => (en ? eng : ar);
+  const gName = (id: string) => (en ? grpMeta(id).en : grpMeta(id).ar);
+  const mLabel = (k: string) => monthLabel(k, en);
   const [fileName, setFileName] = useState('');
   const [months, setMonths] = useState<GubalMonth[]>([]);
   const [error, setError] = useState('');
@@ -277,6 +297,7 @@ export default function GubalProfitReport() {
   }, [months, mode, from, to]);
 
   const agg = useMemo(() => aggregate(selected), [selected]);
+  const periodLabel = selected.length > 1 ? `${mLabel(selected[0].key)} — ${mLabel(selected[selected.length - 1].key)}` : (selected[0] ? mLabel(selected[0].key) : '');
   const margin = agg && agg.incomeTotal ? (agg.net / agg.incomeTotal) * 100 : 0;
   // كل المجموعات غير الصفرية (بما فيها السالبة كتسويات) → صفوف التفصيل تطابق الإجمالي دائماً
   const sortedGroups = useMemo(() => (agg ? [...agg.groups].filter((g) => Math.abs(g.total) > 0.005).sort((a, b) => b.total - a.total) : []), [agg]);
@@ -287,39 +308,39 @@ export default function GubalProfitReport() {
 
       <div className="bg-white rounded-xl shadow p-4 flex flex-wrap items-end gap-4 print:hidden">
         <div>
-          <label className="block text-sm text-gray-600 mb-1">ملف Gubal (Excel)</label>
+          <label className="block text-sm text-gray-600 mb-1">{T('ملف Gubal (Excel)', 'Gubal file (Excel)')}</label>
           <input type="file" accept=".xlsx,.xls" onChange={onFile}
             className="text-sm file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-blue-600 file:text-white file:cursor-pointer hover:file:bg-blue-700" />
-          {fileName && <p className="text-xs text-gray-400 mt-1">📄 {fileName} — {months.length} شهر</p>}
+          {fileName && <p className="text-xs text-gray-400 mt-1">📄 {fileName === 'محفوظ في السيرفر' ? T('محفوظ في السيرفر', 'Saved on server') : fileName} — {months.length} {T('شهر', 'months')}</p>}
         </div>
         {months.length > 0 && (
           <>
             <div>
-              <label className="block text-sm text-gray-600 mb-1">النطاق</label>
+              <label className="block text-sm text-gray-600 mb-1">{T('النطاق', 'Period')}</label>
               <div className="flex rounded-lg border overflow-hidden text-sm">
-                <button onClick={() => setMode('single')} className={`px-3 py-2 ${mode === 'single' ? 'bg-blue-600 text-white' : 'bg-white text-gray-600'}`}>شهر</button>
-                <button onClick={() => setMode('range')} className={`px-3 py-2 ${mode === 'range' ? 'bg-blue-600 text-white' : 'bg-white text-gray-600'}`}>من / إلى</button>
+                <button onClick={() => setMode('single')} className={`px-3 py-2 ${mode === 'single' ? 'bg-blue-600 text-white' : 'bg-white text-gray-600'}`}>{T('شهر', 'Month')}</button>
+                <button onClick={() => setMode('range')} className={`px-3 py-2 ${mode === 'range' ? 'bg-blue-600 text-white' : 'bg-white text-gray-600'}`}>{T('من / إلى', 'From / To')}</button>
               </div>
             </div>
             <div>
-              <label className="block text-sm text-gray-600 mb-1">{mode === 'single' ? 'الشهر' : 'من'}</label>
+              <label className="block text-sm text-gray-600 mb-1">{mode === 'single' ? T('الشهر', 'Month') : T('من', 'From')}</label>
               <select value={from} onChange={(e) => setFrom(e.target.value)} className="border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                {months.map((m) => <option key={m.key} value={m.key}>{monthLabel(m.key)}</option>)}
+                {months.map((m) => <option key={m.key} value={m.key}>{mLabel(m.key)}</option>)}
               </select>
             </div>
             {mode === 'range' && (
               <div>
-                <label className="block text-sm text-gray-600 mb-1">إلى</label>
+                <label className="block text-sm text-gray-600 mb-1">{T('إلى', 'To')}</label>
                 <select value={to} onChange={(e) => setTo(e.target.value)} className="border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                  {months.map((m) => <option key={m.key} value={m.key}>{monthLabel(m.key)}</option>)}
+                  {months.map((m) => <option key={m.key} value={m.key}>{mLabel(m.key)}</option>)}
                 </select>
               </div>
             )}
             {agg && (
               <div className="mr-auto flex items-center gap-2">
                 {savedMsg && <span className="text-xs text-emerald-600 font-medium">{savedMsg}</span>}
-                <button onClick={save} disabled={saving} className="bg-blue-600 text-white text-sm px-4 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50">{saving ? '...' : '💾 حفظ'}</button>
-                <button onClick={() => window.print()} className="bg-gray-700 text-white text-sm px-4 py-2 rounded-lg hover:bg-gray-800">🖨️ طباعة / PDF</button>
+                <button onClick={save} disabled={saving} className="bg-blue-600 text-white text-sm px-4 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50">{saving ? '...' : T('💾 حفظ', '💾 Save')}</button>
+                <button onClick={() => window.print()} className="bg-gray-700 text-white text-sm px-4 py-2 rounded-lg hover:bg-gray-800">{T('🖨️ طباعة / PDF', '🖨️ Print / PDF')}</button>
               </div>
             )}
           </>
@@ -329,7 +350,7 @@ export default function GubalProfitReport() {
       {error && <p className="text-red-500 text-sm">{error}</p>}
       {!months.length && !error && (
         <div className="bg-white rounded-xl shadow p-8 text-center text-gray-400 print:hidden">
-          ارفع ملف Gubal (قائمة الدخل الشهرية) — التقرير هيطلع صافي الربح والإيرادات والتكاليف بالمجموعات، شهرياً أو من فترة لفترة.
+          {T('ارفع ملف Gubal (قائمة الدخل الشهرية) — التقرير هيطلع صافي الربح والإيرادات والتكاليف بالمجموعات، شهرياً أو من فترة لفترة.', 'Upload the Gubal file (monthly income statement) — the report shows net profit, revenue and costs by group, monthly or for a period.')}
         </div>
       )}
 
@@ -337,36 +358,36 @@ export default function GubalProfitReport() {
         <div className="space-y-4 print:hidden">
           {/* KPIs */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <div className="bg-emerald-600 text-white rounded-xl p-4"><p className="text-xs opacity-80">صافي الربح</p><p className="text-2xl font-bold mt-1">{fmt(agg.net)}</p><p className="text-xs opacity-80 mt-1">{selected.length} شهر</p></div>
-            <div className="bg-white rounded-xl shadow p-4"><p className="text-xs text-gray-500">إجمالي الإيراد</p><p className="text-xl font-bold text-gray-800 mt-1">{fmt(agg.incomeTotal)}</p></div>
-            <div className="bg-white rounded-xl shadow p-4"><p className="text-xs text-gray-500">إجمالي التكاليف</p><p className="text-xl font-bold text-red-600 mt-1">{fmt(agg.costTotal)}</p></div>
-            <div className="bg-white rounded-xl shadow p-4"><p className="text-xs text-gray-500">هامش صافي الربح</p><p className="text-xl font-bold text-emerald-700 mt-1">{margin.toFixed(1)}%</p></div>
+            <div className="bg-emerald-600 text-white rounded-xl p-4"><p className="text-xs opacity-80">{T('صافي الربح', 'Net Profit')}</p><p className="text-2xl font-bold mt-1">{fmt(agg.net)}</p><p className="text-xs opacity-80 mt-1">{selected.length} {T('شهر', selected.length === 1 ? 'month' : 'months')}</p></div>
+            <div className="bg-white rounded-xl shadow p-4"><p className="text-xs text-gray-500">{T('إجمالي الإيراد', 'Total Revenue')}</p><p className="text-xl font-bold text-gray-800 mt-1">{fmt(agg.incomeTotal)}</p></div>
+            <div className="bg-white rounded-xl shadow p-4"><p className="text-xs text-gray-500">{T('إجمالي التكاليف', 'Total Operating Costs')}</p><p className="text-xl font-bold text-red-600 mt-1">{fmt(agg.costTotal)}</p></div>
+            <div className="bg-white rounded-xl shadow p-4"><p className="text-xs text-gray-500">{T('هامش صافي الربح', 'Net Profit Margin')}</p><p className="text-xl font-bold text-emerald-700 mt-1">{margin.toFixed(1)}%</p></div>
           </div>
 
           <div className="grid md:grid-cols-2 gap-4">
             {/* Income */}
             <div className="bg-white rounded-xl shadow p-4">
-              <h3 className="font-bold text-gray-700 mb-3">الإيرادات</h3>
+              <h3 className="font-bold text-gray-700 mb-3">{T('الإيرادات', 'Revenue')}</h3>
               <table className="w-full text-sm">
                 <tbody>
                   {agg.incomeLines.slice().sort((a, b) => b.value - a.value).map((l, i) => (
-                    <tr key={`${l.label}-${i}`} className="border-t"><td className="py-1">{l.label}</td><td className="py-1 text-left font-medium">{fmt(l.value)}</td></tr>
+                    <tr key={`${l.label}-${i}`} className="border-t"><td className="py-1">{incomeLabel(l.label, en)}</td><td className="py-1 text-left font-medium">{fmt(l.value)}</td></tr>
                   ))}
-                  <tr className="border-t bg-gray-50 font-bold"><td className="py-1">إجمالي الإيراد</td><td className="py-1 text-left">{fmt(agg.incomeTotal)}</td></tr>
+                  <tr className="border-t bg-gray-50 font-bold"><td className="py-1">{T('إجمالي الإيراد', 'Total Revenue')}</td><td className="py-1 text-left">{fmt(agg.incomeTotal)}</td></tr>
                 </tbody>
               </table>
             </div>
 
             {/* Cost structure donut */}
             <div className="bg-white rounded-xl shadow p-4">
-              <h3 className="font-bold text-gray-700 mb-3">هيكل التكاليف</h3>
+              <h3 className="font-bold text-gray-700 mb-3">{T('هيكل التكاليف', 'Cost Structure')}</h3>
               <div className="flex items-center gap-4">
                 <Donut segs={sortedGroups.filter((g) => g.total > 0).map((g) => ({ value: g.total, color: grpMeta(g.id).color }))} total={agg.costTotal} />
                 <div className="flex-1 space-y-1 text-sm max-h-64 overflow-auto">
                   {sortedGroups.map((g) => (
                     <div key={g.id} className="flex items-center gap-2">
                       <span className="w-3 h-3 rounded-full inline-block" style={{ background: grpMeta(g.id).color }} />
-                      <span className="flex-1 truncate">{grpMeta(g.id).ar}</span>
+                      <span className="flex-1 truncate">{gName(g.id)}</span>
                       <span className="font-medium">{fmtAbbr(g.total)}</span>
                       <span className="text-gray-400 w-9 text-left">{agg.costTotal ? Math.round((g.total / agg.costTotal) * 100) : 0}%</span>
                     </div>
@@ -378,14 +399,14 @@ export default function GubalProfitReport() {
 
           {/* Cost by group — expandable */}
           <div className="bg-white rounded-xl shadow p-4">
-            <h3 className="font-bold text-gray-700 mb-3">التكاليف بالتفصيل</h3>
+            <h3 className="font-bold text-gray-700 mb-3">{T('التكاليف بالتفصيل', 'Cost Breakdown')}</h3>
             <table className="w-full text-sm">
-              <thead className="text-gray-500 text-xs"><tr><th scope="col" className="text-right py-1">المجموعة</th><th scope="col" className="text-left py-1">المبلغ</th><th scope="col" className="text-left py-1 w-16">%</th></tr></thead>
+              <thead className="text-gray-500 text-xs"><tr><th scope="col" className="text-right py-1">{T('المجموعة', 'Cost Group')}</th><th scope="col" className="text-left py-1">{T('المبلغ', 'Amount (USD)')}</th><th scope="col" className="text-left py-1 w-16">%</th></tr></thead>
               <tbody>
                 {sortedGroups.map((g) => (
                   <Fragment key={g.id}>
                     <tr className="border-t cursor-pointer hover:bg-gray-50" onClick={() => setExpanded((e) => ({ ...e, [g.id]: !e[g.id] }))}>
-                      <td className="py-1.5 font-medium">{expanded[g.id] ? '▾' : '▸'} {grpMeta(g.id).ar} <span className="text-gray-400 text-xs">{grpMeta(g.id).en}</span></td>
+                      <td className="py-1.5 font-medium">{expanded[g.id] ? '▾' : '▸'} {gName(g.id)} {!en && <span className="text-gray-400 text-xs">{grpMeta(g.id).en}</span>}</td>
                       <td className="py-1.5 text-left font-medium text-red-600">{fmt(g.total)}</td>
                       <td className="py-1.5 text-left text-gray-400">{agg.costTotal ? Math.round((g.total / agg.costTotal) * 100) : 0}%</td>
                     </tr>
@@ -394,7 +415,7 @@ export default function GubalProfitReport() {
                     ))}
                   </Fragment>
                 ))}
-                <tr className="border-t bg-gray-50 font-bold"><td className="py-1.5">إجمالي التكاليف</td><td className="py-1.5 text-left text-red-700">{fmt(agg.costTotal)}</td><td /></tr>
+                <tr className="border-t bg-gray-50 font-bold"><td className="py-1.5">{T('إجمالي التكاليف', 'Total Operating Costs')}</td><td className="py-1.5 text-left text-red-700">{fmt(agg.costTotal)}</td><td /></tr>
               </tbody>
             </table>
           </div>
@@ -402,8 +423,8 @@ export default function GubalProfitReport() {
           {/* Monthly net trend (only in range with >1 month) */}
           {selected.length > 1 && (
             <div className="bg-white rounded-xl shadow p-4">
-              <h3 className="font-bold text-gray-700 mb-3">الصافي الشهري</h3>
-              <TrendBars data={selected.map((m) => ({ label: monthLabel(m.key).split(' ')[0], value: m.net }))} />
+              <h3 className="font-bold text-gray-700 mb-3">{T('الصافي الشهري', 'Monthly Net Result')}</h3>
+              <TrendBars data={selected.map((m) => ({ label: mLabel(m.key).split(' ')[0], value: m.net }))} />
             </div>
           )}
         </div>
@@ -411,37 +432,37 @@ export default function GubalProfitReport() {
 
       {/* print doc */}
       {agg && (
-        <div id="gubal-doc" dir="rtl" className="hidden print:block">
+        <div id="gubal-doc" dir={en ? 'ltr' : 'rtl'} className={`hidden print:block${en ? ' en' : ''}`}>
           <div className="gh">
             <div className="brand">UME <span>Holding</span></div>
-            <div className="meta">المركب: Gubal Trader<br />الفترة: {agg.label}<br />العملة: USD</div>
+            <div className="meta">{T('المركب', 'Vessel')}: Gubal Trader<br />{T('الفترة', 'Period')}: {periodLabel}<br />{T('العملة', 'Currency')}: USD</div>
           </div>
-          <div className="gt">تقرير أرباح المركب — Gubal Trader</div>
+          <div className="gt">{T('تقرير أرباح المركب — Gubal Trader', 'Vessel Profit & Loss Statement — Gubal Trader')}</div>
           <div className="gk">
-            <div className="kpi main"><span className="l">صافي الربح</span><span className="v">{fmt(agg.net)}</span></div>
-            <div className="kpi"><span className="l">إجمالي الإيراد</span><span className="v">{fmt(agg.incomeTotal)}</span></div>
-            <div className="kpi"><span className="l">إجمالي التكاليف</span><span className="v">{fmt(agg.costTotal)}</span></div>
-            <div className="kpi"><span className="l">هامش الربح</span><span className="v">{margin.toFixed(1)}%</span></div>
+            <div className="kpi main"><span className="l">{T('صافي الربح', 'Net Profit')}</span><span className="v">{fmt(agg.net)}</span></div>
+            <div className="kpi"><span className="l">{T('إجمالي الإيراد', 'Total Revenue')}</span><span className="v">{fmt(agg.incomeTotal)}</span></div>
+            <div className="kpi"><span className="l">{T('إجمالي التكاليف', 'Total Operating Costs')}</span><span className="v">{fmt(agg.costTotal)}</span></div>
+            <div className="kpi"><span className="l">{T('هامش الربح', 'Net Profit Margin')}</span><span className="v">{margin.toFixed(1)}%</span></div>
           </div>
           <div className="cols">
             <div>
-              <h3>الإيرادات</h3>
+              <h3>{T('الإيرادات', 'Revenue')}</h3>
               <table><tbody>
-                {agg.incomeLines.slice().sort((a, b) => b.value - a.value).map((l, i) => (<tr key={`${l.label}-${i}`}><td>{l.label}</td><td>{fmt(l.value)}</td></tr>))}
-                <tr className="tot"><td>إجمالي الإيراد</td><td>{fmt(agg.incomeTotal)}</td></tr>
+                {agg.incomeLines.slice().sort((a, b) => b.value - a.value).map((l, i) => (<tr key={`${l.label}-${i}`}><td>{incomeLabel(l.label, en)}</td><td>{fmt(l.value)}</td></tr>))}
+                <tr className="tot"><td>{T('إجمالي الإيراد', 'Total Revenue')}</td><td>{fmt(agg.incomeTotal)}</td></tr>
               </tbody></table>
             </div>
             <div>
-              <h3>التكاليف بالمجموعات</h3>
+              <h3>{T('التكاليف بالمجموعات', 'Operating Costs by Group')}</h3>
               <table><tbody>
                 {sortedGroups.map((g) => (
                   <tr key={g.id}>
-                    <td>{grpMeta(g.id).ar}</td>
+                    <td>{gName(g.id)}</td>
                     <td>{fmt(g.total)}</td>
                     <td className="pc">{agg.costTotal ? Math.round((g.total / agg.costTotal) * 100) : 0}%</td>
                   </tr>
                 ))}
-                <tr className="tot"><td>إجمالي التكاليف</td><td>{fmt(agg.costTotal)}</td><td className="pc">100%</td></tr>
+                <tr className="tot"><td>{T('إجمالي التكاليف', 'Total Operating Costs')}</td><td>{fmt(agg.costTotal)}</td><td className="pc">100%</td></tr>
               </tbody></table>
             </div>
           </div>
@@ -451,11 +472,11 @@ export default function GubalProfitReport() {
             التي تُراجَع أو تُرسَل لا تُفتح فيها صفوفٌ بالنقر كما على الشاشة.
           */}
           <div className="detail">
-            <h3>التكاليف بالتفصيل</h3>
+            <h3>{T('التكاليف بالتفصيل', 'Cost Breakdown by Line Item')}</h3>
             {sortedGroups.filter((g) => g.lines.length > 0).map((g) => (
               <table key={g.id} className="dt"><tbody>
                 <tr className="gh2">
-                  <td>{grpMeta(g.id).ar} <span className="en">{grpMeta(g.id).en}</span></td>
+                  <td>{gName(g.id)} {!en && <span className="en">{grpMeta(g.id).en}</span>}</td>
                   <td>{fmt(g.total)}</td>
                   <td className="pc">{agg.costTotal ? Math.round((g.total / agg.costTotal) * 100) : 0}%</td>
                 </tr>
@@ -467,7 +488,7 @@ export default function GubalProfitReport() {
               </tbody></table>
             ))}
             <table className="dt"><tbody>
-              <tr className="tot"><td>إجمالي التكاليف</td><td>{fmt(agg.costTotal)}</td><td className="pc">100%</td></tr>
+              <tr className="tot"><td>{T('إجمالي التكاليف', 'Total Operating Costs')}</td><td>{fmt(agg.costTotal)}</td><td className="pc">100%</td></tr>
             </tbody></table>
           </div>
 
@@ -479,7 +500,7 @@ export default function GubalProfitReport() {
           */}
           <div className="charts">
             <div className="cbox">
-              <h3>هيكل التكاليف</h3>
+              <h3>{T('هيكل التكاليف', 'Cost Structure')}</h3>
               <div className="donut">
                 <Donut
                   segs={sortedGroups.filter((g) => g.total > 0).map((g) => ({ value: g.total, color: grpMeta(g.id).color }))}
@@ -488,7 +509,7 @@ export default function GubalProfitReport() {
                 <table className="lg"><tbody>
                   {sortedGroups.filter((g) => g.total > 0).map((g) => (
                     <tr key={g.id}>
-                      <td><span className="sw" style={{ background: grpMeta(g.id).color }} />{grpMeta(g.id).ar}</td>
+                      <td><span className="sw" style={{ background: grpMeta(g.id).color }} />{gName(g.id)}</td>
                       <td>{fmtAbbr(g.total)}</td>
                       <td className="pc">{agg.costTotal ? Math.round((g.total / agg.costTotal) * 100) : 0}%</td>
                     </tr>
@@ -499,13 +520,13 @@ export default function GubalProfitReport() {
 
             {selected.length > 1 && (
               <div className="cbox">
-                <h3>الصافي الشهري</h3>
-                <TrendBars data={selected.map((m) => ({ label: monthLabel(m.key).split(' ')[0], value: m.net }))} />
+                <h3>{T('الصافي الشهري', 'Monthly Net Result')}</h3>
+                <TrendBars data={selected.map((m) => ({ label: mLabel(m.key).split(' ')[0], value: m.net }))} />
               </div>
             )}
           </div>
 
-          <div className="foot">UME Holding — نظام PMS · Gubal Trader · {agg.label} · جميع القيم بالدولار</div>
+          <div className="foot">{T(`UME Holding — نظام PMS · Gubal Trader · ${periodLabel} · جميع القيم بالدولار`, `UME Holding — PMS · Gubal Trader · ${periodLabel} · Management accounts, unaudited · All amounts in USD`)}</div>
         </div>
       )}
     </div>
@@ -569,6 +590,10 @@ const PRINT_CSS = `@media print {
   #gubal-doc .kpi .v { font-size:13pt; font-weight:800; color:#0f172a; }
   #gubal-doc .kpi.main { background:#047857; border-color:#065f46; } #gubal-doc .kpi.main .l { color:#d1fae5; } #gubal-doc .kpi.main .v { color:#fff; }
   #gubal-doc h3 { font-size:10pt; font-weight:700; color:#0f2c5c; background:#eef2ff; margin:10px 0 5px; padding:5px 10px; border-radius:3px; border-right:4pt solid #1d4ed8; }
+  #gubal-doc.en h3 { border-right:0; border-left:4pt solid #1d4ed8; }
+  #gubal-doc.en td:last-child, #gubal-doc.en .pc, #gubal-doc.en .lg .pc, #gubal-doc.en .gh .meta { text-align:right; }
+  #gubal-doc.en .dt tr.ln td:first-child { padding-right:8px; padding-left:18px; }
+  #gubal-doc.en .sw { margin-left:0; margin-right:6px; }
   #gubal-doc .cols { display:flex; gap:16px; align-items:flex-start; } #gubal-doc .cols > div { flex:1; }
   #gubal-doc table { width:100%; border-collapse:collapse; font-size:9pt; }
   #gubal-doc td { padding:4px 8px; border-bottom:.5pt solid #e5e9f0; }
