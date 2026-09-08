@@ -90,7 +90,7 @@ const REV_EN: Record<string, string> = { truck: 'Truck Freight', veh: 'Vehicle F
 const AGENT_EN: Record<string, string> = { 'وكيل بدوي': 'Badawi Agency', 'وكيل البسّام': 'El-Bassam Agency', 'وكيل الاتحاد': 'Etihad Agency' };
 const SEG_EN: Record<string, string> = {
   fuel: 'Bunkers Consumed', agent: 'Agency Commissions', port: 'Port & Handling', fixed: 'Fixed Operating Costs',
-  purchases: 'Purchases & Company Expenses', other: 'Other',
+  purchases: 'Purchases & Services Expenses', other: 'Other',
 };
 /*
  * أسماء بنود المشتريات كما تأتي من القاعدة: فواتير النظام إنجليزيّةٌ غالباً، وقيود
@@ -309,7 +309,7 @@ export default function VesselFinReport({
                 <td className="ref">{T('الإيرادات', 'Revenue analysis')}</td>
               </tr>
               <tr className="neg">
-                <td className="lbl">{T('− مصروفات الوكلاء (صادر + وارد)', '− Agency & Port Expenses (outbound + inbound)')}</td>
+                <td className="lbl">{T('− مصروفات الوكلاء (صادر + وارد)', '− Agency & Port Expenses (Charge + Discharge)')}</td>
                 <td className="amt">({fmt(agentExp)})</td>
                 <td className="shr">{pct(agentExp, R)}</td>
                 <td className="ref">{T('مصروفات الوكالات', 'Agency expenses')}</td>
@@ -347,10 +347,10 @@ export default function VesselFinReport({
                 <td className="ref"></td>
               </tr>
               <tr className="neg">
-                <td className="lbl">{T('− مشتريات العبّارة / مصاريف أخرى (قسط الشهر)', '− Purchases & Company Expenses (monthly charge)')}</td>
+                <td className="lbl">{T('− مشتريات العبّارة / مصاريف أخرى (قسط الشهر)', '− Purchases & Services Expenses (monthly charge)')}</td>
                 <td className="amt">({fmt(purchTotal)})</td>
                 <td className="shr">{pct(purchTotal, R)}</td>
-                <td className="ref">{T('مشتريات العبّارة', 'Purchases')}</td>
+                <td className="ref">{T('مشتريات العبّارة', 'Purchases & services')}</td>
               </tr>
               <tr className="fin">
                 <td className="lbl">{T('= صافي الربح النهائي', '= Net Profit')}</td>
@@ -472,7 +472,7 @@ export default function VesselFinReport({
 
           {/* ── ص٤ · مشتريات العبّارة ── */}
           <div className="vf-sec">
-            <h2>{T('مشتريات العبّارة / مصاريف أخرى', 'Purchases & Company Expenses')}</h2>
+            <h2>{T('مشتريات العبّارة / مصاريف أخرى', 'Purchases & Services Expenses')}</h2>
             <h3>{T('الإجمالي حسب البند', 'Total by item')}</h3>
             <table>
               <thead><tr><th scope="col">{T('البند', 'Item')}</th><th scope="col">{T('قسط الشهر (USD)', 'Monthly charge (USD)')}</th><th scope="col">{T('٪ من المشتريات', '% of purchases')}</th></tr></thead>
