@@ -74,6 +74,13 @@ export interface VesselConfig {
    * تبقى معروضةً بعلامتها، ويُعاد مبلغها إلى الصافي ثمّ يُخصم ما في QuickBooks.
    */
   ledgerExcluded?: string[];
+  /*
+   * حدّ QuickBooks: قيود الشركة حتّى هذا التاريخ من ملفّ QuickBooks، وما بعده من
+   * فواتير شاشة النظام. فلا يُقرأ المصدران في شهرٍ واحد فيتكرّر البند.
+   */
+  cogsUntil?: string;
+  /** بنود فواتير النظام التي لا تدخل الكارت لأنّ مصدرها الوثيقة (تأمين) — مطابقةٌ جزئيّة بلا حالة أحرف */
+  ignoreInvoiceItems?: string[];
   col: {
     type: number; ref: number; date: number; collection: number;
     truckC: number; truck: number; vehC: number; veh: number;
@@ -128,6 +135,13 @@ export const POSEIDON: VesselConfig = {
    * المشتريات. فلا `ledgerExcluded` هنا — الآليّة باقية فارغةً عمداً.
    */
   cogs: true,
+  /*
+   * ── الحدّ الزمنيّ بين المصدرين — بقرار المالك ٨ سبتمبر ٢٠٢٦ ──
+   * من يناير إلى يوليو ٢٠٢٦: مصاريف الشركة من ملفّ QuickBooks. ومن أغسطس: من
+   * فواتير شاشة النظام. وفواتير التأمين في النظام لا تدخل الكارت في أيّ شهر،
+   * لأنّ التأمين يُستحقّ من الوثيقة سطراً سنويّاً.
+   */
+  cogsUntil: '2026-07-31', ignoreInvoiceItems: ['P&I', 'H&M', 'war'],
   /*
    * مرتّبات الشهر — من حساب 5312 في ملفّ COGS USD (يناير–يوليو ٢٠٢٦)، ثُبّتت
    * بأمر المالك ٨ سبتمبر ٢٠٢٦ قبل تشغيل الاستيراد. **وهي تتغلّب على QuickBooks**
@@ -412,12 +426,16 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
    * (عدا المرتّبات، فلها خانتها). بشكل الفاتورة نفسه كي لا يتغيّر حساب المشتريات.
    */
   const costDocs = useMemo(() => [
-    ...invoices,
-    ...cogs.filter((x) => x.charged && x.category !== 'salary').map((x) => ({
+    ...invoices.filter((inv) => {
+      if (cfg.cogsUntil && String(inv.invoice_date || '').slice(0, 10) <= cfg.cogsUntil) return false;
+      const names = [inv.item?.name, ...(Array.isArray(inv.line_items) ? inv.line_items.map((l: { item_name?: string }) => l.item_name) : [])].filter(Boolean).map((n: string) => n.toLowerCase());
+      return !(cfg.ignoreInvoiceItems || []).some((k) => names.some((n) => n.includes(k.toLowerCase())));
+    }),
+    ...cogs.filter((x) => x.charged && x.category !== 'salary' && (x.source !== 'quickbooks' || !cfg.cogsUntil || x.entry_date <= cfg.cogsUntil)).map((x) => ({
       id: x.id, invoice_number: x.doc_number || x.item_label, invoice_date: x.entry_date, total_amount: Number(x.amount_usd),
       currency: 'USD', depreciation_months: x.depreciation_months, item: { name: x.item_label }, supplier: { name: x.supplier || x.source }, line_items: null,
     })),
-  ], [invoices, cogs]);
+  ], [invoices, cogs, cfg.cogsUntil, cfg.ignoreInvoiceItems]);
   // مرتّبات الشهر من QuickBooks — مجموع قيود «مرتّبات» في الشهر
   const cogsSalaryOf = (m: string) => cogs.filter((x) => x.charged && x.category === 'salary' && x.entry_date.slice(0, 7) === m).reduce((s, x) => s + Number(x.amount_usd), 0);
 
@@ -1205,7 +1223,7 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
               <div className="text-right"><p className="text-xs text-gray-500">المبلغ المطروح من الصافي</p><p className="font-bold text-red-600 text-lg">{fmt(data.salaries)}</p></div>
             </div>
 
-            {cfg.cogs && cfg.dbVesselName && <CogsImportPanel vessel={cfg.dbVesselName} onChanged={loadCogs} />}
+            {cfg.cogs && cfg.dbVesselName && <CogsImportPanel vessel={cfg.dbVesselName} until={cfg.cogsUntil} onChanged={loadCogs} />}
             {data.ledgerAddBack > 0 && (
               <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
                 ↩ أُعيد إلى الصافي {fmt(data.ledgerAddBack)} من بنود الدفتر المستبعَدة (ميناء مصر) — بديلها يُخصم من QuickBooks ضمن المشتريات.

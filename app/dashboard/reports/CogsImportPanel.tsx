@@ -36,10 +36,11 @@ interface CogsRow {
 
 interface Plan {
   vessel: string; batch_code: string;
-  counts: { total: number; new: number; existing: number; errors: number; unmapped: number };
+  counts: { total: number; new: number; existing: number; skipped: number; errors: number; unmapped: number };
+  until: string | null;
   totals_new_usd: number;
   by_category: { category: string; item_label: string; charged: boolean; count: number; usd: number }[];
-  rows: (CogsRow & { account_code: string; category: string; item_label: string; depreciation_months: number | null; charged: boolean; exclude_reason: string; unmapped: boolean; status: 'new' | 'existing' | 'error'; error?: string })[];
+  rows: (CogsRow & { account_code: string; category: string; item_label: string; depreciation_months: number | null; charged: boolean; exclude_reason: string; unmapped: boolean; status: 'new' | 'existing' | 'skipped' | 'error'; error?: string })[];
   vanished: { id: string; entry_date: string; doc_number: string; supplier: string; amount_usd: string; account_code: string }[];
 }
 
@@ -108,7 +109,7 @@ const CATEGORY_OPTIONS = [
   ['provision', 'تموين طاقم'], ['lubricants', 'زيوت'], ['salary', 'مرتّبات'], ['other', 'أخرى'],
 ] as const;
 
-export default function CogsImportPanel({ vessel, onChanged }: { vessel: string; onChanged?: () => void }) {
+export default function CogsImportPanel({ vessel, until, onChanged }: { vessel: string; until?: string; onChanged?: () => void }) {
   const [entries, setEntries] = useState<CogsEntry[]>([]);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
@@ -136,7 +137,7 @@ export default function CogsImportPanel({ vessel, onChanged }: { vessel: string;
       setRows(parsed.rows); setWarnings(parsed.warnings); setFileName(f.name);
       if (!parsed.rows.length) { setErr('لم يُقرأ صفٌّ واحد من الملفّ'); return; }
       setBusy(true);
-      const r = await api.post('/api/vessel-cogs/import/plan', { vessel, rows: parsed.rows, batch_code: batchCode });
+      const r = await api.post('/api/vessel-cogs/import/plan', { vessel, rows: parsed.rows, batch_code: batchCode, until: until || null });
       setPlan(r.data as Plan);
     } catch (ex) {
       setErr((ex as { response?: { data?: { message?: string } }; message?: string })?.response?.data?.message || (ex as Error)?.message || 'تعذّرت قراءة الملفّ');
@@ -147,8 +148,8 @@ export default function CogsImportPanel({ vessel, onChanged }: { vessel: string;
     if (!plan || !rows.length) return;
     setBusy(true); setErr('');
     try {
-      const r = await api.post('/api/vessel-cogs/import/commit', { vessel, rows, batch_code: batchCode });
-      setDone(`رُحّل ${r.data.written} قيداً جديداً (${fmt(r.data.totals_written_usd)} USD) · تُخطّي ${r.data.skipped_existing} موجوداً`);
+      const r = await api.post('/api/vessel-cogs/import/commit', { vessel, rows, batch_code: batchCode, until: until || null });
+      setDone(`رُحّل ${r.data.written} قيداً جديداً (${fmt(r.data.totals_written_usd)} USD) · تُخطّي ${r.data.skipped_existing} موجوداً${r.data.skipped_after_until ? ` · ${r.data.skipped_after_until} بعد الحدّ ${until}` : ''}`);
       setPlan(null); setRows([]); await load(); onChanged?.();
     } catch (ex) {
       setErr((ex as { response?: { data?: { message?: string } } })?.response?.data?.message || 'فشل الترحيل');
@@ -208,7 +209,7 @@ export default function CogsImportPanel({ vessel, onChanged }: { vessel: string;
         <div>
           <h3 className="font-bold text-gray-700">🏢 مصاريف المركب من دفتر الشركة (QuickBooks)</h3>
           <p className="text-xs text-gray-500 mt-0.5">
-            {entries.length ? `${entries.length} قيداً · ${months[0]} → ${months[months.length - 1]}` : 'لا قيود بعد'} · تُقسَّط في الكارت بشهور إهلاكها، والتأمين من الوثيقة لا من الأقساط
+            {entries.length ? `${entries.length} قيداً · ${months[0]} → ${months[months.length - 1]}` : 'لا قيود بعد'} · تُقسَّط في الكارت بشهور إهلاكها، والتأمين من الوثيقة لا من الأقساط{until ? ` · QuickBooks حتّى ${until} وما بعده من شاشة النظام` : ''}
           </p>
         </div>
         {isAdmin && (
@@ -234,6 +235,7 @@ export default function CogsImportPanel({ vessel, onChanged }: { vessel: string;
         <div className="rounded-lg border border-navy-900/15 bg-slate-50 p-3 space-y-3">
           <p className="text-sm font-semibold text-gray-800">
             خطّة الترحيل — {fileName}: {plan.counts.total} صفّاً · <span className="text-emerald-700">{plan.counts.new} جديد ({fmt(plan.totals_new_usd)} USD)</span> · {plan.counts.existing} موجودٌ يُتخطّى
+            {plan.counts.skipped > 0 && <span className="text-gray-500"> · {plan.counts.skipped} بعد الحدّ {plan.until}</span>}
             {plan.counts.errors > 0 && <span className="text-red-700"> · {plan.counts.errors} خطأ</span>}
             {plan.counts.unmapped > 0 && <span className="text-amber-700"> · {plan.counts.unmapped} خارج الخريطة</span>}
           </p>
@@ -265,8 +267,8 @@ export default function CogsImportPanel({ vessel, onChanged }: { vessel: string;
               <table className="w-full text-xs">
                 <thead className="bg-gray-50 sticky top-0"><tr><th className="p-1 text-start">الحالة</th><th className="p-1 text-start">التاريخ</th><th className="p-1 text-start">الحساب</th><th className="p-1 text-start">البند</th><th className="p-1 text-start">المورّد</th><th className="p-1 text-end">USD</th><th className="p-1 text-end">إهلاك</th></tr></thead>
                 <tbody>{plan.rows.map((r, i) => (
-                  <tr key={i} className={`border-t ${r.status === 'error' ? 'bg-red-50' : r.status === 'existing' ? 'text-gray-400' : r.unmapped ? 'bg-amber-50' : ''}`}>
-                    <td className="p-1">{r.status === 'new' ? 'جديد' : r.status === 'existing' ? 'موجود' : `خطأ: ${r.error}`}</td>
+                  <tr key={i} className={`border-t ${r.status === 'error' ? 'bg-red-50' : r.status === 'existing' || r.status === 'skipped' ? 'text-gray-400' : r.unmapped ? 'bg-amber-50' : ''}`}>
+                    <td className="p-1">{r.status === 'new' ? 'جديد' : r.status === 'existing' ? 'موجود' : r.status === 'skipped' ? 'بعد الحدّ' : `خطأ: ${r.error}`}</td>
                     <td className="p-1 font-mono">{r.entry_date}</td><td className="p-1">{r.account_code}</td>
                     <td className="p-1">{r.item_label}{!r.charged && ' (مستبعَد)'}</td><td className="p-1">{r.supplier}</td>
                     <td className="p-1 text-end font-mono">{fmt(r.amount_usd)}</td><td className="p-1 text-end">{r.depreciation_months ?? '—'}</td>
