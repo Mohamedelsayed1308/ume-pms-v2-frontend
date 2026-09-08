@@ -7,6 +7,7 @@ import VesselFinReport from './VesselFinReport';
 import VesselBoardReport from './VesselBoardReport';
 import BassamAccountCard from './BassamAccountCard';
 import { DEFAULT_RATES } from './ExchangeRatesCard';
+import CogsImportPanel, { type CogsEntry } from './CogsImportPanel';
 
 // التوزيع الافتراضي لبنود المصروفات على مجموعات هيكل التكاليف (مفتاح البند → المجموعة)
 const COST_BUCKET_DEFAULTS: Record<string, string> = {
@@ -63,6 +64,16 @@ export interface VesselConfig {
   bassamAccount?: boolean; // زر حساب وكيل البسّام داخل الكارت
   bassamStorageKey?: string; // مفتاح تخزين حساب البسّام المستقل (افتراضي BassamAccount)
   hideAgentLiquidity?: boolean; // إخفاء عرض السيولة عند الوكلاء
+  /*
+   * مصاريف المركب من دفتر الشركة (QuickBooks COGS) — جدول `vessel_cogs_entries`.
+   * تُقرأ مع فواتير المركب وتُقسَّط بشهور إهلاكها، ومرتّباتها تملأ «مرتّبات الشهر».
+   */
+  cogs?: boolean;
+  /*
+   * بنودٌ في دفتر الرحلات **تُستبعد من الصافي** لأنّ QuickBooks هو مرجعها.
+   * تبقى معروضةً بعلامتها، ويُعاد مبلغها إلى الصافي ثمّ يُخصم ما في QuickBooks.
+   */
+  ledgerExcluded?: string[];
   col: {
     type: number; ref: number; date: number; collection: number;
     truckC: number; truck: number; vehC: number; veh: number;
@@ -107,6 +118,14 @@ export const POSEIDON: VesselConfig = {
    * **بصمت** — فالجلب يتجاهل الخطأ عمداً كي لا يُعطَّل الكارت.
    */
   linkInvoices: true, dbVesselName: 'Poseidon Express',
+  /*
+   * ── مصاريف الشركة من QuickBooks — بقرار المالك ٨ سبتمبر ٢٠٢٦ ──
+   * الصيانة والتموينات والإدارة الفنّيّة والمرتّبات ورسوم الميناء المصريّ
+   * وعمولة الوكالة: من دفتر الشركة. و«ميناء مصر» في دفتر الرحلات يُستبعد من
+   * الصافي لأنّ الأرقام نفسها تأتي من QuickBooks — والدفتر يحمل أرقاماً قريبةً
+   * لا مطابقة، فالجمع كان سيحسبها مرّتين.
+   */
+  cogs: true, ledgerExcluded: ['egyPort', 'egyPortI'],
   /*
    * خريطة الأعمدة منسوخةٌ من ألكوديا.
    *
@@ -315,7 +334,9 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
    */
   const labelOf = useMemo(() => {
     const m: Record<string, string> = {};
-    [...cfg.exportExp, ...cfg.importExp].forEach((e) => { m[e.key] = e.label; });
+    [...cfg.exportExp, ...cfg.importExp].forEach((e) => {
+      m[e.key] = cfg.ledgerExcluded?.includes(e.key) ? `${e.label} (مستبعَد — من QuickBooks)` : e.label;
+    });
     // فحصتُ بقيّة مفاتيح المركبين فوجدتها متطابقة — هذا وحده الشاذّ
     if (!m.othersI && m.otherExpsI) m.othersI = m.otherExpsI;
     return m;
@@ -366,6 +387,27 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
    */
   const [invLoading, setInvLoading] = useState(true);
   const [rates, setRates] = useState<Record<string, Record<string, number>>>({});
+  // مصاريف المركب من دفتر الشركة — تُقرأ من جدولها ولا تُخلط بجدول الفواتير
+  const [cogs, setCogs] = useState<CogsEntry[]>([]);
+  const loadCogs = useCallback(() => (!cfg.cogs || !cfg.dbVesselName
+    ? Promise.resolve().then(() => setCogs([]))
+    : api.get(`/api/vessel-cogs/by-vessel/${encodeURIComponent(cfg.dbVesselName)}`)
+      .then((r) => setCogs((r.data as CogsEntry[]) || []))
+      .catch(() => setCogs([]))), [cfg.cogs, cfg.dbVesselName]);
+  useEffect(() => { loadCogs(); }, [loadCogs]);
+  /*
+   * مستندات التكلفة التي تُقسَّط: فواتير المركب + قيود QuickBooks المحمَّلة
+   * (عدا المرتّبات، فلها خانتها). بشكل الفاتورة نفسه كي لا يتغيّر حساب المشتريات.
+   */
+  const costDocs = useMemo(() => [
+    ...invoices,
+    ...cogs.filter((x) => x.charged && x.category !== 'salary').map((x) => ({
+      id: x.id, invoice_number: x.doc_number || x.item_label, invoice_date: x.entry_date, total_amount: Number(x.amount_usd),
+      currency: 'USD', depreciation_months: x.depreciation_months, item: { name: x.item_label }, supplier: { name: x.supplier || x.source }, line_items: null,
+    })),
+  ], [invoices, cogs]);
+  // مرتّبات الشهر من QuickBooks — مجموع قيود «مرتّبات» في الشهر
+  const cogsSalaryOf = (m: string) => cogs.filter((x) => x.charged && x.category === 'salary' && x.entry_date.slice(0, 7) === m).reduce((s, x) => s + Number(x.amount_usd), 0);
 
   const cur = manual[month] || { opening: '', closing: '', salaries: '' };
   const setCur = (patch: Partial<{ opening: string; closing: string; salaries: string }>) =>
@@ -376,7 +418,9 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
     const v = manual[m]?.salaries;
     if (v !== undefined && v !== '') return v;
     const def = cfg.salariesByMonth?.[m];
-    return def != null ? String(def) : '';
+    if (def != null) return String(def);
+    if (cfg.cogs) { const q = cogsSalaryOf(m); if (q > 0) return q.toFixed(2); }
+    return '';
   };
 
   // الشهر السابق ('YYYY-MM')
@@ -622,7 +666,7 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
   const bunkerInvoiceUSD = useMemo(() => {
     if (!cfg.linkInvoices || !month) return 0;
     let sum = 0;
-    for (const inv of invoices) {
+    for (const inv of costDocs) {
       const pm = (inv.invoice_date || '').slice(0, 7);
       if (pm !== month) continue;
       const bp = bunkerPortion(inv);
@@ -631,7 +675,7 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
       if (rate > 0) sum += bp / rate;
     }
     return sum;
-  }, [cfg.linkInvoices, invoices, rates, month]);
+  }, [cfg.linkInvoices, costDocs, rates, month]);
 
   const data = useMemo(() => {
     if (!sel.length) return null;
@@ -649,18 +693,23 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
     const closing = parseFloat(manual[month]?.closing ?? '') || 0;
     const bunkerCost = opening + supplies - closing;
     const salariesN = parseFloat(salaryOf(month)) || 0;
-    const net = netBalance - opening + closing - salariesN - bunkerInvoiceUSD;
+    /*
+     * البنود المستبعَدة من الدفتر: خُصمت داخل BALANCE، فتُعاد إلى الصافي هنا،
+     * ويأتي بديلها من QuickBooks عبر المشتريات. الرقم يُعرض ليُقرأ لا ليُخفى.
+     */
+    const ledgerAddBack = (cfg.ledgerExcluded || []).reduce((s, k) => s + (E.exp[k] || 0) + (I.exp[k] || 0), 0);
+    const net = netBalance + ledgerAddBack - opening + closing - salariesN - bunkerInvoiceUSD;
     return {
       E, I, revE, revI, expE, expI, suppliesExcel, bunkerInvoiceUSD, supplies, opening, closing, bunkerCost, salaries: salariesN,
-      net, O, P, revenue, count: sel.length, expenses: revenue - net,
+      net, O, P, revenue, count: sel.length, expenses: revenue - net, ledgerAddBack,
       liqBassam: O, liqIttihad: P - O,
     };
-  }, [sel, manual, month, bunkerInvoiceUSD]);
+  }, [sel, manual, month, bunkerInvoiceUSD, cogs, cfg.ledgerExcluded]);
 
   // بند المشتريات (فواتير المركب) — قسط ثابت بالدولار محوّل بسعر صرف شهر الشراء
   const purchases = useMemo(() => {
     if (!cfg.linkInvoices || !month) return null;
-    const items = invoices
+    const items = costDocs
       .map((inv) => {
         const pm = (inv.invoice_date || '').slice(0, 7);
         if (!pm) return null;
@@ -705,7 +754,7 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
     }
     const byItem = Object.entries(byItemMap).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
     return { items, total, missingList, defaultList, byItem };
-  }, [cfg.linkInvoices, invoices, rates, month]);
+  }, [cfg.linkInvoices, costDocs, rates, month]);
 
   // بيانات التقرير الإداري (شرائح العرض)
   const execData = useMemo<ExecData | null>(() => {
@@ -720,6 +769,7 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
     costLines.push({ key: 'fuel', label: 'الوقود (بنكر)', value: data.bunkerCost });
     const expKeys = new Set([...Object.keys(data.E.exp), ...Object.keys(data.I.exp)]);
     for (const k of expKeys) {
+      if (cfg.ledgerExcluded?.includes(k)) continue; // بديله في المشتريات من QuickBooks
       const v = (data.E.exp[k] || 0) + (data.I.exp[k] || 0);
       if (Math.abs(v) < 0.5) continue;
       costLines.push({ key: k, label: labelOf[k] || k, value: v });
@@ -739,7 +789,7 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
       costLines,
       defaultBuckets: COST_BUCKET_DEFAULTS,
     };
-  }, [data, sel, purchases, labelOf]);
+  }, [data, sel, purchases, labelOf, cfg.ledgerExcluded]);
 
   // صافي كل رحلة بعد توزيع البنكر والمرتبات والمشتريات على كل الرحلات (حسب الإيراد)
   const allocVoy = useMemo(() => {
@@ -1130,13 +1180,20 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
             </div>
 
             <div className="bg-white rounded-xl shadow p-4 flex items-end justify-between flex-wrap gap-3">
-              <div><label className="block text-xs text-gray-500 mb-1">مرتبات الشهر {cfg.salariesByMonth?.[month] != null && (manual[month]?.salaries === undefined || manual[month]?.salaries === '') ? '(محمّلة تلقائياً)' : '(يدوي)'}</label><input value={salaryOf(month)} onChange={(e) => setCur({ salaries: e.target.value })} inputMode="decimal" placeholder="0" className="border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" /></div>
+              <div><label className="block text-xs text-gray-500 mb-1">مرتبات الشهر {(manual[month]?.salaries === undefined || manual[month]?.salaries === '') ? (cfg.salariesByMonth?.[month] != null ? '(محمّلة تلقائياً)' : (cfg.cogs && cogsSalaryOf(month) > 0 ? '(من QuickBooks)' : '(يدوي)')) : '(يدوي)'}</label><input value={salaryOf(month)} onChange={(e) => setCur({ salaries: e.target.value })} inputMode="decimal" placeholder="0" className="border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" /></div>
               <div className="text-right"><p className="text-xs text-gray-500">المبلغ المطروح من الصافي</p><p className="font-bold text-red-600 text-lg">{fmt(data.salaries)}</p></div>
             </div>
 
+            {cfg.cogs && cfg.dbVesselName && <CogsImportPanel vessel={cfg.dbVesselName} onChanged={loadCogs} />}
+            {data.ledgerAddBack > 0 && (
+              <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                ↩ أُعيد إلى الصافي {fmt(data.ledgerAddBack)} من بنود الدفتر المستبعَدة (ميناء مصر) — بديلها يُخصم من QuickBooks ضمن المشتريات.
+              </p>
+            )}
+
             {purchases && (
               <div className="bg-white rounded-xl shadow p-4">
-                <h3 className="font-bold text-gray-700 mb-3">🧾 المشتريات (فواتير المركب) — بالدولار</h3>
+                <h3 className="font-bold text-gray-700 mb-3">🧾 المشتريات (فواتير المركب{cfg.cogs ? ' + دفتر الشركة' : ''}) — بالدولار</h3>
                 {purchases.missingList.length > 0 && (
                   <div className="bg-red-50 border border-red-200 text-red-800 text-sm rounded-lg px-3 py-2 mb-3">
                     ⚠️ فواتير مفيش لها سعر صرف (ولا افتراضي) — مش محتسبة:
