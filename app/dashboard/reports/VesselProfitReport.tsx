@@ -122,10 +122,10 @@ export const POSEIDON: VesselConfig = {
    * ── مصاريف الشركة من QuickBooks — بقرار المالك ٨ سبتمبر ٢٠٢٦ ──
    * الصيانة والتموينات والإدارة الفنّيّة والمرتّبات: من دفتر الشركة.
    *
-   * ومصاريف التوكيلين — بدوي في مصر (EGY-PORT) والبسّام في السعودية (KSA-PORT) —
-   * **تبقى في دفتر الرحلات ولا تُستبعد**: تصحيحُ المالك في المساء نفسه بعد أن
-   * كان القرار الأوّل أخذها من QuickBooks. فحسابات الميناء في QuickBooks هي
-   * التي تُستبعد (في خريطة الخادم)، و`ledgerExcluded` يبقى فارغاً هنا عمداً.
+   * وبندان مختلفان لا بندٌ واحد (توضيح المالك في المساء نفسه): ما في دفتر
+   * الرحلات رسومُ هيئة الميناء «Port Authorities fees» ويبقى ويُخصم؛ وما يأتي من
+   * QuickBooks مصاريفُ توكيل بدوي «EGY Agency Expenses» ويُخصم تحت اسمه ضمن
+   * المشتريات. فلا `ledgerExcluded` هنا — الآليّة باقية فارغةً عمداً.
    */
   cogs: true,
   /*
@@ -154,7 +154,7 @@ export const POSEIDON: VesselConfig = {
     { key: 'vehicle12', label: 'Vehicle 12%', col: 29 },
     { key: 'pks12', label: 'PKS 12%', col: 30 },
     { key: 'broker', label: 'Broker Commission', col: 31 },
-    { key: 'egyPort', label: 'ميناء مصر', col: 33 },
+    { key: 'egyPort', label: 'Port Authorities fees — EGY', col: 33 },
     /*
      * ── وهنا يفترق عن ألكوديا ──
      * `ميناء السعودية` مقروءٌ من رِجل الوارد وحدها هناك، وهو صحيحٌ لها: `pk_E`
@@ -176,7 +176,7 @@ export const POSEIDON: VesselConfig = {
     { key: 'otherExpsI', label: 'Other EXPS', col: 24 },
     { key: 'ksaPort', label: 'ميناء السعودية', col: 32 },
     // وبالمثل في الاتّجاه الآخر: صفرٌ اليوم، فلا يسقط غداً.
-    { key: 'egyPortI', label: 'ميناء مصر', col: 33 },
+    { key: 'egyPortI', label: 'Port Authorities fees — EGY', col: 33 },
   ],
 };
 
