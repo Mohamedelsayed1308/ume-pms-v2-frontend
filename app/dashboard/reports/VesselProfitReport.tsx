@@ -691,6 +691,19 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
     if (!sel.length) return null;
     const E = aggSide(sel, 'E'), I = aggSide(sel, 'I');
     const revE = sideRevenue(E), revI = sideRevenue(I);
+    /*
+     * البنود المستبعَدة تُنزع من مصاريف الوكلاء قبل أيّ حساب.
+     *
+     * فهي ليست تكلفةً في الكارت — بديلها من QuickBooks ضمن المشتريات — وإبقاؤها
+     * في `E.exp` مع إعادة مبلغها إلى الصافي جعل التقرير الماليّ يقرأ الإعادة
+     * «فرقَ دفتر» بمبلغ 103,499.97. تُنزع من المصدر فيتّسق كلّ من يقرأه:
+     * الجداول والتقارير والسلّم. ومبلغها يبقى في `ledgerAddBack` ليُعرض.
+     */
+    let ledgerAddBack = 0;
+    for (const k of cfg.ledgerExcluded || []) {
+      ledgerAddBack += (E.exp[k] || 0) + (I.exp[k] || 0);
+      delete E.exp[k]; delete I.exp[k];
+    }
     const expE = Object.values(E.exp).reduce((a, b) => a + b, 0);
     const expI = Object.values(I.exp).reduce((a, b) => a + b, 0);
     const suppliesExcel = sel.reduce((s, v) => s + v.bunker, 0);
@@ -703,11 +716,7 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
     const closing = parseFloat(manual[month]?.closing ?? '') || 0;
     const bunkerCost = opening + supplies - closing;
     const salariesN = parseFloat(salaryOf(month)) || 0;
-    /*
-     * البنود المستبعَدة من الدفتر: خُصمت داخل BALANCE، فتُعاد إلى الصافي هنا،
-     * ويأتي بديلها من QuickBooks عبر المشتريات. الرقم يُعرض ليُقرأ لا ليُخفى.
-     */
-    const ledgerAddBack = (cfg.ledgerExcluded || []).reduce((s, k) => s + (E.exp[k] || 0) + (I.exp[k] || 0), 0);
+    // البنود المستبعَدة خُصمت داخل BALANCE، فتُعاد إلى الصافي، ويأتي بديلها من QuickBooks عبر المشتريات
     const net = netBalance + ledgerAddBack - opening + closing - salariesN - bunkerInvoiceUSD;
     return {
       E, I, revE, revI, expE, expI, suppliesExcel, bunkerInvoiceUSD, supplies, opening, closing, bunkerCost, salaries: salariesN,
