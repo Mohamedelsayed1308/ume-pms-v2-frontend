@@ -49,7 +49,12 @@ const IN = 'border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 
 
 /** تاريخ إكسيل (رقمٌ تسلسليّ أو نصّ) → YYYY-MM-DD */
 function toIsoDate(v: unknown): string {
-  if (v instanceof Date) return v.toISOString().slice(0, 10);
+  /*
+   * التاريخ بمكوّناته المحلّيّة لا بـ toISOString: الأخيرة تحوّل إلى UTC فيصير
+   * «1 يناير 00:00» في توقيت القاهرة «31 ديسمبر 21:00» — وقد رحّلت هكذا 391
+   * قيداً بيومٍ ناقص، فسقطت فواتير أوّل الشهر في الشهر السابق.
+   */
+  if (v instanceof Date) return `${v.getFullYear()}-${String(v.getMonth() + 1).padStart(2, '0')}-${String(v.getDate()).padStart(2, '0')}`;
   if (typeof v === 'number') {
     const d = XLSX.SSF.parse_date_code(v);
     if (d) return `${d.y}-${String(d.m).padStart(2, '0')}-${String(d.d).padStart(2, '0')}`;
@@ -194,7 +199,7 @@ export default function CogsImportPanel({ vessel, until, onChanged }: { vessel: 
   const summary = useMemo(() => {
     const m = new Map<string, { label: string; charged: boolean; count: number; usd: number; months: Set<string> }>();
     for (const x of entries) {
-      const k = `${x.category}|${x.charged}`;
+      const k = `${x.item_label}|${x.charged}`;
       const c = m.get(k) || { label: x.item_label, charged: x.charged, count: 0, usd: 0, months: new Set<string>() };
       c.count += 1; c.usd += Number(x.amount_usd); c.months.add(x.entry_date.slice(0, 7)); m.set(k, c);
     }
