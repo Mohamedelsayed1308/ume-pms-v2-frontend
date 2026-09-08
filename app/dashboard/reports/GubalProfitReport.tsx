@@ -21,14 +21,15 @@ const COL = { incomeTotal: 14, costTotal: 197, net: 199 };
 const COST_GROUPS: { id: string; ar: string; en: string; a: number; b: number; color: string }[] = [
   { id: 'bunker', ar: 'الوقود والزيوت', en: 'Bunkers & Lubricants', a: 16, b: 17, color: '#1e3a5f' },
   { id: 'crew', ar: 'تكاليف الطاقم', en: 'Crew Costs', a: 19, b: 23, color: '#5b9e77' },
-  { id: 'spare', ar: 'قطع الغيار', en: 'Spare Parts & Stores', a: 107, b: 193, color: '#9cc3ac' },
-  { id: 'insurance', ar: 'التأمين والتصنيف', en: 'Insurance & Classification', a: 24, b: 29, color: '#3f5f8a' },
-  { id: 'ksa', ar: 'وكيل السعودية', en: 'Port & Agency Expenses — KSA', a: 30, b: 43, color: '#c98b6b' },
-  { id: 'egypt', ar: 'وكيل مصر', en: 'Port & Agency Expenses — Egypt', a: 47, b: 60, color: '#7a6ff0' },
-  { id: 'sudan', ar: 'وكيل السودان', en: 'Port & Agency Expenses — Sudan', a: 44, b: 46, color: '#d4537e' },
+  { id: 'spare', ar: 'قطع الغيار', en: 'Spare Parts', a: 107, b: 193, color: '#9cc3ac' },
+  { id: 'insurance', ar: 'التأمين والتصنيف', en: 'Insurance & Class', a: 24, b: 29, color: '#3f5f8a' },
+  /*
+   * حُذفت مجموعات الوكلاء (السعودية · مصر · السودان) والمنهالي بأمر المالك ٨ سبتمبر
+   * ٢٠٢٦ — نسخة ٢٠٢٦ من الملفّ لا تحمل رؤوسها. وإن عادت في ملفٍّ لاحق فأعمدتها
+   * تُضمّ إلى المجموعة التي تسبقها في صفّ الرؤوس، فراجع الرؤوس قبل الرفع.
+   */
   { id: 'otherRel', ar: 'خدمات أخرى متعلقة', en: 'Other Related Services', a: 70, b: 106, color: '#63992a' },
   { id: 'depreciation', ar: 'الإهلاك', en: 'Depreciation', a: 18, b: 18, color: '#b07a2f' },
-  { id: 'menhali', ar: 'المنهالي (KSA)', en: 'El-Menhali Agency (KSA)', a: 64, b: 69, color: '#2f8f8f' },
   { id: 'malta', ar: 'وسطاء مالطا', en: 'Brokerage Commission — Malta Shipbrokers', a: 62, b: 62, color: '#8f6f2f' },
   { id: 'umeab', ar: 'UME Shipping AB', en: 'Management Fees — UME Shipping AB', a: 63, b: 63, color: '#6f8f2f' },
   { id: 'masterSafe', ar: 'عهدة الكابتن', en: "Master's Cash Account", a: 61, b: 61, color: '#996699' },
@@ -69,13 +70,9 @@ const GROUP_HEADS: [RegExp, string][] = [
   [/depreciat/i, 'depreciation'],
   [/crew/i, 'crew'],
   [/insurance/i, 'insurance'],
-  [/ksa\s*agent/i, 'ksa'],
-  [/sudan\s*agent/i, 'sudan'],
-  [/egypt\s*agent/i, 'egypt'],
   [/master\s*safe/i, 'masterSafe'],
   [/malta/i, 'malta'],
   [/ume\s*shipping/i, 'umeab'],
-  [/menhali/i, 'menhali'],
   [/^others?$|^others\b/i, 'others'],
 ];
 
