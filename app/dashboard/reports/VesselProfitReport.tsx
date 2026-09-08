@@ -141,7 +141,7 @@ export const POSEIDON: VesselConfig = {
    * فواتير شاشة النظام. وفواتير التأمين في النظام لا تدخل الكارت في أيّ شهر،
    * لأنّ التأمين يُستحقّ من الوثيقة سطراً سنويّاً.
    */
-  cogsUntil: '2026-07-31', ignoreInvoiceItems: ['P&I', 'H&M', 'war'],
+  cogsUntil: '2026-07-31', ignoreInvoiceItems: ['P&I', 'H&M', 'war'], // والوقود مستثنىً من الحدّ — انظر costDocs
   /*
    * مرتّبات الشهر — من حساب 5312 في ملفّ COGS USD (يناير–يوليو ٢٠٢٦)، ثُبّتت
    * بأمر المالك ٨ سبتمبر ٢٠٢٦ قبل تشغيل الاستيراد. **وهي تتغلّب على QuickBooks**
@@ -426,10 +426,23 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
    * (عدا المرتّبات، فلها خانتها). بشكل الفاتورة نفسه كي لا يتغيّر حساب المشتريات.
    */
   const costDocs = useMemo(() => [
-    ...invoices.filter((inv) => {
-      if (cfg.cogsUntil && String(inv.invoice_date || '').slice(0, 10) <= cfg.cogsUntil) return false;
+    ...invoices.flatMap((inv) => {
       const names = [inv.item?.name, ...(Array.isArray(inv.line_items) ? inv.line_items.map((l: { item_name?: string }) => l.item_name) : [])].filter(Boolean).map((n: string) => n.toLowerCase());
-      return !(cfg.ignoreInvoiceItems || []).some((k) => names.some((n) => n.includes(k.toLowerCase())));
+      if ((cfg.ignoreInvoiceItems || []).some((k) => names.some((n) => n.includes(k.toLowerCase())))) return [];
+      if (!cfg.cogsUntil || String(inv.invoice_date || '').slice(0, 10) > cfg.cogsUntil) return [inv];
+      /*
+       * قبل الحدّ لا تدخل فاتورةٌ من النظام — إلا **الوقود**: ملفّ QuickBooks لا يحوي
+       * حساب وقودٍ أصلاً، والمالك أكّد أنّ فاتورتَي بنكر يونيو ويوليو (291,068.07 و
+       * 51,861.38) وقودٌ حقيقيّ فوق عمود الدفتر. فيمرّ جزء البنكر وحده من الفاتورة،
+       * وما عداه من بنودها يبقى خارجاً لأنّ QuickBooks يحمله.
+       */
+      const bunkerLines = Array.isArray(inv.line_items) ? inv.line_items.filter((l: { item_name?: string }) => (l.item_name || '').toLowerCase().includes('bunker')) : null;
+      const isBunkerHead = (inv.item?.name || '').toLowerCase().includes('bunker');
+      if (bunkerLines && bunkerLines.length) {
+        const amt = bunkerLines.reduce((a: number, l: { amount?: number }) => a + (Number(l.amount) || 0), 0);
+        return [{ ...inv, total_amount: amt, line_items: bunkerLines }];
+      }
+      return isBunkerHead ? [inv] : [];
     }),
     ...cogs.filter((x) => x.charged && x.category !== 'salary' && (x.source !== 'quickbooks' || !cfg.cogsUntil || x.entry_date <= cfg.cogsUntil)).map((x) => ({
       id: x.id, invoice_number: x.doc_number || x.item_label, invoice_date: x.entry_date, total_amount: Number(x.amount_usd),
