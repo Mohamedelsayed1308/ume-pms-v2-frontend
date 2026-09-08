@@ -170,6 +170,18 @@ export default function CogsImportPanel({ vessel, onChanged }: { vessel: string;
     } finally { setBusy(false); }
   }
 
+  async function reapply() {
+    if (!confirm('إعادة تطبيق خريطة التصنيف الحاليّة على كلّ ما استُورد من QuickBooks لهذا المركب؟')) return;
+    setBusy(true); setErr('');
+    try {
+      const r = await api.post('/api/vessel-cogs/reapply-rules', { vessel });
+      setDone(`أُعيد التصنيف: ${r.data.changed} قيداً تغيّر من ${r.data.scanned}`);
+      await load(); onChanged?.();
+    } catch (ex) {
+      setErr((ex as { response?: { data?: { message?: string } } })?.response?.data?.message || 'تعذّرت إعادة التصنيف');
+    } finally { setBusy(false); }
+  }
+
   async function remove(id: string) {
     if (!confirm('حذف هذا السطر من مصاريف المركب؟')) return;
     setBusy(true);
@@ -200,10 +212,17 @@ export default function CogsImportPanel({ vessel, onChanged }: { vessel: string;
           </p>
         </div>
         {isAdmin && (
-          <label className={`cursor-pointer rounded-lg px-4 py-2 text-sm font-medium text-white ${busy ? 'bg-gray-400' : 'bg-navy-900 hover:bg-navy-800'}`}>
-            {busy ? 'جارٍ…' : '📥 استيراد ملفّ COGS'}
-            <input type="file" accept=".xlsm,.xlsx,.xls" className="hidden" onChange={onFile} disabled={busy} />
-          </label>
+          <div className="flex items-center gap-2">
+            {entries.some((x) => x.source === 'quickbooks') && (
+              <button type="button" onClick={reapply} disabled={busy} className="rounded-lg border border-navy-900 px-3 py-2 text-sm text-navy-900 hover:bg-navy-50 disabled:opacity-50" title="بعد تغيير قواعد التصنيف">
+                ♻️ أعد التصنيف
+              </button>
+            )}
+            <label className={`cursor-pointer rounded-lg px-4 py-2 text-sm font-medium text-white ${busy ? 'bg-gray-400' : 'bg-navy-900 hover:bg-navy-800'}`}>
+              {busy ? 'جارٍ…' : '📥 استيراد ملفّ COGS'}
+              <input type="file" accept=".xlsm,.xlsx,.xls" className="hidden" onChange={onFile} disabled={busy} />
+            </label>
+          </div>
         )}
       </div>
 
