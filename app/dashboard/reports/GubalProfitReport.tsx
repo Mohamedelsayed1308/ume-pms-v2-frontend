@@ -471,7 +471,7 @@ export default function GubalProfitReport() {
           <div className="detail">
             <h3>{T('التكاليف بالتفصيل', 'Cost Breakdown by Line Item')}</h3>
             {sortedGroups.filter((g) => g.lines.length > 0).map((g) => (
-              <table key={g.id} className="dt"><tbody>
+              <table key={g.id} className="dt"><colgroup><col /><col className="c-amt" /><col className="c-pc" /></colgroup><tbody>
                 <tr className="gh2">
                   <td>{gName(g.id)} {!en && <span className="en">{grpMeta(g.id).en}</span>}</td>
                   <td>{fmt(g.total)}</td>
@@ -484,7 +484,7 @@ export default function GubalProfitReport() {
                 ))}
               </tbody></table>
             ))}
-            <table className="dt"><tbody>
+            <table className="dt"><colgroup><col /><col className="c-amt" /><col className="c-pc" /></colgroup><tbody>
               <tr className="tot"><td>{T('إجمالي التكاليف', 'Total Operating Costs')}</td><td>{fmt(agg.costTotal)}</td><td className="pc">100%</td></tr>
             </tbody></table>
           </div>
@@ -599,7 +599,11 @@ const PRINT_CSS = `@media print {
   #gubal-doc .pc { width:34px; text-align:left; color:#64748b; }
   #gubal-doc .detail { margin-top:14px; }
   /* المجموعة لا تُشطر بين صفحتين — عنوانٌ في آخر ورقة وبنودُه في التالية لا يُقرأ */
-  #gubal-doc .dt { break-inside: avoid; page-break-inside: avoid; margin-bottom:6px; }
+  /* عمود المبالغ بعرضٍ واحدٍ في كلّ الجداول — كلّ مجموعةٍ جدولٌ مستقلّ، وبغير تثبيت العرض ينزاح العمود من مجموعةٍ لأخرى */
+  #gubal-doc .dt { break-inside: avoid; page-break-inside: avoid; margin-bottom:6px; table-layout:fixed; }
+  #gubal-doc .dt col.c-amt { width:110px; } #gubal-doc .dt col.c-pc { width:44px; }
+  #gubal-doc .dt td:nth-child(2) { white-space:nowrap; font-variant-numeric:tabular-nums; }
+  #gubal-doc.en .dt td:nth-child(2) { text-align:right; }
   #gubal-doc .dt tr.gh2 td { background:#eef2ff; font-weight:800; color:#0f2c5c; border-top:1pt solid #c7d2fe; padding:4px 8px; }
   #gubal-doc .dt tr.gh2 .en { font-weight:400; color:#64748b; font-size:7.5pt; }
   #gubal-doc .dt tr.ln td { font-size:8pt; color:#475569; padding:2px 8px 2px 18px; }
