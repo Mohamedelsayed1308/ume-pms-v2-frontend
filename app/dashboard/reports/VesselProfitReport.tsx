@@ -1222,7 +1222,7 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
                   <table className="w-full text-sm">
                     <thead className="text-gray-500 text-xs"><tr><th scope="col" className="text-right py-1">المصروف</th><th scope="col" className="text-right py-1">المبلغ</th></tr></thead>
                     <tbody>
-                      {Object.entries(panel.side.exp).map(([k, v]) => (<tr key={k} className="border-t"><td className="py-1">{labelOf[k] || k}</td><td className="py-1 text-red-600">{fmt(v)}</td></tr>))}
+                      {Object.entries(panel.side.exp).filter(([, v]) => Math.abs(v) >= 0.005).map(([k, v]) => (<tr key={k} className="border-t"><td className="py-1">{labelOf[k] || k}</td><td className="py-1 text-red-600">{fmt(v)}</td></tr>))}
                       <tr className="border-t bg-gray-50 font-bold"><td className="py-1">إجمالي المصروفات</td><td className="py-1 text-red-700">{fmt(panel.exp)}</td></tr>
                     </tbody>
                   </table>
@@ -1486,8 +1486,8 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
               </tbody>
             </table>
             <div className="cols">
-              <div><h3>مصروفات الصادر ({cfg.agentExport})</h3><table><thead><tr><th scope="col">المصروف</th><th scope="col">المبلغ</th></tr></thead><tbody>{Object.entries(data.E.exp).map(([k, v]) => (<tr key={k}><td>{labelOf[k] || k}</td><td>{fmt(v)}</td></tr>))}<tr className="tot"><td>إجمالي المصروفات</td><td>{fmt(data.expE)}</td></tr></tbody></table></div>
-              <div><h3>مصروفات الوارد ({cfg.agentImport})</h3><table><thead><tr><th scope="col">المصروف</th><th scope="col">المبلغ</th></tr></thead><tbody>{Object.entries(data.I.exp).map(([k, v]) => (<tr key={k}><td>{labelOf[k] || k}</td><td>{fmt(v)}</td></tr>))}<tr className="tot"><td>إجمالي المصروفات</td><td>{fmt(data.expI)}</td></tr></tbody></table></div>
+              <div><h3>مصروفات الصادر ({cfg.agentExport})</h3><table><thead><tr><th scope="col">المصروف</th><th scope="col">المبلغ</th></tr></thead><tbody>{Object.entries(data.E.exp).filter(([, v]) => Math.abs(v) >= 0.005).map(([k, v]) => (<tr key={k}><td>{labelOf[k] || k}</td><td>{fmt(v)}</td></tr>))}<tr className="tot"><td>إجمالي المصروفات</td><td>{fmt(data.expE)}</td></tr></tbody></table></div>
+              <div><h3>مصروفات الوارد ({cfg.agentImport})</h3><table><thead><tr><th scope="col">المصروف</th><th scope="col">المبلغ</th></tr></thead><tbody>{Object.entries(data.I.exp).filter(([, v]) => Math.abs(v) >= 0.005).map(([k, v]) => (<tr key={k}><td>{labelOf[k] || k}</td><td>{fmt(v)}</td></tr>))}<tr className="tot"><td>إجمالي المصروفات</td><td>{fmt(data.expI)}</td></tr></tbody></table></div>
             </div>
             <div className="cols">
               <div>

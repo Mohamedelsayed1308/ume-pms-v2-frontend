@@ -428,7 +428,7 @@ export default function VesselFinReport({
                 <table>
                   <thead><tr><th scope="col">{T('المصروف', 'Expense')}</th><th scope="col">{T('المبلغ', 'Amount')}</th><th scope="col">%</th></tr></thead>
                   <tbody>
-                    {Object.entries(data.E.exp as Record<string, number>).map(([k, v]) => (
+                    {Object.entries(data.E.exp as Record<string, number>).filter(([, v]) => Math.abs(v) >= 0.005).map(([k, v]) => (
                       <tr key={k}><td>{expLabel(k)}</td><td>{fmt(v)}</td><td>{pct(v, R)}</td></tr>
                     ))}
                     <tr className="tot"><td>{T('الإجمالي', 'Total')}</td><td>{fmt(data.expE)}</td><td>{pct(data.expE, R)}</td></tr>
@@ -440,7 +440,7 @@ export default function VesselFinReport({
                 <table>
                   <thead><tr><th scope="col">{T('المصروف', 'Expense')}</th><th scope="col">{T('المبلغ', 'Amount')}</th><th scope="col">%</th></tr></thead>
                   <tbody>
-                    {Object.entries(data.I.exp as Record<string, number>).map(([k, v]) => (
+                    {Object.entries(data.I.exp as Record<string, number>).filter(([, v]) => Math.abs(v) >= 0.005).map(([k, v]) => (
                       <tr key={k}><td>{expLabel(k)}</td><td>{fmt(v)}</td><td>{pct(v, R)}</td></tr>
                     ))}
                     <tr className="tot"><td>{T('الإجمالي', 'Total')}</td><td>{fmt(data.expI)}</td><td>{pct(data.expI, R)}</td></tr>
