@@ -209,7 +209,8 @@ export default function VesselBoardReport({
   const worstV = allocVoy.reduce((a, b) => (b.net < a.net ? b : a), allocVoy[0]);
 
   const expPct = data.revE / R, impPct = data.revI / R;
-  const supTop = pur.suppliers[0];
+  // تنبيه التركّز يخصّ الموردين الحقيقيّين — سطر إهلاك المركب ليس مورداً
+  const supTop = pur.suppliers.find((x) => x.name !== 'إهلاك المركب') ?? pur.suppliers[0];
 
   // ── شلال الربح ──
   const WF = useMemo(() => {

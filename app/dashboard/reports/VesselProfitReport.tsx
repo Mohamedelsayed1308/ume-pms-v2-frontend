@@ -81,6 +81,12 @@ export interface VesselConfig {
   cogsUntil?: string;
   /** بنود فواتير النظام التي لا تدخل الكارت لأنّ مصدرها الوثيقة (تأمين) — مطابقةٌ جزئيّة بلا حالة أحرف */
   ignoreInvoiceItems?: string[];
+  /*
+   * إهلاك المركب: مبلغٌ ثابتٌ بالدولار يُحمَّل كلَّ شهرٍ ضمن المشتريات (بعد صافي التشغيل).
+   * يبدأ من `depreciationFrom` ('YYYY-MM') إن وُجد، وإلا من أوّل شهرٍ في الشيت.
+   */
+  depreciationMonthly?: number;
+  depreciationFrom?: string;
   col: {
     type: number; ref: number; date: number; collection: number;
     truckC: number; truck: number; vehC: number; veh: number;
@@ -221,6 +227,7 @@ export const PELAGOS: VesselConfig = {
 export const ALCUDIA: VesselConfig = {
   vessel: 'Alcudia', sheetKey: 'ALCUDIA', agentExport: 'وكيل بدوي', agentImport: 'وكيل البسّام',
   linkInvoices: true, dbVesselName: 'Alcudia Express', bassamAccount: true, hideAgentLiquidity: true,
+  depreciationMonthly: 110000, // إهلاك المركب — بقرار المالك ٩ سبتمبر ٢٠٢٦
   salariesByMonth: {
     '2026-01': 110871.89, '2026-02': 99685.48, '2026-03': 107177.70,
     '2026-04': 142512.74, '2026-05': 104033.26, '2026-06': 104334.94,
@@ -781,8 +788,8 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
 
   // بند المشتريات (فواتير المركب) — قسط ثابت بالدولار محوّل بسعر صرف شهر الشراء
   const purchases = useMemo(() => {
-    if (!cfg.linkInvoices || !month) return null;
-    const items = costDocs
+    if ((!cfg.linkInvoices && !cfg.depreciationMonthly) || !month) return null;
+    const items = (cfg.linkInvoices ? costDocs : [])
       .map((inv) => {
         const pm = (inv.invoice_date || '').slice(0, 7);
         if (!pm) return null;
@@ -815,6 +822,22 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
         };
       })
       .filter(Boolean) as any[];
+    /*
+     * إهلاك المركب — سطرٌ مصطنعٌ ضمن المشتريات لا فاتورةٌ له.
+     * يوضع هنا لا في الصافي التشغيليّ، فيبقى «صافي قبل المشتريات» مطابقاً لدفتر الرحلات،
+     * وتراه التقارير الثلاثة وتوزيع الرحلات والمطابقات كما ترى أيّ قسط.
+     */
+    if (cfg.depreciationMonthly) {
+      const depMonths = rangeMonths.filter((m) => !cfg.depreciationFrom || m >= cfg.depreciationFrom);
+      if (depMonths.length) {
+        const n = depMonths.length, amt = cfg.depreciationMonthly * n;
+        items.push({
+          id: 'depreciation', number: 'إهلاك ثابت', supplier: 'إهلاك المركب', item: 'إهلاك المركب', lines: null,
+          date: `${depMonths[0]}-01`, amount: amt, currency: 'USD', nMonths: n, purchaseMonth: depMonths[0],
+          rate: 1, missing: false, usedDefault: false, usdTotal: amt, installment: amt, seq: n > 1 ? `1–${n}` : 1,
+        });
+      }
+    }
     const total = items.reduce((s, i) => s + i.installment, 0);
     const missingList = items.filter((i) => i.missing);
     const defaultList = items.filter((i) => i.usedDefault);
@@ -830,7 +853,7 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
     }
     const byItem = Object.entries(byItemMap).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
     return { items, total, missingList, defaultList, byItem };
-  }, [cfg.linkInvoices, costDocs, rates, rangeMonths]);
+  }, [cfg.linkInvoices, cfg.depreciationMonthly, cfg.depreciationFrom, costDocs, rates, rangeMonths]);
 
   // بيانات التقرير الإداري (شرائح العرض)
   const execData = useMemo<ExecData | null>(() => {

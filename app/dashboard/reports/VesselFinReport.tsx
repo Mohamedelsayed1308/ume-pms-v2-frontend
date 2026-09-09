@@ -103,7 +103,7 @@ const ITEM_EN: Record<string, string> = {
   'اتّصالات': 'Communications', 'تصنيف': 'Classification', 'لوجستيّات': 'Logistics', 'برمجيّات وملاحة': 'Software & Navigation',
   'طاقم — طبّيّ': 'Crew — Medical', 'طاقم — سفر': 'Crew — Travel', 'انتقالات وإقامة': 'Transport & Accommodation',
   'تعويضات وغرامات': 'Compensation & Fines', 'مرتّبات': 'Crew Wages', 'أخرى': 'Other', 'بدون بند': 'Uncategorised',
-  'إهلاك دراي دوك': 'Dry Dock Depreciation', 'متعدد البنود': 'Multiple items',
+  'إهلاك دراي دوك': 'Dry Dock Depreciation', 'متعدد البنود': 'Multiple items', 'إهلاك المركب': 'Vessel Depreciation',
 };
 const itemEn = (name: string) => {
   if (ITEM_EN[name]) return ITEM_EN[name];
