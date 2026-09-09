@@ -263,6 +263,15 @@ const monthDiff = (a: string, b: string) => {
   const [ay, am] = a.split('-').map(Number); const [by, bm] = b.split('-').map(Number);
   return (by * 12 + bm) - (ay * 12 + am);
 };
+// كلّ الشهور التقويميّة من a إلى b (شاملةً) — ولو خلا بعضها من الرحلات، فالمرتبات والأقساط تُستحقّ فيها
+const monthsBetween = (a: string, b: string) => {
+  if (!a) return [] as string[];
+  const n = Math.max(0, monthDiff(a, b || a));
+  const [ay, am] = a.split('-').map(Number);
+  const out: string[] = [];
+  for (let i = 0; i <= n; i++) { const t = ay * 12 + (am - 1) + i; out.push(`${Math.floor(t / 12)}-${String((t % 12) + 1).padStart(2, '0')}`); }
+  return out;
+};
 
 interface Side {
   truckC: number; truck: number; vehC: number; veh: number; passC: number; pass: number; houryaC: number; discharge: number;
@@ -381,6 +390,8 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
   const [sheetBusy, setSheetBusy] = useState(false);
   const [voyages, setVoyages] = useState<Voyage[]>([]);
   const [month, setMonth] = useState('');
+  // آخر شهرٍ في الفترة — فارغٌ = شهرٌ واحد
+  const [monthTo, setMonthTo] = useState('');
   const [error, setError] = useState('');
   const [manual, setManual] = useState<Record<string, { opening: string; closing: string; salaries: string }>>({});
   const [saving, setSaving] = useState(false);
@@ -498,6 +509,7 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
     setVoyages(list);
     const ms = [...new Set(list.map((v) => v.month!))].sort();
     setMonth((m) => (m && ms.includes(m) ? m : ms[ms.length - 1] || ''));
+    setMonthTo((t) => (t && ms.includes(t) ? t : ''));
   }, []);
 
   /** الكتابة إلى السيرفر — نقطةٌ واحدة، فالحرّاس قبلها لا داخلها. */
@@ -593,7 +605,7 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
   // reset + الشيت أولاً، فإن تعذّر فالمحفوظ
   useEffect(() => {
     let alive = true;
-    setVoyages([]); setMonth(''); setFileName(''); setError(''); setSource('none'); setSyncedAt(''); setManualLoaded(false); setPendingSave(null);
+    setVoyages([]); setMonth(''); setMonthTo(''); setFileName(''); setError(''); setSource('none'); setSyncedAt(''); setManualLoaded(false); setPendingSave(null);
     (async () => {
       try {
         const saved = await api.get(`/api/vessel-profit/${cfg.vessel}`);
@@ -673,6 +685,14 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
   }
 
   const months = useMemo(() => [...new Set(voyages.map((v) => v.month!))].sort(), [voyages]);
+  /*
+   * الفترة: من `month` إلى `toMonth`.
+   * «إلى» لا يسبق «من»، ويسقط إلى «من» إن لم يعد في الشيت — فالتقرير شهرٌ واحدٌ ما لم يُختر مدى.
+   */
+  const toMonth = monthTo && monthTo > month && months.includes(monthTo) ? monthTo : month;
+  const isRange = toMonth !== month;
+  const rangeMonths = useMemo(() => monthsBetween(month, toMonth), [month, toMonth]);
+  const periodLabel = month ? (isRange ? `${monthLabel(month)} — ${monthLabel(toMonth)}` : monthLabel(month)) : '';
 
   /*
    * أحدث رحلةٍ في المصدر — لا أحدث رحلةٍ في الشهر المعروض.
@@ -692,7 +712,7 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
     }
     return best;
   }, [voyages]);
-  const sel = useMemo(() => voyages.filter((v) => v.month === month), [voyages, month]);
+  const sel = useMemo(() => voyages.filter((v) => !!v.month && v.month >= month && v.month <= toMonth), [voyages, month, toMonth]);
 
   /*
    * الرحلات التي وسَمَها الدفتر — في الشهر المعروض وفي المركب كلِّه.
@@ -711,14 +731,14 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
     let sum = 0;
     for (const inv of costDocs) {
       const pm = (inv.invoice_date || '').slice(0, 7);
-      if (pm !== month) continue;
+      if (pm < month || pm > toMonth) continue;
       const bp = bunkerPortion(inv);
       if (bp <= 0) continue;
       const rate = rateFor(inv.currency || 'USD', pm);
       if (rate > 0) sum += bp / rate;
     }
     return sum;
-  }, [cfg.linkInvoices, costDocs, rates, month]);
+  }, [cfg.linkInvoices, costDocs, rates, month, toMonth]);
 
   const data = useMemo(() => {
     if (!sel.length) return null;
@@ -745,10 +765,11 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
     const O = sel.reduce((s, v) => s + v.O, 0);
     const P = sel.reduce((s, v) => s + v.P, 0);
     const revenue = revE + revI;
+    // الفترة: الافتتاحيّ من أوّل شهرٍ، والختاميّ من آخره، والمرتبات مجموع شهورها
     const opening = parseFloat(openingOf(month)) || 0;
-    const closing = parseFloat(manual[month]?.closing ?? '') || 0;
+    const closing = parseFloat(manual[toMonth]?.closing ?? '') || 0;
     const bunkerCost = opening + supplies - closing;
-    const salariesN = parseFloat(salaryOf(month)) || 0;
+    const salariesN = rangeMonths.reduce((s, m) => s + (parseFloat(salaryOf(m)) || 0), 0);
     // البنود المستبعَدة خُصمت داخل BALANCE، فتُعاد إلى الصافي، ويأتي بديلها من QuickBooks عبر المشتريات
     const net = netBalance + ledgerAddBack - opening + closing - salariesN - bunkerInvoiceUSD;
     return {
@@ -756,7 +777,7 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
       net, O, P, revenue, count: sel.length, expenses: revenue - net, ledgerAddBack,
       liqBassam: O, liqIttihad: P - O,
     };
-  }, [sel, manual, month, bunkerInvoiceUSD, cogs, cfg.ledgerExcluded]);
+  }, [sel, manual, month, toMonth, rangeMonths, bunkerInvoiceUSD, cogs, cfg.ledgerExcluded]);
 
   // بند المشتريات (فواتير المركب) — قسط ثابت بالدولار محوّل بسعر صرف شهر الشراء
   const purchases = useMemo(() => {
@@ -771,8 +792,11 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
         // المبلغ السالب = إشعار دائن ويجب أن يظل ليخصم من المشتريات.
         if (Math.abs(purchAmount) <= 0.005) return null;
         const nMonths = inv.depreciation_months && inv.depreciation_months > 1 ? inv.depreciation_months : 1;
-        const diff = monthDiff(pm, month);
-        if (diff < 0 || diff >= nMonths) return null; // خارج فترة الإهلاك للشهر المختار
+        // شهور الفترة التي يقع فيها قسطٌ من هذه الفاتورة — في المدى تُجمع أقساطها
+        const inRange = rangeMonths.filter((m) => { const d = monthDiff(pm, m); return d >= 0 && d < nMonths; });
+        if (!inRange.length) return null; // خارج فترة الإهلاك للفترة المختارة
+        const diff = monthDiff(pm, inRange[0]);
+        const seqLast = monthDiff(pm, inRange[inRange.length - 1]) + 1;
         const curr = inv.currency || 'USD';
         const monthRate = curr === 'USD' ? 1 : Number(rates[pm]?.[curr]);
         const defRate = curr === 'USD' ? 1 : (Number(rates['default']?.[curr]) || DEFAULT_RATES[curr] || 0);
@@ -780,14 +804,14 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
         const usedDefault = !(monthRate > 0) && rate > 0; // اتحسبت بسعر افتراضي
         const missing = !(rate > 0);
         const usdTotal = missing ? 0 : purchAmount / rate;
-        const installment = usdTotal / nMonths;
+        const installment = (usdTotal / nMonths) * inRange.length;
         const allLines = Array.isArray(inv.line_items) && inv.line_items.length ? inv.line_items.filter((l: any) => !isBunkerName(l.item_name)) : null;
         const lines = allLines && allLines.length ? allLines : null;
         return {
           id: inv.id, number: inv.invoice_number, supplier: inv.supplier?.name || '—',
           item: lines ? 'متعدد البنود' : (inv.item?.name || 'بدون بند'), lines, date: (inv.invoice_date || '').slice(0, 10),
           amount: purchAmount, currency: curr, nMonths, purchaseMonth: pm,
-          rate, missing, usedDefault, usdTotal, installment, seq: diff + 1,
+          rate, missing, usedDefault, usdTotal, installment, seq: inRange.length > 1 ? `${diff + 1}–${seqLast}` : diff + 1,
         };
       })
       .filter(Boolean) as any[];
@@ -806,13 +830,13 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
     }
     const byItem = Object.entries(byItemMap).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
     return { items, total, missingList, defaultList, byItem };
-  }, [cfg.linkInvoices, costDocs, rates, month]);
+  }, [cfg.linkInvoices, costDocs, rates, rangeMonths]);
 
   // بيانات التقرير الإداري (شرائح العرض)
   const execData = useMemo<ExecData | null>(() => {
     if (!data) return null;
     const perVoyage = [...sel]
-      .sort((a, b) => Number(a.ref) - Number(b.ref))
+      .sort((a, b) => (a.month || '').localeCompare(b.month || '') || Number(a.ref) - Number(b.ref))
       .map((v) => {
         const rev = sideRevenue(v.E) + sideRevenue(v.I);
         return { ref: String(v.ref), revenue: rev, net: v.net, expenses: rev - v.net, supplies: v.bunker };
@@ -927,13 +951,13 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
     const ws = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'ملخص');
-    XLSX.writeFile(wb, `ربح-${cfg.vessel}-${month}.xlsx`);
+    XLSX.writeFile(wb, `ربح-${cfg.vessel}-${isRange ? `${month}_${toMonth}` : month}.xlsx`);
   }
 
   // اسم مستند احترافي وقت الطباعة (يظهر في ترويسة المتصفح بدل "Create Next App")
   function printReport() {
     const prev = document.title;
-    document.title = `تقرير صافي ربح ${cfg.vessel} — ${monthLabel(month)}`;
+    document.title = `تقرير صافي ربح ${cfg.vessel} — ${periodLabel}`;
     const restore = () => { document.title = prev; window.removeEventListener('afterprint', restore); };
     window.addEventListener('afterprint', restore);
     window.print();
@@ -962,7 +986,7 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
                   واحد — فتصدير الرقم الكبير يوحي بأن الجداول تحته تخصّه.
                 */}
                 <p className="font-bold text-emerald-900 leading-tight">
-                  {month ? <>{sel.length} رحلة في {monthLabel(month)}</> : <>{voyages.length} رحلة</>}
+                  {month ? <>{sel.length} رحلة في {periodLabel}</> : <>{voyages.length} رحلة</>}
                   <span className="font-normal text-emerald-700"> — من الشيت الموحّد</span>
                 </p>
                 {latest && (
@@ -990,7 +1014,7 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
               <span className="text-2xl leading-none shrink-0">⚠️</span>
               <div className="min-w-0">
                 <p className="font-bold text-amber-900 leading-tight">
-                  {month ? <>{sel.length} رحلة في {monthLabel(month)}</> : <>{voyages.length} رحلة</>}
+                  {month ? <>{sel.length} رحلة في {periodLabel}</> : <>{voyages.length} رحلة</>}
                   <span className="font-normal text-amber-800"> — من ملفٍّ مرفوع يدوياً</span>
                 </p>
                 {latest && (
@@ -1065,12 +1089,21 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
           <button onClick={() => setShowBassam(true)} className="bg-purple-100 text-purple-800 border border-purple-300 text-sm px-3 py-2 rounded-lg hover:bg-purple-200">📒 حساب البسّام</button>
         )}
         {months.length > 0 && (
-          <div>
-            <label className="block text-sm text-gray-600 mb-1">الشهر</label>
-            <select value={month} onChange={(e) => setMonth(e.target.value)}
-              className="border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
-              {months.map((m) => <option key={m} value={m}>{monthLabel(m)}</option>)}
-            </select>
+          <div className="flex items-end gap-2">
+            <div>
+              <label className="block text-sm text-gray-600 mb-1">من شهر</label>
+              <select value={month} onChange={(e) => setMonth(e.target.value)}
+                className="border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                {months.map((m) => <option key={m} value={m}>{monthLabel(m)}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm text-gray-600 mb-1">إلى شهر</label>
+              <select value={toMonth} onChange={(e) => setMonthTo(e.target.value)}
+                className={`border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 ${isRange ? 'border-blue-400 bg-blue-50' : ''}`}>
+                {months.filter((m) => m >= month).map((m) => <option key={m} value={m}>{monthLabel(m)}</option>)}
+              </select>
+            </div>
           </div>
         )}
         {data && (
@@ -1108,7 +1141,7 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
         <div className="rounded-xl border-2 border-red-400 bg-red-50 px-4 py-3 print:hidden">
           <p className="font-bold text-red-900">
             ⚠️ {flaggedSel.length > 0
-              ? <>الدفتر وسَمَ {flaggedSel.length} رحلة في {monthLabel(month)} بـ«راجعها»</>
+              ? <>الدفتر وسَمَ {flaggedSel.length} رحلة في {periodLabel} بـ«راجعها»</>
               : <>الدفتر وسَمَ {flaggedAll.length} رحلة في هذا المركب بـ«راجعها» — في شهورٍ أخرى</>}
           </p>
           <ul className="mt-1.5 space-y-0.5 text-sm text-red-800">
@@ -1136,7 +1169,7 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
           <div className="space-y-4 print:hidden">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <div className="bg-emerald-600 text-white rounded-xl p-4">
-                <p className="text-xs opacity-80">صافي ربح {monthLabel(month)}</p>
+                <p className="text-xs opacity-80">صافي ربح {periodLabel}</p>
                 <p className="text-2xl font-bold mt-1">{fmt(data.net)}</p>
                 <p className="text-xs opacity-80 mt-1">{sel.length} رحلة</p>
               </div>
@@ -1225,14 +1258,19 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
                 </div>
                 <div><p className="text-xs text-gray-500 mb-1">+ تموينات (إكسيل)</p><p className="border rounded-lg px-3 py-2 bg-gray-50 font-medium">{fmt(data.suppliesExcel)}</p></div>
                 <div><p className="text-xs text-gray-500 mb-1">+ فواتير البنكر</p><p className="border rounded-lg px-3 py-2 bg-amber-50 font-medium text-amber-700">{fmt(data.bunkerInvoiceUSD)}</p></div>
-                <div><label className="block text-xs text-gray-500 mb-1">− مخزون آخر المدة (يدوي)</label><input value={cur.closing} onChange={(e) => setCur({ closing: e.target.value })} inputMode="decimal" placeholder="0" className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" /></div>
+                {isRange
+                  ? <div><p className="text-xs text-gray-500 mb-1">− مخزون آخر المدة ({monthLabel(toMonth)})</p><p className="border rounded-lg px-3 py-2 bg-gray-50 font-medium">{fmt(parseFloat(manual[toMonth]?.closing ?? '') || 0)}</p></div>
+                  : <div><label className="block text-xs text-gray-500 mb-1">− مخزون آخر المدة (يدوي)</label><input value={cur.closing} onChange={(e) => setCur({ closing: e.target.value })} inputMode="decimal" placeholder="0" className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" /></div>}
                 <div><p className="text-xs text-gray-500 mb-1">= البنكر المستهلك</p><p className="border rounded-lg px-3 py-2 bg-red-50 font-bold text-red-700">{fmt(data.bunkerCost)}</p></div>
               </div>
+              {isRange && <p className="text-xs text-blue-700 mt-2">📅 فترة {periodLabel}: الرصيد الافتتاحيّ من أوّل شهر، ومخزون آخر المدة من آخر شهر، والتموينات والفواتير مجموع الفترة. لتعديل قيمةٍ اختر شهراً واحداً.</p>}
               {data.bunkerInvoiceUSD > 0 && <p className="text-xs text-amber-600 mt-2">⛽ فواتير بند «Bunker» ({fmt(data.bunkerInvoiceUSD)}) اتحمّلت هنا مش في المشتريات. مخزون آخر المدة بيترحّل رصيد افتتاحي للشهر الجاي.</p>}
             </div>
 
             <div className="bg-white rounded-xl shadow p-4 flex items-end justify-between flex-wrap gap-3">
-              <div><label className="block text-xs text-gray-500 mb-1">مرتبات الشهر {(manual[month]?.salaries === undefined || manual[month]?.salaries === '') ? (cfg.salariesByMonth?.[month] != null ? '(محمّلة تلقائياً)' : (cfg.cogs && cogsSalaryOf(month) > 0 ? '(من QuickBooks)' : '(يدوي)')) : '(يدوي)'}</label><input value={salaryOf(month)} onChange={(e) => setCur({ salaries: e.target.value })} inputMode="decimal" placeholder="0" className="border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" /></div>
+              {isRange
+                ? <div><p className="text-xs text-gray-500 mb-1">مرتبات الفترة (مجموع {rangeMonths.length} شهر)</p><p className="border rounded-lg px-3 py-2 bg-gray-50 font-medium">{fmt(data.salaries)}</p></div>
+                : <div><label className="block text-xs text-gray-500 mb-1">مرتبات الشهر {(manual[month]?.salaries === undefined || manual[month]?.salaries === '') ? (cfg.salariesByMonth?.[month] != null ? '(محمّلة تلقائياً)' : (cfg.cogs && cogsSalaryOf(month) > 0 ? '(من QuickBooks)' : '(يدوي)')) : '(يدوي)'}</label><input value={salaryOf(month)} onChange={(e) => setCur({ salaries: e.target.value })} inputMode="decimal" placeholder="0" className="border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" /></div>}
               <div className="text-right"><p className="text-xs text-gray-500">المبلغ المطروح من الصافي</p><p className="font-bold text-red-600 text-lg">{fmt(data.salaries)}</p></div>
             </div>
 
@@ -1295,7 +1333,7 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
                     </tbody>
                   </table>
                 ) : invLoading ? <p className="text-gray-400 text-sm">جارٍ تحميل فواتير المركب…</p>
-                  : <p className="text-gray-400 text-sm">لا توجد فواتير على المركب في {monthLabel(month)}.</p>}
+                  : <p className="text-gray-400 text-sm">لا توجد فواتير على المركب في {periodLabel}.</p>}
               </div>
             )}
 
@@ -1380,7 +1418,7 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
               <div className="brand">UME <span>Holding</span><small>MARITIME · PMS</small></div>
               <div className="meta">
                 المركب: <b>{cfg.vessel}</b><br />
-                الفترة: <b>{monthLabel(month)}</b><br />
+                الفترة: <b>{periodLabel}</b><br />
                 عدد الرحلات: <b>{sel.length}</b> · العملة: <b>USD</b>
               </div>
             </div>
@@ -1516,7 +1554,7 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
             )}
 
             <div className="foot">
-              <span>UME Holding — نظام PMS · تقرير {cfg.vessel} · {monthLabel(month)}</span>
+              <span>UME Holding — نظام PMS · تقرير {cfg.vessel} · {periodLabel}</span>
               <span>مستند داخلي — سري · جميع القيم بالدولار الأمريكي</span>
             </div>
           </div>
@@ -1524,13 +1562,13 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
       )}
 
       {showExec && execData && (
-        <VesselExecReport cfg={cfg} month={month} monthLabel={monthLabel(month)} exec={execData} onClose={() => setShowExec(false)} />
+        <VesselExecReport cfg={cfg} month={month} monthLabel={periodLabel} exec={execData} onClose={() => setShowExec(false)} />
       )}
 
       {showFin && data && execData && (
         <VesselFinReport
           cfg={{ vessel: cfg.vessel, agentExport: cfg.agentExport, agentImport: cfg.agentImport }}
-          month={month} monthLabel={monthLabel(month)}
+          month={month} monthTo={toMonth} monthLabel={periodLabel}
           data={data as any} purchases={purchases} exec={execData}
           allocVoy={allocVoy} labelOf={labelOf} revRows={REV_ROWS}
           onClose={() => setShowFin(false)}
@@ -1540,7 +1578,7 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
       {showBoard && data && execData && (
         <VesselBoardReport
           cfg={{ vessel: cfg.vessel, agentExport: cfg.agentExport, agentImport: cfg.agentImport }}
-          month={month} monthLabel={monthLabel(month)}
+          month={month} monthTo={toMonth} monthLabel={periodLabel}
           data={data as any} purchases={purchases} exec={execData}
           allocVoy={allocVoy} labelOf={labelOf} revRows={REV_ROWS}
           onClose={() => setShowBoard(false)}

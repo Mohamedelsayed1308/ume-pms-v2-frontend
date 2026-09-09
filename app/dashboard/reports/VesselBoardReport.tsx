@@ -25,6 +25,7 @@ import type { FinData, PurchaseItem, RevRow } from './VesselFinReport';
 interface Props {
   cfg: { vessel: string; agentExport: string; agentImport: string };
   month: string;
+  monthTo?: string;
   monthLabel: string;
   data: FinData;
   purchases: { byItem: { name: string; value: number }[]; items: PurchaseItem[]; total: number } | null;
@@ -134,8 +135,9 @@ const CSS = `
 `;
 
 export default function VesselBoardReport({
-  cfg, month, monthLabel, data, purchases, exec, allocVoy, labelOf, revRows, onClose,
+  cfg, month, monthTo, monthLabel, data, purchases, exec, allocVoy, labelOf, revRows, onClose,
 }: Props) {
+  const periodKey = monthTo && monthTo !== month ? `${month} → ${monthTo}` : month;
   const N = data.count || 1;
   const R = data.revenue || 1;
   const agentExp = data.expE + data.expI;
@@ -776,7 +778,7 @@ export default function VesselBoardReport({
 
             <div className="foot">
               <span>UME Holding · Maritime PMS — {cfg.vessel} · {monthLabel} · Executive Performance Report</span>
-              <span>{month}</span>
+              <span>{periodKey}</span>
             </div>
           </div>
 

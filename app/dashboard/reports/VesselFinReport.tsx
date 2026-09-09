@@ -47,13 +47,14 @@ export interface PurchaseItem {
   id: string; number: string; supplier: string; item: string;
   lines: { item_name?: string; amount?: number }[] | null;
   date: string; amount: number; currency: string;
-  nMonths: number; seq: number; installment: number;
+  nMonths: number; seq: number | string; installment: number;
   missing?: boolean; usedDefault?: boolean;
 }
 
 interface Props {
   cfg: { vessel: string; agentExport: string; agentImport: string };
   month: string;
+  monthTo?: string;
   monthLabel: string;
   data: FinData;
   purchases: { byItem: { name: string; value: number }[]; items: PurchaseItem[]; total: number } | null;
@@ -206,7 +207,7 @@ const CSS = `
 `;
 
 export default function VesselFinReport({
-  cfg, month, monthLabel, data, purchases, exec, allocVoy, labelOf, revRows, onClose,
+  cfg, month, monthTo, monthLabel, data, purchases, exec, allocVoy, labelOf, revRows, onClose,
 }: Props) {
   const [showVoy, setShowVoy] = useState(true);
   const { locale } = useI18n();
@@ -215,9 +216,10 @@ export default function VesselFinReport({
   const expLabel = (k: string) => (en ? (EXP_EN[k] || LABEL_OVERRIDE[k] || labelOf[k] || k) : (LABEL_OVERRIDE[k] || labelOf[k] || k));
   const agentName = (a: string) => (en ? (AGENT_EN[a] || a) : a);
   const itemName = (n: string) => (en ? itemEn(n) : n);
-  const period = en
-    ? (() => { const [y, m] = month.split('-'); return m ? `${MONTH_EN[+m - 1]} ${y}` : monthLabel; })()
-    : monthLabel;
+  const enMonth = (k: string) => { const [y, m] = k.split('-'); return m ? `${MONTH_EN[+m - 1]} ${y}` : k; };
+  const isRange = !!monthTo && monthTo !== month;
+  const period = en ? (isRange ? `${enMonth(month)} — ${enMonth(monthTo!)}` : enMonth(month)) : monthLabel;
+  const periodKey = isRange ? `${month} → ${monthTo}` : month;
 
   const R = data.revenue || 1;
   const agentExp = data.expE + data.expI;
@@ -646,7 +648,7 @@ export default function VesselFinReport({
 
           <div className="foot">
             <span>UME Holding · Maritime PMS — {cfg.vessel} · {period}{en ? ' · Management accounts, unaudited · USD' : ''}</span>
-            <span>{month}</span>
+            <span>{periodKey}</span>
           </div>
         </div>
       </div>
