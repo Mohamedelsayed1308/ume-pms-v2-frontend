@@ -44,7 +44,7 @@ interface RoundView {
   repat_confirmed: number; repat_announced: number;
   net_confirmed: number; net_if_all: number;
   funded_by_parent: number; unfunded_gap: number; suspect_count: number;
-  fund_calls: { as_of: string; fund_called_usd: number; pct: number }[];
+  fund_calls: { id?: string; as_of: string; fund_called_usd: number; pct: number }[];
   capital_returned: number; capital_at_stone: number; realized_gain: number;
   bee_share_pct: number | null; fund_report: FundReportView | null;
   book_result_share: number | null; book_value: number | null;
