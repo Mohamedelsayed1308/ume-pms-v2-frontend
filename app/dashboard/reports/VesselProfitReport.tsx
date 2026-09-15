@@ -228,6 +228,12 @@ export const ALCUDIA: VesselConfig = {
   vessel: 'Alcudia', sheetKey: 'ALCUDIA', agentExport: 'وكيل بدوي', agentImport: 'وكيل البسّام',
   linkInvoices: true, dbVesselName: 'Alcudia Express', bassamAccount: true, hideAgentLiquidity: true,
   depreciationMonthly: 110000, // إهلاك المركب — بقرار المالك ٩ سبتمبر ٢٠٢٦
+  /*
+   * سطورٌ يدويّة للكارت: رسوم التصنيف السنويّة ووثائق التأمين تُقسَّط من المستند
+   * لا من الفاتورة — القاعدة نفسها المعتمدة في بوسيدون. لا يوجد ملفّ QuickBooks
+   * لألكوديا، والجدول هنا للسطور اليدويّة وحدها.
+   */
+  cogs: true,
   salariesByMonth: {
     '2026-01': 110871.89, '2026-02': 99685.48, '2026-03': 107177.70,
     '2026-04': 142512.74, '2026-05': 104033.26, '2026-06': 104334.94,
