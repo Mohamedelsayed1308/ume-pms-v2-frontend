@@ -168,7 +168,8 @@ export default function CogsImportPanel({ vessel, until, onChanged }: { vessel: 
     try {
       await api.post('/api/vessel-cogs/entry', {
         vessel, source: d.get('source'), entry_date: d.get('entry_date'), item_label: d.get('item_label'), category: d.get('category'),
-        amount_usd: d.get('amount_usd'), depreciation_months: d.get('depreciation_months') || null, doc_number: d.get('doc_number'), note: d.get('note'),
+        amount_usd: d.get('amount_usd'), depreciation_months: d.get('depreciation_months') || null, doc_number: d.get('doc_number'),
+        supplier: d.get('supplier'), note: d.get('note'),
       });
       f.reset(); await load(); onChanged?.();
     } catch (ex) {
@@ -306,6 +307,7 @@ export default function CogsImportPanel({ vessel, until, onChanged }: { vessel: 
             <input name="amount_usd" required inputMode="decimal" placeholder="المبلغ الكلّيّ USD" className={IN} />
             <input name="depreciation_months" inputMode="numeric" placeholder="شهور التقسيط (12)" className={IN} />
             <input name="doc_number" placeholder="رقم الوثيقة / المستند" className={IN} />
+            <input name="supplier" placeholder="المورّد — مثل: Lloyd's Register Egypt LLC" className={IN} />
             <button type="submit" disabled={busy} className="rounded-lg bg-navy-900 px-4 py-2 text-sm text-white hover:bg-navy-800 disabled:opacity-50">أضف</button>
           </form>
         </details>
@@ -315,10 +317,10 @@ export default function CogsImportPanel({ vessel, until, onChanged }: { vessel: 
         <div>
           <p className="text-xs font-semibold text-gray-600 mb-1">السطور اليدويّة والوثائق</p>
           <table className="w-full text-xs">
-            <thead className="bg-gray-50"><tr><th className="p-1 text-start">من</th><th className="p-1 text-start">البند</th><th className="p-1 text-start">المستند</th><th className="p-1 text-end">USD</th><th className="p-1 text-end">شهور</th><th className="p-1 text-end">شهريّاً</th>{isAdmin && <th />}</tr></thead>
+            <thead className="bg-gray-50"><tr><th className="p-1 text-start">من</th><th className="p-1 text-start">البند</th><th className="p-1 text-start">المستند</th><th className="p-1 text-start">المورّد</th><th className="p-1 text-end">USD</th><th className="p-1 text-end">شهور</th><th className="p-1 text-end">شهريّاً</th>{isAdmin && <th />}</tr></thead>
             <tbody>{manualRows.map((x) => (
               <tr key={x.id} className="border-t">
-                <td className="p-1 font-mono">{x.entry_date.slice(0, 7)}</td><td className="p-1">{x.item_label}</td><td className="p-1">{x.doc_number || '—'}</td>
+                <td className="p-1 font-mono">{x.entry_date.slice(0, 7)}</td><td className="p-1">{x.item_label}</td><td className="p-1">{x.doc_number || '—'}</td><td className="p-1">{x.supplier || '—'}</td>
                 <td className="p-1 text-end font-mono">{fmt(x.amount_usd)}</td><td className="p-1 text-end">{x.depreciation_months ?? 1}</td>
                 <td className="p-1 text-end font-mono">{fmt(Number(x.amount_usd) / (x.depreciation_months || 1))}</td>
                 {isAdmin && <td className="p-1 text-end"><button type="button" onClick={() => remove(x.id)} className="text-red-600 hover:underline">حذف</button></td>}

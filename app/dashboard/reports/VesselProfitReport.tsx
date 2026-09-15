@@ -87,6 +87,11 @@ export interface VesselConfig {
    */
   depreciationMonthly?: number;
   depreciationFrom?: string;
+  /*
+   * إيرادٌ يدويٌّ شهريّ خارج دفتر الرحلات — مبيعات الكافتيريا التي يحصّلها الوكيل
+   * ويصدر بها إشعار دائن. لا تدخل عمود BALANCE، فتُضاف إلى الإيراد والصافي معاً.
+   */
+  cafeteriaRevenue?: boolean;
   col: {
     type: number; ref: number; date: number; collection: number;
     truckC: number; truck: number; vehC: number; veh: number;
@@ -228,6 +233,7 @@ export const ALCUDIA: VesselConfig = {
   vessel: 'Alcudia', sheetKey: 'ALCUDIA', agentExport: 'وكيل بدوي', agentImport: 'وكيل البسّام',
   linkInvoices: true, dbVesselName: 'Alcudia Express', bassamAccount: true, hideAgentLiquidity: true,
   depreciationMonthly: 110000, // إهلاك المركب — بقرار المالك ٩ سبتمبر ٢٠٢٦
+  cafeteriaRevenue: true,   // إشعارات بدوي الدائنة — تُقيَّد بشهر إصدار الإشعار
   /*
    * سطورٌ يدويّة للكارت: رسوم التصنيف السنويّة ووثائق التأمين تُقسَّط من المستند
    * لا من الفاتورة — القاعدة نفسها المعتمدة في بوسيدون. لا يوجد ملفّ QuickBooks
@@ -406,7 +412,7 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
   // آخر شهرٍ في الفترة — فارغٌ = شهرٌ واحد
   const [monthTo, setMonthTo] = useState('');
   const [error, setError] = useState('');
-  const [manual, setManual] = useState<Record<string, { opening: string; closing: string; salaries: string }>>({});
+  const [manual, setManual] = useState<Record<string, { opening: string; closing: string; salaries: string; cafeteria?: string }>>({});
   const [saving, setSaving] = useState(false);
   const [savedMsg, setSavedMsg] = useState('');
   /*
@@ -477,8 +483,10 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
   const cogsSalaryOf = (m: string) => cogs.filter((x) => x.charged && x.category === 'salary' && x.entry_date.slice(0, 7) === m).reduce((s, x) => s + Number(x.amount_usd), 0);
 
   const cur = manual[month] || { opening: '', closing: '', salaries: '' };
-  const setCur = (patch: Partial<{ opening: string; closing: string; salaries: string }>) =>
+  const setCur = (patch: Partial<{ opening: string; closing: string; salaries: string; cafeteria: string }>) =>
     setManual((m) => ({ ...m, [month]: { ...(m[month] || { opening: '', closing: '', salaries: '' }), ...patch } }));
+  // مبيعات الكافتيريا لشهر — يدويّةٌ دائماً، ولا مصدر آخر لها
+  const cafeteriaOf = (m: string) => manual[m]?.cafeteria ?? '';
 
   // المرتبات الفعّالة لشهر: اليدوي إن وُجد، وإلا القيمة الافتراضية من إعدادات المركب
   const salaryOf = (m: string) => {
@@ -777,20 +785,22 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
     const netBalance = sel.reduce((s, v) => s + v.net, 0);
     const O = sel.reduce((s, v) => s + v.O, 0);
     const P = sel.reduce((s, v) => s + v.P, 0);
-    const revenue = revE + revI;
+    const cafeteria = cfg.cafeteriaRevenue
+      ? rangeMonths.reduce((s, m) => s + (parseFloat(cafeteriaOf(m)) || 0), 0) : 0;
+    const revenue = revE + revI + cafeteria;
     // الفترة: الافتتاحيّ من أوّل شهرٍ، والختاميّ من آخره، والمرتبات مجموع شهورها
     const opening = parseFloat(openingOf(month)) || 0;
     const closing = parseFloat(manual[toMonth]?.closing ?? '') || 0;
     const bunkerCost = opening + supplies - closing;
     const salariesN = rangeMonths.reduce((s, m) => s + (parseFloat(salaryOf(m)) || 0), 0);
     // البنود المستبعَدة خُصمت داخل BALANCE، فتُعاد إلى الصافي، ويأتي بديلها من QuickBooks عبر المشتريات
-    const net = netBalance + ledgerAddBack - opening + closing - salariesN - bunkerInvoiceUSD;
+    const net = netBalance + ledgerAddBack - opening + closing - salariesN - bunkerInvoiceUSD + cafeteria;
     return {
       E, I, revE, revI, expE, expI, suppliesExcel, bunkerInvoiceUSD, supplies, opening, closing, bunkerCost, salaries: salariesN,
-      net, O, P, revenue, count: sel.length, expenses: revenue - net, ledgerAddBack,
+      net, O, P, revenue, cafeteria, count: sel.length, expenses: revenue - net, ledgerAddBack,
       liqBassam: O, liqIttihad: P - O,
     };
-  }, [sel, manual, month, toMonth, rangeMonths, bunkerInvoiceUSD, cogs, cfg.ledgerExcluded]);
+  }, [sel, manual, month, toMonth, rangeMonths, bunkerInvoiceUSD, cogs, cfg.ledgerExcluded, cfg.cafeteriaRevenue]);
 
   // بند المشتريات (فواتير المركب) — قسط ثابت بالدولار محوّل بسعر صرف شهر الشراء
   const purchases = useMemo(() => {
@@ -1300,6 +1310,9 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
               {isRange
                 ? <div><p className="text-xs text-gray-500 mb-1">مرتبات الفترة (مجموع {rangeMonths.length} شهر)</p><p className="border rounded-lg px-3 py-2 bg-gray-50 font-medium">{fmt(data.salaries)}</p></div>
                 : <div><label className="block text-xs text-gray-500 mb-1">مرتبات الشهر {(manual[month]?.salaries === undefined || manual[month]?.salaries === '') ? (cfg.salariesByMonth?.[month] != null ? '(محمّلة تلقائياً)' : (cfg.cogs && cogsSalaryOf(month) > 0 ? '(من QuickBooks)' : '(يدوي)')) : '(يدوي)'}</label><input value={salaryOf(month)} onChange={(e) => setCur({ salaries: e.target.value })} inputMode="decimal" placeholder="0" className="border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" /></div>}
+              {cfg.cafeteriaRevenue && (isRange
+                ? <div><p className="text-xs text-gray-500 mb-1">مبيعات الكافتيريا (مجموع الفترة)</p><p className="border rounded-lg px-3 py-2 bg-gray-50 font-medium text-emerald-700">{fmt(data.cafeteria)}</p></div>
+                : <div><label className="block text-xs text-gray-500 mb-1">مبيعات الكافتيريا (إشعار دائن)</label><input value={cafeteriaOf(month)} onChange={(e) => setCur({ cafeteria: e.target.value })} inputMode="decimal" placeholder="0" className="border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500" /></div>)}
               <div className="text-right"><p className="text-xs text-gray-500">المبلغ المطروح من الصافي</p><p className="font-bold text-red-600 text-lg">{fmt(data.salaries)}</p></div>
             </div>
 
@@ -1479,6 +1492,7 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
                   return (<tr key={r.key}><td>{r.label}</td><td>{eC || '—'}</td><td>{fmt(eA)}</td><td>{iC || '—'}</td><td>{fmt(iA)}</td><td>{fmt(eA + iA)}</td></tr>);
                 })}
                 <tr><td>إذن الشحن</td><td>—</td><td>{fmt(data.E.discharge)}</td><td>—</td><td>{fmt(data.I.discharge)}</td><td>{fmt(data.E.discharge + data.I.discharge)}</td></tr>
+                {data.cafeteria > 0 && <tr><td>مبيعات الكافتيريا</td><td>—</td><td>—</td><td>—</td><td>—</td><td>{fmt(data.cafeteria)}</td></tr>}
                 <tr className="tot"><td>إجمالي الإيراد</td><td></td><td>{fmt(data.revE)}</td><td></td><td>{fmt(data.revI)}</td><td>{fmt(data.revenue)}</td></tr>
               </tbody>
             </table>
