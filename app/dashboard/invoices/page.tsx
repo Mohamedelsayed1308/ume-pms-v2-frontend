@@ -338,6 +338,15 @@ function InvoicesContent() {
         po_id: resolvedPoId || null,
         invoice_date: form.invoice_date || null,
         due_date: form.due_date || null,
+        /*
+         * التواريخ الفارغة تُرسَل `null` لا `''`.
+         *
+         * عمود `approval_status_date` من نوع `date`، وPostgres يرفض النصّ الفارغ
+         * ويردّ 500. وحقل الحالة يُفرَّغ عمداً حين تُمسح الموافقة، فكانت كلّ فاتورةٍ
+         * جديدةٍ بلا «حالة موافقة» تفشل في الحفظ بلا سببٍ ظاهر.
+         */
+        approval_status: form.approval_status || null,
+        approval_status_date: form.approval_status_date || null,
         depreciation_months: charge_type === 'depreciate' ? parseInt(form.depreciation_months) : null,
         item_id: multiItem ? null : (form.item_id || null),
         line_items: multiItem ? form.line_items.map((l) => ({ item_id: l.item_id, item_name: items.find((it) => it.id === l.item_id)?.name || l.item_name || '', amount: parseFloat(l.amount) })) : null,
