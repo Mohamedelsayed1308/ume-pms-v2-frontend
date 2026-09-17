@@ -52,10 +52,20 @@ export function costSegments(exec: ExecData, buckets?: Record<string, string>) {
     if (l.key !== 'purchases') opItemized += l.value;
   }
   totals.other += exec.opExpenses - opItemized;
-  const grand = BUCKET_IDS.reduce((s, id) => s + Math.max(0, totals[id]), 0) || 1;
+  /*
+   * المجموعة السالبة تبقى — ولا تُحذف.
+   *
+   * كان المرشِّح `value > 0.5` يُسقط أيّ مجموعةٍ صافيها سالب، فيزيد «إجمالي
+   * المصروفات» تحت الحلقة على مجموع قائمة الدخل بمقدار ما أُسقط. وفي يوليو ٢٠٢٦
+   * كان بند «Other EXPS» لبوسيدون سالباً بـ 27,686.65 — وهو خصمٌ حقيقيّ يردّه
+   * الوكيل — فاختفى من الحلقة وبقي أثره في قائمة الدخل، فلم يُطابق المجموعان.
+   *
+   * والنسبة تُحسب على المجموع **الصافي** لا على الموجب وحده، فتُجمَع إلى ١٠٠٪.
+   */
+  const grand = BUCKET_IDS.reduce((s, id) => s + totals[id], 0) || 1;
   return BUCKETS
-    .map((b) => ({ ...b, value: totals[b.id], share: Math.max(0, totals[b.id]) / grand }))
-    .filter((x) => x.value > 0.5)
+    .map((b) => ({ ...b, value: totals[b.id], share: totals[b.id] / grand }))
+    .filter((x) => Math.abs(x.value) > 0.5)
     .sort((a, b) => b.value - a.value);
 }
 
@@ -342,7 +352,8 @@ function Donut({ segs }: { segs: { color: string; share: number }[] }) {
     <svg viewBox={`0 0 ${size} ${size}`} width={size} height={size} className="shrink-0">
       <g transform={`rotate(-90 ${c} ${c})`}>
         {segs.map((s, i) => {
-          const len = s.share * circ;
+          // الحصّة السالبة لا تُرسَم قوساً — تظهر رقماً في القائمة بجانب الحلقة
+          const len = Math.max(0, s.share) * circ;
           const el = (<circle key={i} cx={c} cy={c} r={r} fill="none" stroke={s.color} strokeWidth={sw}
             strokeDasharray={`${len} ${circ - len}`} strokeDashoffset={-acc} />);
           acc += len;

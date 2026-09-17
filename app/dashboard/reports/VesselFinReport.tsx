@@ -588,6 +588,7 @@ export default function VesselFinReport({
                 {(() => {
                   let off = 25;
                   return segs.map((s) => {
+                    // القوس للموجب فقط؛ والسالب يظهر رقماً ونسبةً في الجدول تحته
                     const share = (Math.max(0, s.value) / segTotal) * 100;
                     const el = (
                       <circle key={s.id} cx="21" cy="21" r="15.915" fill="transparent"
@@ -605,7 +606,7 @@ export default function VesselFinReport({
                     <tr key={s.id}>
                       <td><span className="sw" style={{ background: s.color }} />{en ? (SEG_EN[s.id] || s.en || s.ar) : s.ar}</td>
                       <td>{fmt(s.value)}</td>
-                      <td style={{ color: '#64748b' }}>{((Math.max(0, s.value) / segTotal) * 100).toFixed(1)}%</td>
+                      <td style={{ color: s.value < 0 ? '#b91c1c' : '#64748b' }}>{((s.value / segTotal) * 100).toFixed(1)}%</td>
                     </tr>
                   ))}
                   <tr className="tot"><td>{T('إجمالي المصروفات', 'Total Operating Costs')}</td><td>{fmt(segTotal)}</td><td>100%</td></tr>
