@@ -934,6 +934,9 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
       purchasesTotal,
       bunkerCost: data.bunkerCost,
       salaries: data.salaries,
+      agentExp: data.expE + data.expI,
+      // فرق الدفتر: الصافي من BALANCE ناقص الصافي محسوباً من مكوّناته
+      bookGap: data.net - (data.revenue - (data.expE + data.expI) - data.bunkerCost - data.salaries),
       count: data.count,
       costLines,
       defaultBuckets: COST_BUCKET_DEFAULTS,

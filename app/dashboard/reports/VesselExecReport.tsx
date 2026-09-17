@@ -13,6 +13,8 @@ export interface ExecData {
   purchasesTotal: number;
   bunkerCost: number;   // إجمالي تكلفة البنكر المستهلك (أول + تموينات − آخر)
   salaries: number;     // إجمالي مرتبات الشهر
+  agentExp: number;     // سطر «مصروفات الوكلاء» في قائمة الدخل (صادر + وارد)
+  bookGap: number;      // فرق دفتر المركب: الصافي من BALANCE ناقص الصافي من مكوّناته
   count: number;
   costLines: ExecLine[];        // بنود مصروفات التشغيل + المشتريات
   defaultBuckets: Record<string, string>;
@@ -32,26 +34,39 @@ export const BUCKETS = [
 const BUCKET_IDS = BUCKETS.map((b) => b.id);
 
 /**
- * تجميع بنود التكلفة في مجموعات هيكل التكاليف.
+ * هيكل التكاليف — **مشتقٌّ من بنود المصروف في قائمة الدخل وحدها**.
  *
- * كان محبوساً داخل التقرير الإداري، فلم تستطع شاشة الربحية عرض الحلقة نفسها.
- * وإخراجه هنا يجعل التعريف واحداً: لو تغيّرت المجموعات تغيّرت في الموضعين معاً،
- * ولا يظهر رسمان بالأسماء نفسها وأرقامٍ مختلفة.
+ * ── لماذا هكذا، بقرار المالك ١٧ سبتمبر ٢٠٢٦ ──
+ * كان الهيكل يُبنى من تجميعٍ مستقلٍّ لبنود الدفتر ثمّ يُسوّى بفارقٍ يُضاف إلى
+ * «أخرى». وأيّ خللٍ في التجميع كان يفتح فجوةً بينه وبين قائمة الدخل فوقه —
+ * وهذا ما وقع في يوليو ٢٠٢٦ حين أُسقطت مجموعةٌ صافيها سالب.
  *
- * وبند التسوية مقصود: `costLines` بنودٌ مفصّلة، و`opExpenses` مأخوذ من الصافي
- * المعتمد في الدفتر. والفرق بينهما يُضاف إلى «أخرى» فيُغلق المجموع على الإجمالي
- * — بدله تُظهر الحلقة نسباً من رقمٍ لا يساوي المصروفات المعروضة فوقها.
+ * فصارت الأسطر الثلاثة الثابتة تُؤخَذ من قائمة الدخل **نصّاً**: البنكر والمرتّبات
+ * والمشتريات. ولا يبقى للتفصيل إلّا سطر «مصروفات الوكلاء»، فيُفصَّل بمفاتيح
+ * الدفتر إلى ميناءٍ وعمولاتٍ وأخرى، ويُغلق الباقي في «أخرى» فيساوي مجموعُ
+ * الثلاثة سطرَ الوكلاء بالضبط.
+ *
+ * والنتيجة أنّ مجموع الهيكل = مجموع مصروفات قائمة الدخل **بناءً لا بالمصادفة**،
+ * فلا يمكن أن يفترقا مهما تغيّرت خريطة المجموعات.
  */
 export function costSegments(exec: ExecData, buckets?: Record<string, string>) {
   const totals: Record<string, number> = {};
   for (const id of BUCKET_IDS) totals[id] = 0;
-  let opItemized = 0;
+  // ① الأسطر الثلاثة كما هي في قائمة الدخل
+  totals.fuel = exec.bunkerCost;
+  totals.fixed = exec.salaries;
+  totals.purchases = exec.purchasesTotal;
+  // ② سطر «مصروفات الوكلاء» وحده هو ما يُفصَّل — ولا يُسمح لبندٍ منه أن يقفز إلى الثلاثة
+  let split = 0;
   for (const l of exec.costLines) {
+    if (l.key === 'fuel' || l.key === 'salaries' || l.key === 'purchases') continue;
     const b = (buckets && buckets[l.key]) || exec.defaultBuckets[l.key] || 'other';
-    totals[b] += l.value;
-    if (l.key !== 'purchases') opItemized += l.value;
+    const id = b === 'agent' || b === 'port' ? b : 'other';
+    totals[id] += l.value;
+    split += l.value;
   }
-  totals.other += exec.opExpenses - opItemized;
+  // ③ ما لم يُفصَّل من سطر الوكلاء (بنودٌ دقيقةٌ دون حدّ العرض) وفرقُ الدفتر
+  totals.other += (exec.agentExp - split) - exec.bookGap;
   /*
    * المجموعة السالبة تبقى — ولا تُحذف.
    *
@@ -157,14 +172,14 @@ export default function VesselExecReport({
       {/* cost-bucket editor */}
       {showMap && (
         <div className="bg-white border-b px-4 py-3 print:hidden">
-          <p className="text-sm text-gray-600 mb-2">وزّع كل بند على مجموعته — الدائرة بتتحدّث فوراً:</p>
+          <p className="text-sm text-gray-600 mb-2">وزّع بنود «مصروفات الوكلاء» على مجموعاتها — الدائرة بتتحدّث فوراً. والبنكر والمرتّبات والمشتريات تأتي من قائمة الدخل فلا تُوزَّع:</p>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-            {exec.costLines.filter((l) => l.key !== 'purchases').map((l) => (
+            {exec.costLines.filter((l) => l.key !== 'purchases' && l.key !== 'fuel' && l.key !== 'salaries').map((l) => (
               <div key={l.key} className="flex items-center gap-2 text-sm border rounded-lg px-3 py-1.5">
                 <span className="flex-1 truncate">{l.label} <span className="text-gray-400">({fmtFull(l.value)})</span></span>
                 <select value={buckets[l.key]} onChange={(e) => setBuckets((b) => ({ ...b, [l.key]: e.target.value }))}
                   className="border rounded-md px-2 py-1 text-xs">
-                  {BUCKETS.filter((b) => b.id !== 'purchases').map((b) => <option key={b.id} value={b.id}>{b.ar}</option>)}
+                  {BUCKETS.filter((b) => b.id === 'agent' || b.id === 'port' || b.id === 'other').map((b) => <option key={b.id} value={b.id}>{b.ar}</option>)}
                 </select>
               </div>
             ))}
