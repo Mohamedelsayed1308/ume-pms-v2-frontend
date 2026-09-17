@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import api from '@/lib/api';
 
@@ -8,6 +8,17 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  /*
+   * سببُ الخروج الأخير — يكتبه معترض الطلبات ويُقرأ مرّةً واحدةً ثمّ يُمحى،
+   * فلا تبقى الرسالة معلّقةً في كلّ زيارةٍ للشاشة.
+   */
+  const [loggedOutReason, setLoggedOutReason] = useState('');
+  useEffect(() => {
+    try {
+      const r = localStorage.getItem('ume_logout_reason');
+      if (r) { setLoggedOutReason(r); localStorage.removeItem('ume_logout_reason'); }
+    } catch { /* noop */ }
+  }, []);
   const [loading, setLoading] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -76,6 +87,12 @@ export default function LoginPage() {
               required
             />
           </div>
+
+          {loggedOutReason === 'session_revoked' && !error && (
+            <p className="text-amber-800 bg-amber-50 border border-amber-300 rounded-lg px-3 py-2 text-sm text-center">
+              تم تسجيل خروجك لأن الحساب تم تسجيل الدخول إليه من جهاز آخر.
+            </p>
+          )}
 
           {error && (
             <p className="text-red-500 text-sm text-center">{error}</p>

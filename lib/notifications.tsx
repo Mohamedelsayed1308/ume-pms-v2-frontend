@@ -17,7 +17,10 @@ const TYPE_SCREEN: Record<string, string> = {
 };
 
 export type Severity = 'critical' | 'warning' | 'info';
-export type Category = 'financial' | 'tasks' | 'fleet';
+export type Category = 'financial' | 'tasks' | 'fleet' | 'security';
+
+/** بادئةُ معرّف الإشعار المحفوظ — بها يُعرف أنّ حالة القراءة على الخادم لا في المتصفّح. */
+export const SERVER_PREFIX = 'srv:';
 
 export interface Notif {
   id: string;                 // ثابت عبر التحميلات: `${type}:${recordId}`
@@ -193,6 +196,9 @@ export function describeNotif(n: Notif, locale: 'ar' | 'en'): { title: string; d
     case 'vessel_outstanding':
       return { title: ar ? `مركب ${d.name} عليه مستحقات موردين` : `Vessel ${d.name} has supplier outstanding`,
         detail: `${d.ccyText}${d.count ? (ar ? ` · ${d.count} فاتورة` : ` · ${d.count} invoices`) : ''}` };
+    case 'security_event':
+      // العنوان والنصّ محفوظان على الخادم — يُعرضان كما هما
+      return { title: d.title || (ar ? 'تنبيه أمني' : 'Security alert'), detail: d.body || '' };
     default:
       return { title: n.type, detail: '' };
   }
@@ -203,7 +209,26 @@ export const NOTIF_ICON: Record<string, string> = {
   task_overdue: 'check', task_due_today: 'check',
   payment_mismatch: 'card', payment_large: 'card',
   supplier_outstanding: 'factory', vessel_outstanding: 'ship',
+  security_event: 'bell',
 };
+
+/**
+ * إشعارٌ محفوظٌ على الخادم → شكلُ `Notif` نفسه.
+ *
+ * فيُعرض في الجرس ومركز الإشعارات بلا مسارٍ ثانٍ ولا مكوّنٍ جديد. وعنوانه
+ * ونصّه يأتيان من الخادم كما كُتبا لحظةَ الحادثة — لا يُعاد بناؤهما هنا.
+ */
+export function serverNotifToNotif(row: any): Notif {
+  return {
+    id: `${SERVER_PREFIX}${row.id}`,
+    type: 'security_event',
+    category: 'security',
+    severity: (row.severity === 'warning' || row.severity === 'info') ? row.severity : 'critical',
+    route: '/dashboard/notifications',
+    sortDays: -9999, // الأحدث أمناً يتصدّر دائماً
+    data: { title: row.title, body: row.body, createdAt: row.created_at, ...(row.data || {}) },
+  };
+}
 
 // ── حالة محلية (قراءة/إخفاء) — متصفّح فقط، غير مُزامنة ──
 const DISMISS_KEY = 'ume_notif_dismissed';
@@ -229,6 +254,8 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
   const [invoices, setInvoices] = useState<any[]>([]);
   const [tasks, setTasks] = useState<any[]>([]);
   const [payments, setPayments] = useState<any[]>([]);
+  // إشعاراتٌ محفوظةٌ على الخادم (أمنيّة) — تصل صاحبها ولو كان خارج المنظومة وقت الحادثة
+  const [server, setServer] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
@@ -245,11 +272,13 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
       wantInv ? api.get('/api/invoices').then((r) => r.data).catch(() => null) : Promise.resolve([]),
       wantTasks ? api.get('/api/tasks').then((r) => r.data).catch(() => null) : Promise.resolve([]),
       wantPay ? api.get('/api/payments').then((r) => r.data).catch(() => null) : Promise.resolve([]),
-    ]).then(([inv, tsk, pay]) => {
+      api.get('/api/notifications').then((r) => r.data).catch(() => null),
+    ]).then(([inv, tsk, pay, srv]) => {
       if (inv == null && tsk == null && pay == null) { setError(true); }
       setInvoices(Array.isArray(inv) ? inv : []);
       setTasks(Array.isArray(tsk) ? tsk : []);
       setPayments(Array.isArray(pay) ? pay : []);
+      setServer(Array.isArray(srv) ? srv : []);
     }).finally(() => setLoading(false));
   }, []);
 
@@ -258,18 +287,43 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
   const all = useMemo(() => {
     const u = getUser();
     // تصفية بالصلاحية: أي تنبيه لوحدة لا يصلها المستخدم يُستبعد (مثل مستحقات مورد بلا صلاحية موردين)
-    return computeNotifications(invoices, tasks, payments).filter((n) => canHref(u, TYPE_SCREEN[n.type] || '/dashboard'));
-  }, [invoices, tasks, payments]);
+    const derived = computeNotifications(invoices, tasks, payments)
+      .filter((n) => canHref(u, TYPE_SCREEN[n.type] || '/dashboard'));
+    // المحفوظة تُوجَّه لصاحبها في الخادم أصلاً، فلا تُصفّى هنا — وتتصدّر
+    return [...server.map(serverNotifToNotif), ...derived];
+  }, [invoices, tasks, payments, server]);
   const active = useMemo(() => all.filter((n) => !dismissed.has(n.id)), [all, dismissed]);
-  const unreadCount = useMemo(() => active.filter((n) => !read.has(n.id)).length, [active, read]);
+  /*
+   * غير المقروء: المحفوظة تُسأل عن `is_read` من الخادم، والمشتقّة من المتصفّح.
+   * فحالةُ قراءة التنبيه الأمنيّ تتبع الحساب لا الجهاز.
+   */
+  const serverUnread = useMemo(
+    () => new Set(server.filter((r) => !r.is_read).map((r) => `${SERVER_PREFIX}${r.id}`)),
+    [server]);
+  const unreadCount = useMemo(
+    () => active.filter((n) => (n.id.startsWith(SERVER_PREFIX) ? serverUnread.has(n.id) : !read.has(n.id))).length,
+    [active, read, serverUnread]);
 
-  const markRead = useCallback((id: string) => setRead((s) => { const n = new Set(s); n.add(id); writeSet(READ_KEY, n); return n; }), []);
-  const markAllRead = useCallback(() => setRead(() => { const n = new Set(all.map((x) => x.id)); writeSet(READ_KEY, n); return n; }), [all]);
+  const markRead = useCallback((id: string) => {
+    if (id.startsWith(SERVER_PREFIX)) {
+      const rid = id.slice(SERVER_PREFIX.length);
+      setServer((rows) => rows.map((r) => (r.id === rid ? { ...r, is_read: true } : r)));
+      api.put(`/api/notifications/${rid}/read`).catch(() => { /* يُعاد عند التحديث التالي */ });
+      return;
+    }
+    setRead((s) => { const n = new Set(s); n.add(id); writeSet(READ_KEY, n); return n; });
+  }, []);
+  const markAllRead = useCallback(() => {
+    setServer((rows) => rows.map((r) => ({ ...r, is_read: true })));
+    api.put('/api/notifications/read-all').catch(() => { /* يُعاد عند التحديث التالي */ });
+    setRead(() => { const n = new Set(all.map((x) => x.id)); writeSet(READ_KEY, n); return n; });
+  }, [all]);
   const dismiss = useCallback((id: string) => setDismissed((s) => { const n = new Set(s); n.add(id); writeSet(DISMISS_KEY, n); return n; }), []);
 
   const value: Ctx = {
     loading, error, all, active, unreadCount,
-    isRead: (id) => read.has(id), isDismissed: (id) => dismissed.has(id),
+    isRead: (id) => (id.startsWith(SERVER_PREFIX) ? !serverUnread.has(id) : read.has(id)),
+    isDismissed: (id) => dismissed.has(id),
     markRead, markAllRead, dismiss, refresh: fetchAll,
   };
   return <NotifCtx.Provider value={value}>{children}</NotifCtx.Provider>;
@@ -291,4 +345,5 @@ export const SEVERITY_STYLE: Record<Severity, string> = {
 };
 export const CATEGORY_LABEL: Record<Category, { ar: string; en: string }> = {
   financial: { ar: 'مالية', en: 'Financial' }, tasks: { ar: 'المهام', en: 'Tasks' }, fleet: { ar: 'الأسطول', en: 'Fleet' },
+  security: { ar: 'أمنية', en: 'Security' },
 };
