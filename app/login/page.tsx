@@ -19,8 +19,20 @@ export default function LoginPage() {
       localStorage.setItem('token', res.data.access_token);
       localStorage.setItem('user', JSON.stringify(res.data.user));
       router.push('/dashboard');
-    } catch {
-      setError('البريد الإلكتروني أو كلمة المرور غير صحيحة');
+    } catch (e: any) {
+      /*
+       * ثلاثة أسباب كانت تظهر برسالةٍ واحدة.
+       *
+       * كان `catch` يبتلع الحالة كلّها، فالحدّ الأقصى للمحاولات (429) وانقطاع
+       * الخادم يقولان «كلمة المرور غير صحيحة» — فيُعاد المحاولة بكلمةٍ صحيحة
+       * فتُرفض، ولا شيء يدلّ على السبب. والبيانات الخاطئة تبقى غامضةً عمداً
+       * (لا تقول أَوُجد البريد أم لا)، أمّا الاثنان الآخران فيُقالان صراحةً.
+       */
+      const st = e?.response?.status;
+      if (st === 429) setError('محاولات كثيرة متتالية — انتظر دقيقة ثمّ أعد المحاولة. الكلمة الصحيحة تُرفض أيضاً خلال هذه المدّة.');
+      else if (!e?.response) setError('تعذّر الوصول إلى الخادم — تحقّق من الاتصال ثمّ أعد المحاولة.');
+      else if (st >= 500) setError('عطلٌ في الخادم — أعد المحاولة بعد قليل.');
+      else setError('البريد الإلكتروني أو كلمة المرور غير صحيحة');
     } finally {
       setLoading(false);
     }

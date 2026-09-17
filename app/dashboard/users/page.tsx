@@ -232,8 +232,18 @@ export default function UsersPage() {
                 <div className="border border-blue-200 bg-blue-50 rounded-lg p-3 mb-3">
                   <p className="text-xs text-gray-600 mb-2">
                     كلمة مرور جديدة لـ <span className="font-medium">{u.full_name}</span> — {MIN_PW} أحرف فأكثر.
-                    لن تظهر الكلمة القديمة ولا تُطلب.
+                    لن تظهر الكلمة القديمة ولا تُطلب. والمسافات في الطرفين تُقصّ.
                   </p>
+                  {/*
+                    * الحساب الموقوف لا يدخل مهما صحّت كلمته — والدخول يردّ الرسالة العامّة
+                    * نفسها، فيبدو أنّ الكلمة الجديدة «لا تعمل». يُقال هنا صراحةً.
+                    */}
+                  {!u.is_active && (
+                    <p className="text-xs text-amber-800 bg-amber-100 border border-amber-300 rounded-lg px-3 py-2 mb-2">
+                      ⚠️ هذا الحساب <b>موقوف</b> — لن يستطيع الدخول بأيّ كلمة مرور حتّى تُفعّله.
+                      فعّله أوّلاً من «تفعيل الحساب» ثمّ غيّر الكلمة.
+                    </p>
+                  )}
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                     <input type={pwShow ? 'text' : 'password'} autoComplete="new-password" placeholder="كلمة المرور الجديدة"
                       value={pw.a} onChange={(e) => setPw({ ...pw, a: e.target.value })} dir="ltr"
