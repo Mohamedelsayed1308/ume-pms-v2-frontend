@@ -16,6 +16,14 @@ interface AppUser {
 
 const allHrefs = PERMISSION_SCREENS.map((s) => s.href);
 
+/*
+ * الحدّ الأدنى لكلمة المرور — نسخةٌ من الحدّ المفروض في الخدمة.
+ *
+ * الخادم هو الذي يمنع، وهذا هنا ليرى المستخدم السبب قبل أن يُرسل. فإن اختلفا
+ * يوماً فالخادم هو الحَكَم — ورسالته تُعرض كما هي.
+ */
+const MIN_PW = 8;
+
 export default function UsersPage() {
   const router = useRouter();
   const [users, setUsers] = useState<AppUser[]>([]);
@@ -29,6 +37,18 @@ export default function UsersPage() {
   const [showAdd, setShowAdd] = useState(false);
   const [newUser, setNewUser] = useState({ full_name: '', email: '', password: '', role: 'user' });
   const [adding, setAdding] = useState(false);
+
+  /*
+   * تغيير كلمة المرور — لوحةٌ واحدةٌ مفتوحةٌ في كلّ وقت.
+   *
+   * حقلان لا حقلٌ واحد: الأدمن يكتب كلمةً لغيره فلا يراها صاحبها ليصحّحها،
+   * فالتأكيد هو ما يمنع خطأ الطباعة من إقفال حسابٍ على صاحبه. والحقلان
+   * `type="password"` بزرّ إظهارٍ صريح، ويُمسحان بعد الحفظ وعند الإغلاق.
+   */
+  const [pwFor, setPwFor] = useState('');
+  const [pw, setPw] = useState({ a: '', b: '' });
+  const [pwShow, setPwShow] = useState(false);
+  const [pwSaving, setPwSaving] = useState(false);
   /*
    * الرسالة كانت مربوطة بفراغ القائمة لا بحالة الجلب، فتقول «جاري التحميل»
    * أبداً متى كانت القائمة فارغة حقاً. الحالة هنا تفصل الانتظار عن النتيجة.
@@ -88,9 +108,31 @@ export default function UsersPage() {
     } catch (e: any) { setError(e?.response?.data?.message || 'فشل التعديل'); }
   }
 
+  function openPw(uid: string) {
+    setPwFor((cur) => (cur === uid ? '' : uid));
+    setPw({ a: '', b: '' }); setPwShow(false); setError('');
+  }
+
+  async function savePw(u: AppUser) {
+    if (pw.a.trim().length < MIN_PW) { setError(`كلمة المرور لا تقلّ عن ${MIN_PW} أحرف`); return; }
+    if (pw.a !== pw.b) { setError('الكلمتان غير متطابقتين'); return; }
+    setPwSaving(true); setError('');
+    try {
+      await api.put(`/api/auth/users/${u.id}/password`, { password: pw.a });
+      setPwFor(''); setPw({ a: '', b: '' }); setPwShow(false);
+      setMsg(`تم تغيير كلمة مرور ${u.full_name} ✅`);
+      setTimeout(() => setMsg(''), 3000);
+    } catch (e: any) {
+      setError(e?.response?.data?.message || 'فشل تغيير كلمة المرور');
+    } finally { setPwSaving(false); }
+  }
+
   async function addUser() {
     if (!newUser.full_name.trim() || !newUser.email.trim() || !newUser.password.trim()) {
       setError('الاسم والإيميل وكلمة المرور مطلوبين'); return;
+    }
+    if (newUser.password.trim().length < MIN_PW) {
+      setError(`كلمة المرور لا تقلّ عن ${MIN_PW} أحرف`); return;
     }
     setAdding(true); setError('');
     try {
@@ -139,7 +181,8 @@ export default function UsersPage() {
               className="border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
             <input placeholder="الإيميل" type="email" value={newUser.email} onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
               className="border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" dir="ltr" />
-            <input placeholder="كلمة المرور" type="text" value={newUser.password} onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
+            <input placeholder={`كلمة المرور (${MIN_PW} أحرف فأكثر)`} type="password" autoComplete="new-password"
+              value={newUser.password} onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
               className="border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" dir="ltr" />
             <select value={newUser.role} onChange={(e) => setNewUser({ ...newUser, role: e.target.value })}
               className="border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
@@ -175,10 +218,47 @@ export default function UsersPage() {
                     {u.is_active ? 'نشط' : 'موقوف'}
                   </span>
                 </div>
-                <button onClick={() => toggleActive(u)} className="text-xs text-gray-500 hover:text-gray-800 underline">
-                  {u.is_active ? 'إيقاف الحساب' : 'تفعيل الحساب'}
-                </button>
+                <div className="flex items-center gap-4">
+                  <button onClick={() => openPw(u.id)} className="text-xs text-blue-600 hover:text-blue-800 underline">
+                    {pwFor === u.id ? 'إلغاء' : '🔑 تغيير كلمة المرور'}
+                  </button>
+                  <button onClick={() => toggleActive(u)} className="text-xs text-gray-500 hover:text-gray-800 underline">
+                    {u.is_active ? 'إيقاف الحساب' : 'تفعيل الحساب'}
+                  </button>
+                </div>
               </div>
+
+              {pwFor === u.id && (
+                <div className="border border-blue-200 bg-blue-50 rounded-lg p-3 mb-3">
+                  <p className="text-xs text-gray-600 mb-2">
+                    كلمة مرور جديدة لـ <span className="font-medium">{u.full_name}</span> — {MIN_PW} أحرف فأكثر.
+                    لن تظهر الكلمة القديمة ولا تُطلب.
+                  </p>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                    <input type={pwShow ? 'text' : 'password'} autoComplete="new-password" placeholder="كلمة المرور الجديدة"
+                      value={pw.a} onChange={(e) => setPw({ ...pw, a: e.target.value })} dir="ltr"
+                      className="border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    <input type={pwShow ? 'text' : 'password'} autoComplete="new-password" placeholder="تأكيد كلمة المرور"
+                      value={pw.b} onChange={(e) => setPw({ ...pw, b: e.target.value })} dir="ltr"
+                      className={`border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 ${pw.b && pw.a !== pw.b ? 'border-red-400' : ''}`} />
+                    <div className="flex items-center gap-3">
+                      <button onClick={() => savePw(u)} disabled={pwSaving}
+                        className="bg-blue-600 text-white text-sm px-4 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50">
+                        {pwSaving ? 'جاري الحفظ...' : 'حفظ كلمة المرور'}
+                      </button>
+                      <label className="text-xs text-gray-600 flex items-center gap-1 cursor-pointer">
+                        <input type="checkbox" checked={pwShow} onChange={(e) => setPwShow(e.target.checked)} />
+                        إظهار
+                      </label>
+                    </div>
+                  </div>
+                  {pw.b && pw.a !== pw.b && <p className="text-xs text-red-500 mt-2">الكلمتان غير متطابقتين.</p>}
+                  <p className="text-xs text-gray-500 mt-2">
+                    ملاحظة: الجلسات المفتوحة لهذا المستخدم تبقى عاملةً حتّى تنتهي مدّتها.
+                    لقطعها فوراً أوقِف الحساب ثمّ فعّله.
+                  </p>
+                </div>
+              )}
 
               {isAdmin ? (
                 <p className="text-sm text-gray-400 bg-gray-50 rounded-lg px-3 py-2">👑 الأدمن يدخل كل الشاشات — لا حاجة لتحديد صلاحيات.</p>
