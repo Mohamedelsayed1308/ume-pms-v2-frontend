@@ -53,6 +53,22 @@ export function allocateVoyageNets(
 
 // ── per-vessel configuration ──
 export interface ExpItem { key: string; label: string; col: number }
+/**
+ * بندُ إيرادٍ يدويٍّ شهريّ.
+ *
+ * `key` مفتاحُ تخزينه في `manual` — لا يُغيَّر بعد أوّل حفظٍ وإلا ضاعت القيم
+ * المحفوظة. و`note` مصدرُ الرقم كما يُعرض في الشاشة.
+ */
+export interface ManualRevenue { key: string; label: string; note?: string }
+
+/**
+ * القيم اليدويّة لشهرٍ واحد.
+ *
+ * الثلاثة الأولى ثابتةٌ لكلّ المراكب، وما بعدها مفاتيح `manualRevenues` — ولذلك
+ * فهرسٌ مفتوح. والتخزين `jsonb` في القاعدة فلا يحتاج مفتاحٌ جديدٌ هجرةً.
+ */
+type ManualMonth = { opening: string; closing: string; salaries: string; [k: string]: string | undefined };
+
 export interface VesselConfig {
   vessel: string;      // save key + display
   sheetKey: string;    // UPPERCASE token to locate the data sheet
@@ -88,10 +104,13 @@ export interface VesselConfig {
   depreciationMonthly?: number;
   depreciationFrom?: string;
   /*
-   * إيرادٌ يدويٌّ شهريّ خارج دفتر الرحلات — مبيعات الكافتيريا التي يحصّلها الوكيل
-   * ويصدر بها إشعار دائن. لا تدخل عمود BALANCE، فتُضاف إلى الإيراد والصافي معاً.
+   * إيراداتٌ يدويّةٌ شهريّة خارج دفتر الرحلات.
+   *
+   * يحصّلها الوكيل نيابةً عن المالك ويصدر بها إشعاراً دائناً، فلا تدخل عمود
+   * BALANCE ولا تظهر في الرحلات — وتُضاف إلى الإيراد والصافي معاً.
+   * القيمة تُدخَل شهراً بشهر وتُحفظ في `manual[month][key]`.
    */
-  cafeteriaRevenue?: boolean;
+  manualRevenues?: ManualRevenue[];
   col: {
     type: number; ref: number; date: number; collection: number;
     truckC: number; truck: number; vehC: number; veh: number;
@@ -136,6 +155,16 @@ export const POSEIDON: VesselConfig = {
    * **بصمت** — فالجلب يتجاهل الخطأ عمداً كي لا يُعطَّل الكارت.
    */
   linkInvoices: true, dbVesselName: 'Poseidon Express',
+  /*
+   * إيرادان يحصّلهما توكيل بدوي بإشعارٍ دائن — بأمر المالك ١٧ سبتمبر ٢٠٢٦.
+   *
+   * الأرقام من دفتر الشركة صافيةً من ضريبة القيمة المضافة (١٥٪)، لا من نصّ
+   * الإشعار فهو يذكر الإجماليّ بالضريبة. وتُقيَّد بشهر إصدار الإشعار.
+   */
+  manualRevenues: [
+    { key: 'dischargeIncome', label: 'إيراد أذون التفريغ والشحن', note: 'إشعار دائن' },
+    { key: 'cafeteria', label: 'مبيعات الكافتيريا', note: 'إشعار دائن' },
+  ],
   /*
    * ── مصاريف الشركة من QuickBooks — بقرار المالك ٨ سبتمبر ٢٠٢٦ ──
    * الصيانة والتموينات والإدارة الفنّيّة والمرتّبات: من دفتر الشركة.
@@ -233,7 +262,8 @@ export const ALCUDIA: VesselConfig = {
   vessel: 'Alcudia', sheetKey: 'ALCUDIA', agentExport: 'وكيل بدوي', agentImport: 'وكيل البسّام',
   linkInvoices: true, dbVesselName: 'Alcudia Express', bassamAccount: true, hideAgentLiquidity: true,
   depreciationMonthly: 110000, // إهلاك المركب — بقرار المالك ٩ سبتمبر ٢٠٢٦
-  cafeteriaRevenue: true,   // إشعارات بدوي الدائنة — تُقيَّد بشهر إصدار الإشعار
+  // إشعارات بدوي الدائنة — تُقيَّد بشهر إصدار الإشعار لا بالشهر المكتوب في نصّها
+  manualRevenues: [{ key: 'cafeteria', label: 'مبيعات الكافتيريا', note: 'إشعار دائن' }],
   /*
    * سطورٌ يدويّة للكارت: رسوم التصنيف السنويّة ووثائق التأمين تُقسَّط من المستند
    * لا من الفاتورة — القاعدة نفسها المعتمدة في بوسيدون. لا يوجد ملفّ QuickBooks
@@ -412,7 +442,7 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
   // آخر شهرٍ في الفترة — فارغٌ = شهرٌ واحد
   const [monthTo, setMonthTo] = useState('');
   const [error, setError] = useState('');
-  const [manual, setManual] = useState<Record<string, { opening: string; closing: string; salaries: string; cafeteria?: string }>>({});
+  const [manual, setManual] = useState<Record<string, ManualMonth>>({});
   const [saving, setSaving] = useState(false);
   const [savedMsg, setSavedMsg] = useState('');
   /*
@@ -483,10 +513,10 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
   const cogsSalaryOf = (m: string) => cogs.filter((x) => x.charged && x.category === 'salary' && x.entry_date.slice(0, 7) === m).reduce((s, x) => s + Number(x.amount_usd), 0);
 
   const cur = manual[month] || { opening: '', closing: '', salaries: '' };
-  const setCur = (patch: Partial<{ opening: string; closing: string; salaries: string; cafeteria: string }>) =>
+  const setCur = (patch: Partial<ManualMonth>) =>
     setManual((m) => ({ ...m, [month]: { ...(m[month] || { opening: '', closing: '', salaries: '' }), ...patch } }));
-  // مبيعات الكافتيريا لشهر — يدويّةٌ دائماً، ولا مصدر آخر لها
-  const cafeteriaOf = (m: string) => manual[m]?.cafeteria ?? '';
+  // إيرادٌ يدويٌّ لشهر — يُقرأ بمفتاحه، ولا مصدر آخر له
+  const manualRevOf = (key: string, m: string) => manual[m]?.[key] ?? '';
 
   // المرتبات الفعّالة لشهر: اليدوي إن وُجد، وإلا القيمة الافتراضية من إعدادات المركب
   const salaryOf = (m: string) => {
@@ -785,22 +815,26 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
     const netBalance = sel.reduce((s, v) => s + v.net, 0);
     const O = sel.reduce((s, v) => s + v.O, 0);
     const P = sel.reduce((s, v) => s + v.P, 0);
-    const cafeteria = cfg.cafeteriaRevenue
-      ? rangeMonths.reduce((s, m) => s + (parseFloat(cafeteriaOf(m)) || 0), 0) : 0;
-    const revenue = revE + revI + cafeteria;
+    // الإيرادات اليدويّة: كلّ بندٍ مجموعُ شهور الفترة، ومجموعها يُضاف للإيراد والصافي
+    const manualRev = (cfg.manualRevenues || []).map((r) => ({
+      key: r.key, label: r.label,
+      amount: rangeMonths.reduce((s, m) => s + (parseFloat(manual[m]?.[r.key] ?? '') || 0), 0),
+    }));
+    const manualRevTotal = manualRev.reduce((s, r) => s + r.amount, 0);
+    const revenue = revE + revI + manualRevTotal;
     // الفترة: الافتتاحيّ من أوّل شهرٍ، والختاميّ من آخره، والمرتبات مجموع شهورها
     const opening = parseFloat(openingOf(month)) || 0;
     const closing = parseFloat(manual[toMonth]?.closing ?? '') || 0;
     const bunkerCost = opening + supplies - closing;
     const salariesN = rangeMonths.reduce((s, m) => s + (parseFloat(salaryOf(m)) || 0), 0);
     // البنود المستبعَدة خُصمت داخل BALANCE، فتُعاد إلى الصافي، ويأتي بديلها من QuickBooks عبر المشتريات
-    const net = netBalance + ledgerAddBack - opening + closing - salariesN - bunkerInvoiceUSD + cafeteria;
+    const net = netBalance + ledgerAddBack - opening + closing - salariesN - bunkerInvoiceUSD + manualRevTotal;
     return {
       E, I, revE, revI, expE, expI, suppliesExcel, bunkerInvoiceUSD, supplies, opening, closing, bunkerCost, salaries: salariesN,
-      net, O, P, revenue, cafeteria, count: sel.length, expenses: revenue - net, ledgerAddBack,
+      net, O, P, revenue, manualRev, manualRevTotal, count: sel.length, expenses: revenue - net, ledgerAddBack,
       liqBassam: O, liqIttihad: P - O,
     };
-  }, [sel, manual, month, toMonth, rangeMonths, bunkerInvoiceUSD, cogs, cfg.ledgerExcluded, cfg.cafeteriaRevenue]);
+  }, [sel, manual, month, toMonth, rangeMonths, bunkerInvoiceUSD, cogs, cfg.ledgerExcluded, cfg.manualRevenues]);
 
   // بند المشتريات (فواتير المركب) — قسط ثابت بالدولار محوّل بسعر صرف شهر الشراء
   const purchases = useMemo(() => {
@@ -1310,9 +1344,9 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
               {isRange
                 ? <div><p className="text-xs text-gray-500 mb-1">مرتبات الفترة (مجموع {rangeMonths.length} شهر)</p><p className="border rounded-lg px-3 py-2 bg-gray-50 font-medium">{fmt(data.salaries)}</p></div>
                 : <div><label className="block text-xs text-gray-500 mb-1">مرتبات الشهر {(manual[month]?.salaries === undefined || manual[month]?.salaries === '') ? (cfg.salariesByMonth?.[month] != null ? '(محمّلة تلقائياً)' : (cfg.cogs && cogsSalaryOf(month) > 0 ? '(من QuickBooks)' : '(يدوي)')) : '(يدوي)'}</label><input value={salaryOf(month)} onChange={(e) => setCur({ salaries: e.target.value })} inputMode="decimal" placeholder="0" className="border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" /></div>}
-              {cfg.cafeteriaRevenue && (isRange
-                ? <div><p className="text-xs text-gray-500 mb-1">مبيعات الكافتيريا (مجموع الفترة)</p><p className="border rounded-lg px-3 py-2 bg-gray-50 font-medium text-emerald-700">{fmt(data.cafeteria)}</p></div>
-                : <div><label className="block text-xs text-gray-500 mb-1">مبيعات الكافتيريا (إشعار دائن)</label><input value={cafeteriaOf(month)} onChange={(e) => setCur({ cafeteria: e.target.value })} inputMode="decimal" placeholder="0" className="border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500" /></div>)}
+              {(cfg.manualRevenues || []).map((r) => (isRange
+                ? <div key={r.key}><p className="text-xs text-gray-500 mb-1">{r.label} (مجموع الفترة)</p><p className="border rounded-lg px-3 py-2 bg-gray-50 font-medium text-emerald-700">{fmt(data.manualRev.find((x) => x.key === r.key)?.amount || 0)}</p></div>
+                : <div key={r.key}><label className="block text-xs text-gray-500 mb-1">{r.label}{r.note ? ` (${r.note})` : ''}</label><input value={manualRevOf(r.key, month)} onChange={(e) => setCur({ [r.key]: e.target.value })} inputMode="decimal" placeholder="0" className="border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500" /></div>))}
               <div className="text-right"><p className="text-xs text-gray-500">المبلغ المطروح من الصافي</p><p className="font-bold text-red-600 text-lg">{fmt(data.salaries)}</p></div>
             </div>
 
@@ -1492,7 +1526,9 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
                   return (<tr key={r.key}><td>{r.label}</td><td>{eC || '—'}</td><td>{fmt(eA)}</td><td>{iC || '—'}</td><td>{fmt(iA)}</td><td>{fmt(eA + iA)}</td></tr>);
                 })}
                 <tr><td>إذن الشحن</td><td>—</td><td>{fmt(data.E.discharge)}</td><td>—</td><td>{fmt(data.I.discharge)}</td><td>{fmt(data.E.discharge + data.I.discharge)}</td></tr>
-                {data.cafeteria > 0 && <tr><td>مبيعات الكافتيريا</td><td>—</td><td>—</td><td>—</td><td>—</td><td>{fmt(data.cafeteria)}</td></tr>}
+                {data.manualRev.filter((r) => r.amount > 0).map((r) => (
+                  <tr key={r.key}><td>{r.label}</td><td>—</td><td>—</td><td>—</td><td>—</td><td>{fmt(r.amount)}</td></tr>
+                ))}
                 <tr className="tot"><td>إجمالي الإيراد</td><td></td><td>{fmt(data.revE)}</td><td></td><td>{fmt(data.revI)}</td><td>{fmt(data.revenue)}</td></tr>
               </tbody>
             </table>

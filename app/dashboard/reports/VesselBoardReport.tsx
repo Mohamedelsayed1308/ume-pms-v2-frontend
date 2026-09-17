@@ -188,7 +188,7 @@ export default function VesselBoardReport({
       i: Number((data.I as any)[r.key]) || 0,
     }));
     out.push({ name: 'إذن الشحن', e: data.E.discharge || 0, i: data.I.discharge || 0 });
-    if ((data.cafeteria || 0) > 0) out.push({ name: 'Cafeteria Sales', e: data.cafeteria || 0, i: 0 });
+    for (const r of (data.manualRev || [])) if (r.amount > 0) out.push({ name: r.label, e: r.amount, i: 0 });
     return out.map((x) => ({ ...x, total: x.e + x.i })).sort((a, b) => b.total - a.total);
   }, [data, revRows]);
   const revTop = segRev[0];

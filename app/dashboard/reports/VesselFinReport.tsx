@@ -35,7 +35,8 @@ export interface RevRow { key: string; cKey: string; label: string }
 
 export interface FinData {
   E: any; I: any;
-  revE: number; revI: number; revenue: number; cafeteria?: number;
+  revE: number; revI: number; revenue: number;
+  manualRev?: { key: string; label: string; amount: number }[];
   expE: number; expI: number;
   opening: number; supplies: number; closing: number; bunkerCost: number;
   salaries: number; net: number;
@@ -410,12 +411,12 @@ export default function VesselFinReport({
                   <td>{fmt(data.E.discharge + data.I.discharge)}</td>
                   <td>{pct(data.E.discharge + data.I.discharge, R)}</td>
                 </tr>
-                {(data.cafeteria || 0) > 0 && (
-                  <tr>
-                    <td>{T('مبيعات الكافتيريا', 'Cafeteria Sales')}</td><td>—</td><td>—</td><td>—</td><td>—</td>
-                    <td>{fmt(data.cafeteria || 0)}</td><td>{pct(data.cafeteria || 0, R)}</td>
+                {(data.manualRev || []).filter((r) => r.amount > 0).map((r) => (
+                  <tr key={r.key}>
+                    <td>{r.label}</td><td>—</td><td>—</td><td>—</td><td>—</td>
+                    <td>{fmt(r.amount)}</td><td>{pct(r.amount, R)}</td>
                   </tr>
-                )}
+                ))}
                 <tr className="tot">
                   <td>{T('إجمالي الإيراد', 'Total Revenue')}</td><td></td><td>{fmt(data.revE)}</td>
                   <td></td><td>{fmt(data.revI)}</td><td>{fmt(data.revenue)}</td><td>100.0%</td>
