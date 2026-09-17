@@ -958,8 +958,9 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
    * يُحسب هنا مرّةً ويُعرض على الشاشة وفي الورق معاً، فلا يفترق رسمٌ عن رسم.
    */
   const costSegs = useMemo(() => (execData ? costSegments(execData) : []), [execData]);
+  // المجموع الصافي — يشمل المجموعة السالبة كي يطابق قائمة الدخل في التقرير المالي
   const costSegsTotal = useMemo(
-    () => costSegs.reduce((s, x) => s + Math.max(0, x.value), 0),
+    () => costSegs.reduce((s, x) => s + x.value, 0),
     [costSegs]);
 
   const PRINT_CSS = `@media print {
