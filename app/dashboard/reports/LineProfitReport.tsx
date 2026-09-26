@@ -152,18 +152,6 @@ function vesselCostOf(
   return { hire, owned, stockAdj, stockSet: has(mm.bunkerOpen) && has(mm.bunkerClose) };
 }
 
-/** انحدارٌ خطّيٌّ بسيط: المساهمة = أ + ب × الشاحنات. */
-function regress(xs: number[], ys: number[]) {
-  const n = xs.length;
-  if (n < 5) return null;
-  const mx = xs.reduce((a, b) => a + b, 0) / n, my = ys.reduce((a, b) => a + b, 0) / n;
-  let sxy = 0, sxx = 0, syy = 0;
-  for (let i = 0; i < n; i++) { sxy += (xs[i] - mx) * (ys[i] - my); sxx += (xs[i] - mx) ** 2; syy += (ys[i] - my) ** 2; }
-  if (!sxx || !syy) return null;
-  const b = sxy / sxx, a = my - b * mx;
-  return { a, b, r2: (sxy * sxy) / (sxx * syy) };
-}
-
 /** مقاييس المقارنة لمركبٍ في فترة. */
 function peerMetrics(vs: LineVoyage[], man: LineManual, ownership: 'chartered' | 'owned', hireInLedger: boolean, months: string[]) {
   const a = aggregate(vs);
@@ -296,11 +284,28 @@ export default function LineProfitReport({ config }: { config: LineVesselConfig 
     const trucks = agg.cnt.tE + agg.cnt.tI, veh = agg.cnt.vE + agg.cnt.vI, pax = agg.cnt.pE + agg.cnt.pI;
     const xs = inRange.map((v) => v.E.trucks + v.I.trucks);
     const ys = inRange.map((v) => v.income - v.commTotal - (v.expTotal - (v.exp.hire || 0)));
-    const reg = regress(xs, ys);
-    const perVoyVessel = agg.n ? (vesselTotal + tot.stockAdj) / agg.n : 0;
-    const beBefore = reg && reg.b > 0 ? -reg.a / reg.b : null;
-    const beAfter = reg && reg.b > 0 ? (perVoyVessel - reg.a) / reg.b : null;
-    return { trucks, veh, pax, xs, ys, reg, beBefore, beAfter, perVoyVessel };
+    const n = agg.n || 1;
+    /*
+     * نقطة التعادل من البنود نفسها لا من انحدارٍ إحصائيّ.
+     *
+     * جُرّب الانحدار أوّلاً (المساهمة مقابل عدد الشاحنات) فخرجت دقّته صفراً
+     * وقال إنّ الشاحنة تضيف ١٣ دولاراً — والحقيقة نحو ٦٠٠. فالمساهمة تتقلّب
+     * بالركّاب ورسوم الموانئ المقيَّدة دفعاتٍ أكثر ممّا تتقلّب بالشاحنات.
+     *
+     * فتُحسب هكذا، وكلّ حدٍّ فيها رقمٌ من قائمة الدخل:
+     *   هامش الشاحنة = (نولون الشاحنات − عمولتها) ÷ عددها
+     *   بقيّة الإيراد للرحلة = (الإيراد − نولون الشاحنات − بقيّة العمولات) ÷ الرحلات
+     *   مصاريف الرحلة الثابتة = (مصاريف الرحلات + تسوية المخزون) ÷ الرحلات
+     *   التعادل = (المصاريف الثابتة [+ تكلفة السفينة] − بقيّة الإيراد) ÷ هامش الشاحنة
+     */
+    const truckRev = (agg.revE.tr || 0) + (agg.revI.tr || 0);
+    const truckMargin = trucks ? (truckRev - (agg.comm.cTR || 0)) / trucks : 0;
+    const otherPerVoy = (agg.income - truckRev - (agg.commTotal - (agg.comm.cTR || 0))) / n;
+    const fixedPerVoy = (agg.expTotal - agg.ledgerHire + tot.stockAdj) / n;
+    const perVoyVessel = agg.n ? vesselTotal / agg.n : 0;
+    const beBefore = truckMargin > 0 ? (fixedPerVoy - otherPerVoy) / truckMargin : null;
+    const beAfter = truckMargin > 0 && beBefore != null ? beBefore + perVoyVessel / truckMargin : null;
+    return { trucks, veh, pax, xs, ys, truckMargin, otherPerVoy, fixedPerVoy, beBefore, beAfter, perVoyVessel };
   }, [inRange, agg, vesselTotal, tot.stockAdj]);
 
   const lastVoyage = useMemo(() => [...voyages].sort((a, b) => String(b.date).localeCompare(String(a.date)))[0], [voyages]);
@@ -329,9 +334,6 @@ export default function LineProfitReport({ config }: { config: LineVesselConfig 
         {unit.xs.map((x, i) => (
           <circle key={i} cx={sx(x)} cy={sy(unit.ys[i])} r="4" fill={unit.ys[i] >= unit.perVoyVessel ? '#059669' : '#dc2626'} fillOpacity="0.7" />
         ))}
-        {unit.reg && (
-          <line x1={sx(0)} y1={sy(unit.reg.a)} x2={sx(xmax)} y2={sy(unit.reg.a + unit.reg.b * xmax)} stroke="#1e3a5f" strokeWidth="2" />
-        )}
         <text x={W / 2} y={H - 8} fontSize="11" textAnchor="middle" fill="#6b7280">{T('عدد الشاحنات في الرحلة', 'Trucks per voyage')}</text>
         <text x={P} y={sy(ymax) - 6} fontSize="10" fill="#6b7280">{fmt(ymax)}</text>
         <text x={P} y={sy(ymin) + 12} fontSize="10" fill="#6b7280">{fmt(ymin)}</text>
@@ -441,7 +443,7 @@ export default function LineProfitReport({ config }: { config: LineVesselConfig 
             <div className="bg-white rounded-xl shadow p-4"><p className="text-xs text-gray-500">{T('الإيراد', 'Revenue')}</p><p className="text-xl font-bold tabular-nums">{fmt(agg.income)}</p><p className="text-xs text-gray-400">{agg.n} {T('رحلة', 'voyages')}</p></div>
             <div className="bg-white rounded-xl shadow p-4"><p className="text-xs text-gray-500">{T('مساهمة الرحلات', 'Voyage contribution')}</p><p className="text-xl font-bold tabular-nums">{fmt(agg.contrib)}</p><p className="text-xs text-gray-400">{T('قبل تكلفة السفينة', 'Before vessel cost')}</p></div>
             <div className="bg-white rounded-xl shadow p-4"><p className="text-xs text-gray-500">{cfg.ownership === 'chartered' ? T('الإيجار', 'Hire') : T('تكلفة السفينة', 'Vessel cost')}</p><p className="text-xl font-bold tabular-nums">{fmt(vesselTotal)}</p><p className="text-xs text-gray-400">{agg.n ? `${fmt(vesselTotal / agg.n)} ${T('للرحلة', '/ voyage')}` : ''}</p></div>
-            <div className="bg-white rounded-xl shadow p-4"><p className="text-xs text-gray-500">{T('الصافي للرحلة', 'Net / voyage')}</p><p className="text-xl font-bold tabular-nums">{agg.n ? fmt(netProfit / agg.n) : '—'}</p><p className="text-xs text-gray-400">{T('بعد تكلفة السفينة', 'After vessel cost')}</p></div>
+            <div className="bg-white rounded-xl shadow p-4"><p className="text-xs text-gray-500">{T('الصافي للرحلة', 'Net / voyage')}</p><p className="text-xl font-bold tabular-nums">{agg.n ? fmt(netProfit / agg.n) : '—'}</p><p className="text-xs text-gray-400">{hireMissing && hireMissing.length ? T('قبل إيجارٍ ناقص', 'Hire incomplete') : T('بعد تكلفة السفينة', 'After vessel cost')}</p></div>
           </div>
 
           {/* ── قائمة الدخل ── */}
@@ -490,14 +492,16 @@ export default function LineProfitReport({ config }: { config: LineVesselConfig 
               </div>
               <Scatter />
               <div className="text-sm space-y-1">
-                {unit.reg ? (
-                  <>
-                    <p>{T('كلّ شاحنةٍ إضافيّة تضيف للمساهمة نحو', 'Each extra truck adds about')} <b className="tabular-nums">{fmt(unit.reg.b)}</b> {T('دولار', 'USD')}.</p>
-                    <p>{T('نقطة التعادل قبل تكلفة السفينة', 'Break-even before vessel cost')}: <b className="tabular-nums">{unit.beBefore != null ? fmt(Math.max(0, unit.beBefore)) : '—'}</b> {T('شاحنة للرحلة', 'trucks / voyage')}</p>
-                    <p>{T('نقطة التعادل بعد تكلفة السفينة', 'Break-even after vessel cost')}: <b className="tabular-nums">{unit.beAfter != null && unit.perVoyVessel > 0 ? fmt(Math.max(0, unit.beAfter)) : '—'}</b> {T('شاحنة للرحلة', 'trucks / voyage')}</p>
-                    <p className="text-xs text-gray-400">{T(`دقّة العلاقة ${pct(unit.reg.r2)} — الباقي يفسّره الركّاب وأسعار الرحلة. النقاط الحمراء رحلاتٌ لم تغطِّ تكلفة السفينة.`, `Fit ${pct(unit.reg.r2)} — the rest is passengers and pricing. Red points did not cover vessel cost.`)}</p>
-                  </>
-                ) : <p className="text-xs text-gray-400">{T('الرحلات أقلّ من أن تُحسب منها علاقة.', 'Too few voyages to fit a relationship.')}</p>}
+                <p>{T('هامش الشاحنة بعد عمولتها', 'Truck margin after commission')}: <b className="tabular-nums">{fmt(unit.truckMargin)}</b> {T('دولار', 'USD')}</p>
+                <p>{T('بقيّة الإيراد للرحلة بعد عمولاته (ركّابٌ وسياراتٌ وأوامر تسليمٍ وغيرها)', 'Other revenue per voyage after its commissions')}: <b className="tabular-nums">{fmt(unit.otherPerVoy)}</b></p>
+                <p>{T('مصاريف الرحلة', 'Voyage expenses per voyage')}: <b className="tabular-nums">{fmt(unit.fixedPerVoy)}</b></p>
+                <p className="pt-1">{T('نقطة التعادل قبل تكلفة السفينة', 'Break-even before vessel cost')}: {unit.beBefore == null ? '—'
+                  : unit.beBefore <= 0 ? <b className="text-emerald-700">{T('بقيّة الإيراد تغطّي مصاريف الرحلة وحدها — كلّ شاحنةٍ ربحٌ صافٍ', 'Other revenue alone covers voyage expenses — every truck is margin')}</b>
+                  : <b className="tabular-nums">{fmt(unit.beBefore)} {T('شاحنة للرحلة', 'trucks / voyage')}</b>}</p>
+                <p>{T('نقطة التعادل بعد تكلفة السفينة', 'Break-even after vessel cost')}: {unit.beAfter == null || unit.perVoyVessel <= 0
+                  ? <span className="text-amber-600">{cfg.ownership === 'chartered' ? T('تظهر بعد إدخال الإيجار', 'Shown once hire is entered') : T('تظهر بعد إدخال تكاليف السفينة', 'Shown once vessel costs are entered')}</span>
+                  : <b className="tabular-nums">{fmt(Math.max(0, unit.beAfter))} {T('شاحنة للرحلة', 'trucks / voyage')}</b>}</p>
+                <p className="text-xs text-gray-400">{T(`متوسّط الفترة ${fmt(agg.n ? unit.trucks / agg.n : 0)} شاحنة للرحلة. وفي الرسم كلّ نقطةٍ رحلة: الخضراء غطّت تكلفة السفينة والحمراء لم تغطّها.`, `Period average ${fmt(agg.n ? unit.trucks / agg.n : 0)} trucks / voyage. Each dot is a voyage: green covered vessel cost, red did not.`)}</p>
               </div>
             </div>
           </div>
@@ -560,13 +564,13 @@ export default function LineProfitReport({ config }: { config: LineVesselConfig 
                   [T('مصاريف الرحلات', 'Voyage expenses'), (x: any) => -(x.a.expTotal - x.a.ledgerHire), -(agg.expTotal - agg.ledgerHire)],
                   [T('مساهمة الرحلات', 'Contribution'), (x: any) => x.a.contrib, agg.contrib],
                   [T('تسوية المخزون', 'Stock adj.'), (x: any) => -x.stockAdj, -tot.stockAdj],
-                  [cfg.ownership === 'chartered' ? T('الإيجار', 'Hire') : T('تكلفة السفينة', 'Vessel cost'), (x: any) => (cfg.ownership === 'chartered' && x.hire == null ? null : -x.vessel), -vesselTotal],
+                  [cfg.ownership === 'chartered' ? T('الإيجار', 'Hire') : T('تكلفة السفينة', 'Vessel cost'), (x: any) => (cfg.ownership === 'chartered' && x.hire == null ? null : -x.vessel), (hireMissing && hireMissing.length ? null : -vesselTotal)],
                   [T('صافي الربح', 'Net profit'), (x: any) => x.net, netProfit],
-                ] as [string, (x: any) => number | null, number][]).map(([l, f, t], i) => (
+                ] as [string, (x: any) => number | null, number | null][]).map(([l, f, t], i) => (
                   <tr key={l} className={`border-b last:border-0 ${i === 6 || i === 9 ? 'font-bold' : ''}`}>
                     <td className="py-1.5 px-2">{l}</td>
                     {monthly.map((x) => { const v = f(x); return <td key={x.m} className={`py-1.5 px-2 text-left tabular-nums ${v != null && v < 0 ? 'text-red-600' : ''}`}>{v == null ? <span className="text-amber-600">{T('ناقص', 'missing')}</span> : fmt(v)}</td>; })}
-                    <td className={`py-1.5 px-2 text-left tabular-nums ${t < 0 ? 'text-red-600' : ''}`}>{fmt(t)}</td>
+                    <td className={`py-1.5 px-2 text-left tabular-nums ${t != null && t < 0 ? 'text-red-600' : ''}`}>{t == null ? <span className="text-amber-600">{T('ناقص', 'missing')}</span> : fmt(t)}</td>
                   </tr>
                 ))}
               </tbody>
