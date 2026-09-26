@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
+import { DashboardPreferences, QuickCreate, useDashboardPreferences } from '@/components/dashboard/Preferences';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { getUser, logout } from '@/lib/auth';
@@ -12,7 +13,7 @@ import { CommandPaletteProvider, useCommandPalette } from '@/components/CommandP
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
-    <I18nProvider>
+    <DashboardPreferences><I18nProvider>
       <ToastProvider>
         <NotificationsProvider>
           <CommandPaletteProvider>
@@ -20,7 +21,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </CommandPaletteProvider>
         </NotificationsProvider>
       </ToastProvider>
-    </I18nProvider>
+    </I18nProvider></DashboardPreferences>
   );
 }
 
@@ -31,7 +32,7 @@ function Shell({ children }: { children: React.ReactNode }) {
   const palette = useCommandPalette();
   const isMac = typeof navigator !== 'undefined' && /mac/i.test(navigator.platform || navigator.userAgent);
   const [user, setUser] = useState<any>(null);
-  const [collapsed, setCollapsed] = useState(false);
+  const { collapsed, setCollapsed } = useDashboardPreferences();
   const [mobileOpen, setMobileOpen] = useState(false);
 
   useEffect(() => {
@@ -39,7 +40,7 @@ function Shell({ children }: { children: React.ReactNode }) {
     if (!token) { router.push('/login'); return; }
     setUser(getUser());
     setCollapsed(localStorage.getItem('sidebarCollapsed') === '1');
-  }, [router]);
+  }, [router, setCollapsed]);
 
   useEffect(() => { setMobileOpen(false); }, [pathname]);
 
@@ -206,7 +207,7 @@ function Shell({ children }: { children: React.ReactNode }) {
             <button onClick={palette.open} title={t('topbar.search')} aria-label={t('topbar.search')} className="lg:hidden text-gray-500 hover:text-gray-800 hover:bg-gray-100 rounded-lg p-2">
               <Icon name="search" size={19} />
             </button>
-            <button onClick={toggle} title={t('topbar.language')} className="flex items-center gap-1 text-gray-500 hover:text-gray-800 hover:bg-gray-100 rounded-lg px-2 py-1.5 text-xs font-medium">
+            <button disabled={pathname === '/dashboard' && locale === 'ar'} onClick={toggle} title={pathname === '/dashboard' ? 'النسخة الإنجليزية للصفحة الجديدة غير متاحة بعد' : t('topbar.language')} className="flex items-center gap-1 text-gray-500 hover:text-gray-800 hover:bg-gray-100 rounded-lg px-2 py-1.5 text-xs font-medium">
               <Icon name="globe" size={18} />{locale === 'ar' ? 'EN' : 'ع'}
             </button>
             <Link href="/dashboard/ask-ume" title="Ask UME" aria-label="Ask UME"
@@ -214,6 +215,7 @@ function Shell({ children }: { children: React.ReactNode }) {
                 isActive('/dashboard/ask-ume') ? 'bg-brand-50 text-brand-700' : 'text-gray-500 hover:text-gray-800 hover:bg-gray-100')}>
               <Icon name="sparkle" size={18} /><span className="hidden sm:inline">Ask UME</span>
             </Link>
+            {pathname === '/dashboard' && <QuickCreate />}
             <NotificationBell />
             <div className="flex items-center gap-2 pr-2 mr-1 border-r border-[var(--hairline)]">
               <div className="w-8 h-8 rounded-full bg-brand-600 text-white text-xs font-bold flex items-center justify-center uppercase">{initials}</div>
