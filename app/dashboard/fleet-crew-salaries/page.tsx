@@ -48,7 +48,7 @@ function CyclesList({ onOpen }: { onOpen: (id: string | null) => void }) {
             <ImportPanel onDone={(id) => { load(); if (id) onOpen(id); }} />
           </Card>
           {state === 'loading' && <Card className="p-4"><TableSkeleton rows={4} cols={5} /></Card>}
-          {state === 'error' && <Card><ErrorState title={t('loadError')} onRetry={load} /></Card>}
+          {state === 'error' && <Card><ErrorState title={t('loadError')} onRetry={load} retryLabel={t('retry')} /></Card>}
           {state === 'ok' && data && (
             <>
               {data.unassigned_files?.length > 0 && <Unassigned files={data.unassigned_files} onDone={(id) => { load(); onOpen(id); }} />}

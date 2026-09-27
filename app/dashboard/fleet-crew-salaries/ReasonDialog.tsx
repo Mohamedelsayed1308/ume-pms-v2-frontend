@@ -1,5 +1,5 @@
 'use client';
-import { useCallback, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Button, Field, Modal, Textarea } from '@/components/ui';
 import { useCrewT } from '@/lib/crewSalariesI18n';
 
@@ -20,6 +20,14 @@ export function useReason() {
     setText('');
     setState({ ...a, open: true });
   }), []);
+
+  // حبس التركيز يضعه على أوّل زرّ (الإغلاق) — والمقصود حقل السبب
+  const open = !!state?.open;
+  useEffect(() => {
+    if (!open) return;
+    const id = setTimeout(() => document.getElementById('crew-reason')?.focus(), 30);
+    return () => clearTimeout(id);
+  }, [open]);
 
   const close = (v: string | null) => {
     resolver.current?.(v);

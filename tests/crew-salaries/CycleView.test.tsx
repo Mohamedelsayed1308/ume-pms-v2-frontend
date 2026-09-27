@@ -106,6 +106,17 @@ describe('شاشة الدورة', () => {
     expect(screen.queryByText('قُبل البند')).toBeNull();
   });
 
+  it('صفّ البحّار يُفتح من لوحة المفاتيح (Enter)', async () => {
+    renderView();
+    await screen.findByText(title);
+    fireEvent.click(screen.getAllByRole('tab')[1]);
+    const row = screen.getByText('9102').closest('tr')!;
+    expect(row.getAttribute('tabindex')).toBe('0');
+    fireEvent.keyDown(row, { key: 'Enter' });
+    expect(row.getAttribute('aria-expanded')).toBe('true');
+    expect(screen.getAllByRole('button', { name: 'قبول' }).length).toBeGreaterThan(0);
+  });
+
   it('فشل التحميل: رسالةٌ وإعادة محاولة', async () => {
     get.mockRejectedValueOnce({ response: { status: 500 } });
     renderView();
@@ -124,5 +135,13 @@ describe('شاشة الدورة', () => {
     expect(screen.getByText(/Item awaiting review: Lashing · Differences or conflicts not reviewed · No payment account/)).toBeTruthy();
     await rtlAct(async () => { fireEvent.click(screen.getAllByRole('tab')[5]); });
     expect(screen.getByText(/Exporting does not mean paying/)).toBeTruthy();
+  });
+
+  it('بالإنجليزيّة: زرّ إعادة المحاولة مترجَم أيضاً', async () => {
+    localStorage.setItem('locale', 'en');
+    get.mockRejectedValueOnce({ response: { status: 500 } });
+    render(<I18nProvider><ToastProvider><CycleView id="c1" onBack={() => {}} /></ToastProvider></I18nProvider>);
+    expect(await screen.findByRole('button', { name: 'Try again' })).toBeTruthy();
+    expect(screen.getByText('Could not load the data')).toBeTruthy();
   });
 });

@@ -231,7 +231,8 @@ export function ExtractedSection({ v, act, ask }: P) {
               const pend = e.extras.filter((x) => x.review === 'pending').length;
               return (
                 <Fragment key={e.key}>
-                  <TR onClick={() => setOpen(open === e.key ? null : e.key)} className="cursor-pointer" selected={open === e.key} aria-expanded={open === e.key}>
+                  <TR onClick={() => setOpen(open === e.key ? null : e.key)} className="cursor-pointer focus-visible:outline-2 focus-visible:outline-brand-600" selected={open === e.key} aria-expanded={open === e.key}
+                    tabIndex={0} onKeyDown={(ev: React.KeyboardEvent) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); setOpen(open === e.key ? null : e.key); } }}>
                     <TD className="tabular-nums">{e.crew_id}</TD>
                     <TD dir="auto">{e.name}</TD>
                     <TD className="text-xs">{e.rank}</TD>

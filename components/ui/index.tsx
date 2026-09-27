@@ -515,8 +515,8 @@ export function EmptyState({ icon = 'file', title, description, action }:
 }
 
 /** حالة خطأ — تقول ما حدث وتُتيح المحاولة، ولا تترك الشاشة فارغة بلا تفسير. */
-export function ErrorState({ title = 'تعذّر تحميل البيانات', description, onRetry }:
-  { title?: string; description?: string; onRetry?: () => void }) {
+export function ErrorState({ title = 'تعذّر تحميل البيانات', description, onRetry, retryLabel = 'إعادة المحاولة' }:
+  { title?: string; description?: string; onRetry?: () => void; retryLabel?: string }) {
   return (
     <div className="text-center py-12 px-4" role="alert">
       <div className="w-11 h-11 mx-auto rounded-xl bg-red-50 ring-1 ring-inset ring-red-200 text-red-500 flex items-center justify-center mb-3">
@@ -524,7 +524,7 @@ export function ErrorState({ title = 'تعذّر تحميل البيانات', d
       </div>
       <p className="text-gray-800 font-medium">{title}</p>
       {description && <p className="text-sm text-gray-500 mt-1 max-w-sm mx-auto">{description}</p>}
-      {onRetry && <div className="mt-4"><Button variant="outline" icon="refresh" onClick={onRetry}>إعادة المحاولة</Button></div>}
+      {onRetry && <div className="mt-4"><Button variant="outline" icon="refresh" onClick={onRetry}>{retryLabel}</Button></div>}
     </div>
   );
 }

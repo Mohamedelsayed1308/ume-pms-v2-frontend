@@ -56,8 +56,8 @@ export default function CycleView({ id, onBack }: { id: string; onBack: () => vo
 
   if (state === 'loading') return <Card className="p-4"><TableSkeleton rows={6} cols={6} /></Card>;
   if (state === 'forbidden') return <Card><ErrorState title={t('noAccess')} /></Card>;
-  if (state === 'missing') return <Card><ErrorState title={t('cycle.missing')} onRetry={onBack} /></Card>;
-  if (state === 'error' || !v) return <Card><ErrorState title={t('loadError')} onRetry={() => load()} /></Card>;
+  if (state === 'missing') return <Card><ErrorState title={t('cycle.missing')} onRetry={onBack} retryLabel={t('back')} /></Card>;
+  if (state === 'error' || !v) return <Card><ErrorState title={t('loadError')} onRetry={() => load()} retryLabel={t('retry')} /></Card>;
 
   const open = v.unresolved.filter((u) => !u.resolution).length;
   const counts = (key: keyof CurrencyTotals) => currencyCards(v.totals).reduce((n, { t: x }) => n + (Number(x[key]) || 0), 0);
