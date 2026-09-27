@@ -121,7 +121,8 @@ export function addDays(dateKey: string, n: number): string {
  * والتخمين ممنوع: «M.Elsayed» لا تُنسب لـ «Mohamed» إلّا بربطٍ صريح.
  */
 export const TASK_OWNER_ALIASES: Record<string, string[]> = {
-  // '<user id>': ['M.Elsayed'],
+  // محمد السيد (mohamed@ume.com) — بطلب المالك ٢٧ سبتمبر ٢٠٢٦
+  '8712bd6f-1880-4fd7-9a7d-8e9976e88eb1': ['M.Elsayed'],
 };
 const normName = (s: unknown) => String(s ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
 export function ownerLabelsOf(user: { id?: unknown; full_name?: unknown } | null | undefined): Set<string> {

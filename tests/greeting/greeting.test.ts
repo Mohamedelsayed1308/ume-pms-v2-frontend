@@ -84,6 +84,12 @@ describe('السطر الثاني: الأولويّة والنطاق والفش�
     const mo = { ...base, user: { id: 'u2', full_name: 'Mohamed' }, tasks: [task('M.Elsayed', '2026-09-01')] };
     expect(pickWorkLine(mo)).toBeNull();
   });
+  it('الربط الصريح: حساب المالك يرى مهامّ «M.Elsayed»، وغيره لا', () => {
+    const tasks = [task('M.Elsayed', '2026-09-01')];
+    const owner = { ...base, user: { id: '8712bd6f-1880-4fd7-9a7d-8e9976e88eb1', full_name: 'Mohamed' }, tasks };
+    expect(pickWorkLine(owner)).toEqual({ kind: 'tasks_overdue', count: 1, href: '/dashboard/tasks?preset=overdue&owner=M.Elsayed' });
+    expect(pickWorkLine({ ...owner, user: { id: 'someone-else', full_name: 'Mohamed' } })).toBeNull();
+  });
   it('المكتملة والملغاة لا تُعدّ، ولا مهمّة اليوم (ليست متأخّرة)', () => {
     const l = pickWorkLine({ ...base, tasks: [task('Bassel', '2026-09-01', 'done'), task('Bassel', '2026-09-01', 'cancelled'), task('Bassel', '2026-09-27')] });
     expect(l).toBeNull();
