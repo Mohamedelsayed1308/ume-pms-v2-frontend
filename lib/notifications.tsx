@@ -247,7 +247,17 @@ interface Ctx {
   markAllRead: () => void;
   dismiss: (id: string) => void;
   refresh: () => void;
+  /*
+   * البيانات الخامّ نفسها التي تُشتقّ منها التنبيهات — لمن يحتاجها في الواجهة
+   * (الترحيب في الرئيسيّة) دون طلبٍ ثانٍ. وحالة كلّ مصدرٍ منفصلة: «فشل» ليس
+   * «لا شيء»، و«لا صلاحية» ليس «فشل».
+   */
+  tasks: ReadonlyArray<{ status?: string; due_date?: string | null; owner?: string | null }>;
+  invoices: ReadonlyArray<{ status?: string; due_date?: string | null }>;
+  tasksState: SourceState;
+  invoicesState: SourceState;
 }
+export type SourceState = 'ok' | 'failed' | 'forbidden' | 'loading';
 const NotifCtx = createContext<Ctx | null>(null);
 
 export function NotificationsProvider({ children }: { children: React.ReactNode }) {
@@ -258,6 +268,8 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
   const [server, setServer] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [tasksState, setTasksState] = useState<SourceState>('loading');
+  const [invoicesState, setInvoicesState] = useState<SourceState>('loading');
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
   const [read, setRead] = useState<Set<string>>(new Set());
 
@@ -275,6 +287,8 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
       api.get('/api/notifications').then((r) => r.data).catch(() => null),
     ]).then(([inv, tsk, pay, srv]) => {
       if (inv == null && tsk == null && pay == null) { setError(true); }
+      setInvoicesState(!wantInv ? 'forbidden' : Array.isArray(inv) ? 'ok' : 'failed');
+      setTasksState(!wantTasks ? 'forbidden' : Array.isArray(tsk) ? 'ok' : 'failed');
       setInvoices(Array.isArray(inv) ? inv : []);
       setTasks(Array.isArray(tsk) ? tsk : []);
       setPayments(Array.isArray(pay) ? pay : []);
@@ -325,13 +339,14 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
     isRead: (id) => (id.startsWith(SERVER_PREFIX) ? !serverUnread.has(id) : read.has(id)),
     isDismissed: (id) => dismissed.has(id),
     markRead, markAllRead, dismiss, refresh: fetchAll,
+    tasks, invoices, tasksState, invoicesState,
   };
   return <NotifCtx.Provider value={value}>{children}</NotifCtx.Provider>;
 }
 
 export function useNotifications(): Ctx {
   const c = useContext(NotifCtx);
-  if (!c) return { loading: false, error: false, all: [], active: [], unreadCount: 0, isRead: () => false, isDismissed: () => false, markRead: () => {}, markAllRead: () => {}, dismiss: () => {}, refresh: () => {} };
+  if (!c) return { loading: false, error: false, all: [], active: [], unreadCount: 0, isRead: () => false, isDismissed: () => false, markRead: () => {}, markAllRead: () => {}, dismiss: () => {}, refresh: () => {}, tasks: [], invoices: [], tasksState: 'failed', invoicesState: 'failed' };
   return c;
 }
 

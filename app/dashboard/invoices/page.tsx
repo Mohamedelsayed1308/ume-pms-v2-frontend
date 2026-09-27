@@ -180,7 +180,11 @@ function InvoicesContent() {
   const { t, locale } = useI18n();
   // workspace controls (Phase 3 modernization — presentation only)
   const [q, setQ] = useState(searchParams.get('q') || '');
-  const [preset, setPreset] = useState<'all' | 'unpaid' | 'paid' | 'overdue' | 'duesoon' | 'approval'>('all');
+  // ?preset=overdue|duesoon — يفتحها ترحيب الرئيسيّة على الفلتر المطابق لعدّه. وما سوى القائمة يُتجاهل
+  const [preset, setPreset] = useState<'all' | 'unpaid' | 'paid' | 'overdue' | 'duesoon' | 'approval'>(() => {
+    const p = searchParams.get('preset');
+    return p === 'overdue' || p === 'duesoon' ? p : 'all';
+  });
   const [supFilter, setSupFilter] = useState('');
   const [vesFilter, setVesFilter] = useState('');
   const [ccyFilter, setCcyFilter] = useState('');

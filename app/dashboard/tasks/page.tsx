@@ -111,6 +111,9 @@ export default function TasksPage() {
 
   const [search, setSearch] = useState('');
   useInitialQuery(setSearch);
+  // ?preset=overdue&owner=… — يفتحها ترحيب الرئيسيّة. والقيم تُقبل من القوائم الثابتة وحدها
+  useInitialQuery((v) => { if (v === 'overdue') setPreset('overdue'); }, 'preset');
+  useInitialQuery((v) => { if (OWNERS.includes(v)) setFOwner(v); }, 'owner');
   const [preset, setPreset] = useState<Preset>('all');
   const [fStatus, setFStatus] = useState('');
   const [fPriority, setFPriority] = useState('');

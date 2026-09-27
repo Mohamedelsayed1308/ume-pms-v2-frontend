@@ -6,6 +6,7 @@ import { Button, Icon, Modal, Input, Select, Field } from '@/components/ui';
 import { vesselPhoto } from '@/lib/vesselPhoto';
 import { useDashboardPreferences, type DisplayRole } from './Preferences';
 import { compactMoney, money, months, periods, routes, percentage, selectDashboard, vessels, type Period, type Route, type LedgerItem } from './demo-data';
+import HomeGreeting from './HomeGreeting';
 import s from './dashboard.module.css';
 
 const roleNames: Record<DisplayRole, string> = { executive: 'تنفيذي', finance: 'مالية', operations: 'عمليات' };
@@ -104,7 +105,7 @@ export default function DashboardV2() {
   </section>;
 
   return <div className={s.dashboard} dir="rtl">
-    <div className={s.intro}><div><div className={s.eyebrow}>UME / OVERVIEW</div><h1>كل ما يهمّك، في نظرة واحدة</h1><p>الأسطول والإدارة المالية · ٢٥ سبتمبر ٢٠٢٦</p></div><div className={s.introActions}><span className={s.demoBadge}>نسخة مراجعة · بيانات تجريبية</span><Button variant="outline" icon="filter" onClick={() => setTweaks(!tweaks)} aria-expanded={tweaks}>تخصيص العرض</Button></div></div>
+    <div className={s.intro}><div><div className={s.eyebrow}>UME / OVERVIEW</div><HomeGreeting /><p>الأسطول والإدارة المالية · ٢٥ سبتمبر ٢٠٢٦</p></div><div className={s.introActions}><span className={s.demoBadge}>نسخة مراجعة · بيانات تجريبية</span><Button variant="outline" icon="filter" onClick={() => setTweaks(!tweaks)} aria-expanded={tweaks}>تخصيص العرض</Button></div></div>
     {tweaks && <div className={s.tweaks}><label>الدور <Select value={role} onChange={e => setRole(e.target.value as DisplayRole)}>{Object.entries(roleNames).map(([key, value]) => <option key={key} value={key}>{value}</option>)}</Select></label><label><input type="checkbox" checked={collapsed} onChange={e => { setCollapsed(e.target.checked); localStorage.setItem('sidebarCollapsed', e.target.checked ? '1' : '0'); }} /> طيّ الشريط الجانبي</label><label><input type="checkbox" checked={showAsk} onChange={e => setShowAsk(e.target.checked)} /> إظهار «اسأل UME»</label><small>الدور يخصّ العرض فقط، ولا يغيّر الصلاحيات.</small></div>}
     <div className={s.filters}><div className={s.filterLabel}><Icon name="calendar" size={17} /><span>الفترة</span></div><div className={s.segmented}>{(Object.keys(periods) as Period[]).map(p => <button key={p} aria-pressed={period === p} onClick={() => setFilters(p, route)}>{periods[p]}</button>)}</div><div className={s.divider} /><div className={s.segmented}>{(Object.keys(routes) as Route[]).map(r => <button key={r} aria-pressed={route === r} onClick={() => setFilters(period, r)}>{routes[r]}</button>)}</div><span className={s.filterNote}>تُطبّق على جميع الأقسام</span></div>
     <section><SectionTitle title="يحتاج قرارك اليوم" sub="مراجعة واحدة، وصورة أوضح للأولويات"><span className={s.count}>{actions.filter(a => !reviewed.includes(reviewKey(a.id))).length} للمراجعة</span></SectionTitle><div className={s.actionGrid}>{actions.map(a => {
