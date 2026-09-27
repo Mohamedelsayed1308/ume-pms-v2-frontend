@@ -25,7 +25,13 @@ import { xlsxCell } from './safeCell';
 
 export const CCYS: string[] = CURRENCIES.map((c) => c.code);
 
-export type TxKind = 'invoice' | 'payment' | 'credit_note';
+/*
+ * أنواع الحركة كما يُعيدها الخادم. والتسويتان دائنتان تُغلقان الرصيد لكن **بلا سند
+ * دفعٍ داخل النظام** — فلا تُسمّيان «سداداً» أبداً (`invoices.service.ts` R3A/R3B).
+ * والخادم يجمعهما في `paymentsTotal`، ويبقى ذلك كما هو: الإجماليّات لا يُعاد حسابها.
+ */
+export type TxKind = 'invoice' | 'payment' | 'credit_note' | 'legacy_settlement' | 'unevidenced_settlement';
+const KINDS: TxKind[] = ['invoice', 'payment', 'credit_note', 'legacy_settlement', 'unevidenced_settlement'];
 export interface Tx {
   idx: number; date: string; kind: TxKind; type: 'debit' | 'credit';
   ref: string; description: string; vessel: string | null; currency: string;
@@ -68,8 +74,8 @@ export function normalizeLedger(raw: RawLedger | null | undefined): Ledger {
   const transactions: Tx[] = txs.map((t, idx) => {
     const debit = num(t.debit), credit = num(t.credit);
     run = r2(run + debit - credit);
-    const kind: TxKind = t.kind === 'payment' || t.kind === 'credit_note' || t.kind === 'invoice'
-      ? t.kind : (t.type === 'debit' ? 'invoice' : 'payment');
+    const kind: TxKind = KINDS.includes(t.kind as TxKind)
+      ? (t.kind as TxKind) : (t.type === 'debit' ? 'invoice' : 'payment');
     return {
       idx,
       date: String(t.date || '').slice(0, 10),
@@ -233,6 +239,26 @@ export function sheetFromRows(rows: (string | number)[][]): XLSX.WorkSheet {
 }
 
 /**
+ * اسم ورقة Excel: يُقصّ اسم المورّد وحده ثمّ تُلحَق العملة دائماً، فلا تضيع
+ * العملة من اسمٍ طويل. والتكرار يُفحص بلا حساسيّة حروف (Excel لا يفرّق بين
+ * `ACME` و`Acme`)، ولا تبدأ الورقة أو تنتهي بعلامة `'` (يرفضها Excel).
+ */
+export function sheetName(supplier: string, ccy: string, used: Record<string, number>): string {
+  const suffix = `-${ccy}`;
+  const clean = (x: string) => x.replace(/[\\/?*[\]:]/g, ' ').replace(/^'+|'+$/g, '').trim();
+  let base = clean(supplier).slice(0, 31 - suffix.length).replace(/'+$/, '').trim() || 'Supplier';
+  let name = base + suffix;
+  const k = name.toLowerCase();
+  if (used[k] != null) {
+    used[k]++;
+    const tag = ` ${used[k]}`;
+    base = base.slice(0, 31 - suffix.length - tag.length).replace(/'+$/, '').trim();
+    name = base + tag + suffix;
+  } else used[k] = 0;
+  return name;
+}
+
+/**
  * ورقةٌ لكلّ مورّدٍ وعملة — كما في `exportMultiToExcel` القائم — وتبدأ كلٌّ
  * بسطور البيانات ثمّ سطرٍ فارغ ثمّ الجدول.
  */
@@ -242,9 +268,7 @@ export function buildStatementWorkbook(sets: ExportSet[], meta: (string | number
   const list = sets.length ? sets : [];
   for (const s of list) {
     const rows = [...meta, [], T.head, ...tableRows(s, T)];
-    let name = `${s.sec.supplierName}-${s.L.currency}`.replace(/[\\/?*[\]:]/g, ' ').slice(0, 28) || 'Sheet';
-    if (used[name] != null) { used[name]++; name = `${name} ${used[name]}`; } else { used[name] = 0; }
-    XLSX.utils.book_append_sheet(wb, sheetFromRows(rows), name);
+    XLSX.utils.book_append_sheet(wb, sheetFromRows(rows), sheetName(s.sec.supplierName, s.L.currency, used));
   }
   if (!list.length) XLSX.utils.book_append_sheet(wb, sheetFromRows([...meta]), 'Report');
   return wb;

@@ -19,7 +19,7 @@ export default function ReportShell({ id, locale, allowed, pinned, onBack, onTog
   const c = CAT_MAP[r.cat];
   const L = (b: { ar: string; en: string }) => (en ? b.en : b.ar);
   return (
-    <div className="flex flex-col gap-4 [font-variant-numeric:tabular-nums_lining-nums]">
+    <div className="relative flex flex-col gap-4 [font-variant-numeric:tabular-nums_lining-nums]">
       <nav aria-label={en ? 'Breadcrumb' : 'مسار التنقل'} className="print:hidden text-[12px] text-[#667085]">
         <ol className="flex flex-wrap items-center gap-1.5">
           <li><button type="button" onClick={onBack} className="text-[#234ed6] hover:text-[#1d3eb0] hover:underline">{en ? 'Analytics Center' : 'مركز التحليلات'}</button></li>

@@ -113,6 +113,47 @@ describe('١٢ · حالات الفراغ و«عرض كل العملات»', () 
   });
 });
 
+describe('«عرض كل العملات» يبني على المطبَّق', () => {
+  it('لا يُرسل مورّداً أُضيف إلى المسوّدة دون تطبيق', async () => {
+    get.mockImplementation(okImpl);
+    mount({ initial: { sups: ['s2'], ccy: 'EUR' } });
+    await screen.findByText(T.noCcyAny('EUR'));
+    pick('Red Sea Marine');                                          // إضافةٌ غير مطبّقة
+    get.mockClear();
+    const s2 = screen.getByRole('region', { name: 'Suez Bunkering' });
+    fireEvent.click(within(s2).getByRole('button', { name: T.showAllCcy }));
+    await waitFor(() => expect(get).toHaveBeenCalledTimes(1));
+    expect(idOf(get.mock.calls[0][0])).toBe('s2');
+  });
+});
+
+describe('٨ · نافذة الطباعة', () => {
+  it('تحبس التركيز، وEsc يُغلقها ويُعيد التركيز، وinert يعود كما كان، وتحمل كلّ الصفوف', async () => {
+    get.mockImplementation(okImpl);
+    const outside = document.createElement('div');
+    outside.inert = true;                                             // نافذةٌ أخرى كانت خاملةً قبلنا
+    document.body.appendChild(outside);
+    mount({ initial: { sups: ['s1'], ccy: 'all' } });
+    await screen.findByRole('heading', { name: 'Red Sea Marine' });
+    const opener = screen.getByRole('button', { name: T.print });
+    opener.focus();
+    fireEvent.click(opener);
+    const dlg = await screen.findByRole('dialog');
+    await waitFor(() => expect(dlg.contains(document.activeElement)).toBe(true));
+    expect(dlg.querySelectorAll('tbody tr').length).toBe(6);         // كلّ المطابق من كلّ الصفحات
+    // Tab من آخر زرٍّ يعود لأوّله
+    const btns = within(dlg).getAllByRole('button');
+    btns[btns.length - 1].focus();
+    fireEvent.keyDown(window, { key: 'Tab' });
+    expect(document.activeElement).toBe(btns[0]);
+    fireEvent.keyDown(window, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(document.activeElement).toBe(opener);
+    expect(outside.inert).toBe(true);                                 // لم يُمسّ
+    outside.remove();
+  });
+});
+
 describe('٣ · الافتتاحيّ المفقود على الشاشة', () => {
   it('الدفتر يعرض «غير متاح» و«صافي تراكمي»، والملخّص بلا ختاميّ', async () => {
     get.mockImplementation(okImpl);

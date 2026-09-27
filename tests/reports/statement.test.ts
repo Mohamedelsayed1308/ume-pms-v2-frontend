@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import * as XLSX from 'xlsx';
 import {
-  buildLink, buildStatementWorkbook, cleanSups, currencySummary, emptyStateOf, exportSets, ledgerConsistent,
+  buildLink, buildStatementWorkbook, cleanSups, currencySummary, emptyStateOf, exportSets, ledgerConsistent, sheetName,
   ledgersOf, metaRows, normalizeLedger, parseLink, tableRows, type Section,
 } from '@/lib/reports/statement';
 import { csvCell, toCsv, xlsxCell } from '@/lib/reports/safeCell';
@@ -136,6 +136,34 @@ describe('١٠ · حقن الصيغ', () => {
     const bad = cells.find((c) => String(c.v).startsWith('=HYPERLINK'))!;
     expect(bad.t).toBe('s');
     expect(bad.f).toBeUndefined();
+  });
+});
+
+describe('التسويات لا تُسمّى سداداً', () => {
+  it('نوعا التسوية يبقيان كما أعادهما الخادم، ويُصدَّران بوسمهما', () => {
+    const L = sec('s2').currencies[0];
+    expect(L.transactions.map((t) => t.kind)).toEqual(['invoice', 'legacy_settlement', 'unevidenced_settlement']);
+    const rows = tableRows(exportSets([sec('s2')], 'all', '', 'asc')[0], T);
+    expect(rows.map((r) => r[3])).toEqual([STX.ar.kInvoice, STX.ar.kLegacy, STX.ar.kUnevidenced]);
+    expect(rows.some((r) => r[3] === STX.ar.kPayment)).toBe(false);
+    // والإجماليّ كما يجمعه الخادم (التسويتان ضمن paymentsTotal)، والختاميّ متّسق
+    expect(L.paymentsTotal).toBe(600);
+    expect(ledgerConsistent(L)).toBe(true);
+  });
+});
+
+describe('أسماء أوراق Excel', () => {
+  it('العملة لا تضيع من اسمٍ طويل، والتكرار بلا حساسيّة حروف، ولا فاصلة عليا في الطرفين', () => {
+    const used: Record<string, number> = {};
+    const long = 'Mediterranean Shipping Company Holdings';
+    const a = sheetName(long, 'USD', used), b = sheetName(long, 'EUR', used);
+    expect(a.endsWith('-USD')).toBe(true);
+    expect(b.endsWith('-EUR')).toBe(true);
+    expect(a.length).toBeLessThanOrEqual(31);
+    const c = sheetName('ACME', 'USD', used), d = sheetName('Acme', 'USD', used);
+    expect(c.toLowerCase()).not.toBe(d.toLowerCase());
+    expect(d.endsWith('-USD')).toBe(true);
+    expect(sheetName("'Quoted'", 'EGP', used)).toBe('Quoted-EGP');
   });
 });
 

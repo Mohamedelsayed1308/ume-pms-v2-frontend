@@ -18,7 +18,7 @@ export const STX = {
     opening: 'رصيد افتتاحي', invoices: 'فواتير', payments: 'سدادات', credits: 'إشعارات دائنة', closing: 'الرصيد الختامي',
     txSearch: 'بحث في الحركات: البيان، السفينة، المرجع', order: 'ترتيب العرض', orderAsc: 'الأقدم أولاً', orderDesc: 'الأحدث أولاً', orderLbl: 'الترتيب',
     colDate: 'التاريخ', colType: 'النوع', colDesc: 'البيان', colVessel: 'السفينة', colDebit: 'مدين', colCredit: 'دائن', colBalance: 'الرصيد', colRef: 'المرجع',
-    kInvoice: 'فاتورة', kPayment: 'سداد', kCredit: 'إشعار دائن', prev: 'السابق', next: 'التالي', pageSize: 'حجم الصفحة',
+    kInvoice: 'فاتورة', kPayment: 'سداد', kCredit: 'إشعار دائن', kLegacy: 'تسوية تاريخية', kUnevidenced: 'إغلاق بلا سند', prev: 'السابق', next: 'التالي', pageSize: 'حجم الصفحة',
     noTx: 'لا توجد حركات لهذا المورد', noMatch: 'لا حركات مطابقة للبحث في هذا الدفتر', noCcyTx: 'للمورد حركات بعملات أخرى فقط.', showAllCcy: 'عرض كل العملات',
     noCcyAny: (c: string) => `لا يملك أيٌّ من الموردين المختارين حركات بعملة ${c}.`,
     openingNA: 'غير متاح', openingNANote: 'بعض الدفاتر بلا رصيد افتتاحي من المصدر؛ استُبعدت من الرصيد الختامي، ويظهر صافي حركاتها منفصلاً تحته.',
@@ -59,7 +59,7 @@ export const STX = {
     opening: 'Opening', invoices: 'Invoices', payments: 'Payments', credits: 'Credit notes', closing: 'Closing',
     txSearch: 'Search transactions: description, vessel, ref', order: 'Order', orderAsc: 'Oldest first', orderDesc: 'Newest first', orderLbl: 'Order',
     colDate: 'Date', colType: 'Type', colDesc: 'Description', colVessel: 'Vessel', colDebit: 'Debit', colCredit: 'Credit', colBalance: 'Balance', colRef: 'Reference',
-    kInvoice: 'Invoice', kPayment: 'Payment', kCredit: 'Credit note', prev: 'Previous', next: 'Next', pageSize: 'Page size',
+    kInvoice: 'Invoice', kPayment: 'Payment', kCredit: 'Credit note', kLegacy: 'Historical settlement', kUnevidenced: 'Closed without voucher', prev: 'Previous', next: 'Next', pageSize: 'Page size',
     noTx: 'No transactions for this supplier', noMatch: 'No rows match the search in this ledger', noCcyTx: 'This supplier only has transactions in other currencies.', showAllCcy: 'Show all currencies',
     noCcyAny: (c: string) => `None of the selected suppliers has transactions in ${c}.`,
     openingNA: 'N/A', openingNANote: 'Some ledgers have no opening balance from the source; they are excluded from the closing balance and their net movement is shown separately below it.',
@@ -90,7 +90,9 @@ export const STX = {
 };
 export type StatementText = typeof STX.ar;
 
-export const kindLabel = (T: StatementText, k: TxKind) => (k === 'invoice' ? T.kInvoice : k === 'payment' ? T.kPayment : T.kCredit);
+export const kindLabel = (T: StatementText, k: TxKind) =>
+  k === 'invoice' ? T.kInvoice : k === 'payment' ? T.kPayment : k === 'credit_note' ? T.kCredit
+    : k === 'legacy_settlement' ? T.kLegacy : T.kUnevidenced;
 
 export function exportLabels(T: StatementText): ExportLabels {
   return {

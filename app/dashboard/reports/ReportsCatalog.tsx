@@ -108,7 +108,7 @@ export default function ReportsCatalog(p: CatalogProps) {
   const gridProps = { en, T, favs: p.favs, onOpen: p.onOpen, onTogglePin: p.onTogglePin };
 
   return (
-    <div className="flex flex-col gap-5 [font-variant-numeric:tabular-nums_lining-nums]">
+    <div className="relative flex flex-col gap-5 [font-variant-numeric:tabular-nums_lining-nums]">
       <div className="flex flex-col gap-1">
         <h1 className="m-0 text-[24px] max-md:text-[20px] font-extrabold text-[#00283a] tracking-[-.015em]">{T.title}</h1>
         <p className="m-0 text-[13.5px] text-[#475467]">{T.sub}</p>

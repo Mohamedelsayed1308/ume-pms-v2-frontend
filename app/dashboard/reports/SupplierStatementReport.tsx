@@ -31,7 +31,8 @@ import { STX, kindLabel, exportLabels } from '@/lib/reports/statementText';
 
 const PAGE_SIZES = [10, 25, 50];
 const fmt = (n: number | null | undefined) => (n == null ? '—' : Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
-const kindSty = (k: Tx['kind']) => (k === 'invoice' ? 'bg-[#fef3f2] text-[#b42318]' : k === 'payment' ? 'bg-[#ecfdf3] text-[#027a48]' : 'bg-[#eef4ff] text-[#1d3eb0]');
+const kindSty = (k: Tx['kind']) => (k === 'invoice' ? 'bg-[#fef3f2] text-[#b42318]' : k === 'payment' ? 'bg-[#ecfdf3] text-[#027a48]'
+  : k === 'credit_note' ? 'bg-[#eef4ff] text-[#1d3eb0]' : 'bg-[#fffaeb] text-[#93370d]');
 const ctl = 'h-[34px] max-md:h-11';
 const focusRing = 'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#3366ea]';
 
@@ -143,6 +144,8 @@ export default function SupplierStatementReport({
     if (initDone.current || !initial || suppliersLoading) return;
     initDone.current = true;
     if (!allowed) return;
+    // قائمةٌ لم تصل ليست نطاقاً فارغاً: لا يُقال «خارج صلاحياتك» عن فشل تحميل — ورسالة الفشل ظاهرةٌ في القائمة
+    if (suppliersError) return;
     const sups = cleanSups(initial.sups, supOk);
     const dropped = new Set(initial.sups).size - sups.length;
     // مزامنةٌ مع مصدرٍ خارجيّ (معاملات الرابط بعد وصول قائمة المورّدين) — مرّةً واحدة
@@ -153,7 +156,7 @@ export default function SupplierStatementReport({
     setDraftState(d);
     run(d);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initial, suppliersLoading, allowed, supOk]);
+  }, [initial, suppliersLoading, suppliersError, allowed, supOk]);
 
   const reset = () => {
     req.cancel();
@@ -179,7 +182,8 @@ export default function SupplierStatementReport({
   const deleteSet = (name: string) => { const next = sets.filter((x) => x.name !== name); writeSets(setsKey, next); setSets(next); };
 
   // ── الاشتقاقات ──
-  const dirty = !!applied && (applied.ccy !== draft.ccy || applied.sups.join() !== draft.sups.join());
+  const sameSet = (a: string[], b: string[]) => a.length === b.length && [...a].sort().join() === [...b].sort().join();
+  const dirty = !!applied && (applied.ccy !== draft.ccy || !sameSet(applied.sups, draft.sups));
   const PS = pageSize ?? (narrow ? 10 : 25);
   const q = txq.trim();
   const ap = applied;
@@ -223,7 +227,11 @@ export default function SupplierStatementReport({
   const draftSummary = (draft.sups.length ? `${draft.sups.length} ${T.selected}` : '') + (draft.ccy !== 'all' ? ` · ${draft.ccy}` : '') + (dirty ? ` · ${T.notApplied}` : '');
 
   return (
-    <div className="flex flex-col gap-4 text-[13.5px] text-[#101828]">
+    /*
+     * `relative` ليس زينة: عناصر قارئ الشاشة (`sr-only`) مطلقة الموضع، وبلا سلفٍ
+     * مُموضَع تُقاس من الصفحة كلّها فتُطيلها — فيتحرّك رأس التطبيق عند أوّل تركيز.
+     */
+    <div className="relative flex flex-col gap-4 text-[13.5px] text-[#101828]">
       {/* ══ الفلاتر ══ */}
       <section aria-label={T.filters} className="rounded-[14px] border border-[#e4e7ec] bg-white print:hidden">
         <button type="button" onClick={() => setFiltersOpen((o) => !o)} aria-expanded={filtersOpen}
@@ -394,7 +402,7 @@ export default function SupplierStatementReport({
           {noCcyAny && (
             <div role="status" className="flex flex-wrap items-center justify-between gap-2 rounded-[10px] border border-[#fedf89] bg-[#fffaeb] px-4 py-2.5 text-[13px] text-[#93370d]">
               <span>{T.noCcyAny(ap.ccy)}</span>
-              <button type="button" onClick={() => { const d = { ...draft, ccy: 'all' }; setDraftState(d); run(d); }} className={`rounded-[9px] border border-[#fedf89] bg-white px-3 ${ctl} text-[12.5px] font-semibold ${focusRing}`}>{T.showAllCcy}</button>
+              <button type="button" onClick={() => { if (!applied) return; const d = { sups: applied.sups, ccy: 'all' }; setDraftState(d); run(d); }} className={`rounded-[9px] border border-[#fedf89] bg-white px-3 ${ctl} text-[12.5px] font-semibold ${focusRing}`}>{T.showAllCcy}</button>
             </div>
           )}
 
@@ -496,7 +504,7 @@ export default function SupplierStatementReport({
                 {empty === 'otherCcy' && (
                   <div className="rounded-[10px] bg-[#f9fafb] p-4 text-center text-[13px] text-[#475467]">
                     <p>{T.noCcyTx} (<span dir="ltr">{sec.currencies.map((x) => x.currency).join(' / ')}</span>)</p>
-                    <button type="button" onClick={() => { const d = { ...draft, ccy: 'all' }; setDraftState(d); run(d); }} className={`mt-2 rounded-[9px] border border-[#d0d5dd] bg-white px-3 ${ctl} text-[12.5px] font-semibold ${focusRing}`}>{T.showAllCcy}</button>
+                    <button type="button" onClick={() => { if (!applied) return; const d = { sups: applied.sups, ccy: 'all' }; setDraftState(d); run(d); }} className={`mt-2 rounded-[9px] border border-[#d0d5dd] bg-white px-3 ${ctl} text-[12.5px] font-semibold ${focusRing}`}>{T.showAllCcy}</button>
                   </div>
                 )}
                 {lgs.map((L) => {
@@ -672,15 +680,20 @@ function PrintLayer({ open, onClose, en, T, meta, ledgers }: {
 }) {
   const dlgRef = useRef<HTMLDivElement>(null);
   const opener = useRef<HTMLElement | null>(null);
+  // الأب يمرّر دالّةً جديدةً في كلّ رسم — فلا تُعاد تهيئة النافذة بسببها
+  const closeRef = useRef(onClose);
+  useEffect(() => { closeRef.current = onClose; }, [onClose]);
 
   useEffect(() => {
     if (!open) return;
     opener.current = document.activeElement as HTMLElement | null;
     const others = Array.from(document.body.children).filter((el) => !(el as HTMLElement).dataset.printLayer) as HTMLElement[];
+    // يُحفظ ما كان عليه كلّ عنصر ويُعاد كما كان — فلا تُكسر نافذةٌ أخرى تستعمل inert
+    const prev = others.map((el) => el.inert);
     others.forEach((el) => { el.inert = true; });
-    setTimeout(() => (dlgRef.current?.querySelector('button') as HTMLElement | null)?.focus(), 0);
+    setTimeout(() => (dlgRef.current?.querySelector('button') as HTMLElement | null)?.focus({ preventScroll: true }), 0);
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { e.preventDefault(); onClose(); return; }
+      if (e.key === 'Escape') { e.preventDefault(); closeRef.current(); return; }
       if (e.key !== 'Tab' || !dlgRef.current) return;
       const f = Array.from(dlgRef.current.querySelectorAll<HTMLElement>('button:not([disabled])'));
       if (!f.length) return;
@@ -692,10 +705,10 @@ function PrintLayer({ open, onClose, en, T, meta, ledgers }: {
     window.addEventListener('keydown', onKey);
     return () => {
       window.removeEventListener('keydown', onKey);
-      others.forEach((el) => { el.inert = false; });
-      if (opener.current?.isConnected) opener.current.focus();
+      others.forEach((el, i) => { el.inert = prev[i]; });
+      if (opener.current?.isConnected) opener.current.focus({ preventScroll: true });
     };
-  }, [open, onClose]);
+  }, [open]);
 
   // البوّابة تحتاج `document` — والطبقة لا تُعرض إلّا بعد نتائج في المتصفّح
   if (typeof document === 'undefined') return null;

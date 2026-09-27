@@ -265,6 +265,15 @@ export default function ReportsPage() {
     'المرفقات': (attachments[inv.id] || []).map((f: any) => f.file_url).join(' | '),
   }));
 
+  // المستخدم يُقرأ بعد التركيب — وقبله لا يُعرف ما يُسمح له، فلا يُعرض «لا تقارير لصلاحياتك» خطأً
+  if (!user) {
+    return (
+      <div ref={rootRef} aria-busy="true" className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+        {[0, 1, 2].map((i) => <div key={i} className="h-44 rounded-[14px] border border-[#e4e7ec] bg-white animate-pulse" />)}
+      </div>
+    );
+  }
+
   // ══════════════════════════ مركز التحليلات (الصفحة الرئيسية) ══════════════════════════
   if (!selected) {
     return (
