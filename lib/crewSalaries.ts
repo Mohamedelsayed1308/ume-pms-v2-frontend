@@ -217,7 +217,7 @@ export interface BatchLine {
 }
 /** حالةٌ خرجت ثمّ تغيّرت — تنتظر قرار المالك أو قُرِّرت. */
 export interface BatchDecision {
-  state: 'pending' | 'decided' | 'kept'; entry_key: string; crew_id: string; name: string; currency: string;
+  state: 'pending' | 'decided' | 'kept'; entry_key: string; entry_hash: string; crew_id: string; name: string; currency: string;
   version_id: string; version_no: number; balance: string; row_id: string;
   prior: { batch_no: string; amount: string; currency: string; row_kind: string; version_no: number }[];
   amount_changed: boolean | null; bank_changed: boolean | null;

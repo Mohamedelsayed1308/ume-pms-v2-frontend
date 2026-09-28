@@ -430,7 +430,8 @@ function BatchDecisions({ v, act, ask }: P) {
     });
     if (!reason) return;
     await act('batch', () => api.post(`${base}/cycles/${v.cycle.id}/decisions`, {
-      kind: 'batch_resolution', row_id: d.row_id, entry_key: d.entry_key, action: c.action, amount: c.action === 'settle' ? c.amount : undefined, reason,
+      // الحالة كما عُرضت: الخادم يرفض القرار (409) إن تغيّرت منذ عرضها — إصدارٌ أحدث أو مبلغٌ أو حسابٌ أو عملة
+      kind: 'batch_resolution', row_id: d.row_id, entry_key: d.entry_key, expected_hash: d.entry_hash, expected_version_id: d.version_id, action: c.action, amount: c.action === 'settle' ? c.amount : undefined, reason,
     }), t('batch.saved'));
   };
   return (

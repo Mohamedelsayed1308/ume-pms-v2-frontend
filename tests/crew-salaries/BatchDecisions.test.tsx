@@ -18,7 +18,7 @@ const ask = vi.fn<(a: { label?: string }) => Promise<string | null>>(async () =>
 const wrap = (v: CycleViewData) => render(<ToastProvider><ExportSection v={v} act={act} ask={ask} /></ToastProvider>);
 
 const pending: BatchDecision = {
-  state: 'pending', entry_key: '9101:EUR', crew_id: '9101', name: 'Alpha Test', currency: 'EUR', version_id: 'v2', version_no: 2,
+  state: 'pending', entry_key: '9101:EUR', entry_hash: 'a'.repeat(64), crew_id: '9101', name: 'Alpha Test', currency: 'EUR', version_id: 'v2', version_no: 2,
   balance: '1750.00', row_id: 'row-1', prior: [{ batch_no: 'CS-TV-202608-V1-EUR', amount: '1650.00', currency: 'EUR', row_kind: 'full', version_no: 1 }],
   amount_changed: true, bank_changed: false, resolution: null,
 };
@@ -44,7 +44,7 @@ describe('قرار المالك في دفعةٍ خرجت', () => {
     fireEvent.click(save);
     await waitFor(() => expect(post).toHaveBeenCalled());
     expect(ask.mock.calls[0][0]).toMatchObject({ label: 'ما يثبت أنّ الدفعة السابقة لم تُنفَّذ' });
-    expect(post).toHaveBeenCalledWith('/api/crew-salaries/cycles/c1/decisions', { kind: 'batch_resolution', row_id: 'row-1', entry_key: '9101:EUR', action: 'replace', amount: undefined, reason: 'البنك أكّد أنّ الملفّ لم يُرفع' });
+    expect(post).toHaveBeenCalledWith('/api/crew-salaries/cycles/c1/decisions', { kind: 'batch_resolution', row_id: 'row-1', entry_key: '9101:EUR', expected_hash: 'a'.repeat(64), expected_version_id: 'v2', action: 'replace', amount: undefined, reason: 'البنك أكّد أنّ الملفّ لم يُرفع' });
   });
 
   it('تسوية: لا تُسجَّل بلا مبلغٍ موجب، وتُرسل بالمبلغ الصريح', async () => {
@@ -57,6 +57,17 @@ describe('قرار المالك في دفعةٍ خرجت', () => {
     fireEvent.click(save);
     await waitFor(() => expect(post).toHaveBeenCalled());
     expect(post.mock.calls[0][1]).toMatchObject({ action: 'settle', amount: '100' });
+  });
+
+  it('قرارٌ من صفحةٍ قديمة: رسالة الخادم (409) تظهر، ولا «سُجِّل»', async () => {
+    const actReal = vi.fn(async (_l: string, fn: () => Promise<unknown>) => { try { await fn(); return true; } catch { return false; } });
+    post.mockRejectedValueOnce({ response: { status: 409, data: { message: 'تغيّرت الحالة منذ فتحتَ القرار' } } });
+    render(<ToastProvider><ExportSection v={view({ permissions: owner, batch_decisions: [pending] })} act={actReal} ask={ask} /></ToastProvider>);
+    fireEvent.change(screen.getByRole('combobox', { name: 'القرار' }), { target: { value: 'keep' } });
+    fireEvent.click(screen.getByRole('button', { name: 'تسجيل القرار' }));
+    await waitFor(() => expect(actReal).toHaveBeenCalled());
+    expect(post.mock.calls[0][1]).toMatchObject({ expected_hash: 'a'.repeat(64), expected_version_id: 'v2' });
+    expect(await actReal.mock.results[0].value).toBe(false);
   });
 
   it('إلغاء نافذة السبب لا يُرسل شيئاً', async () => {
