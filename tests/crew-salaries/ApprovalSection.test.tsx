@@ -47,7 +47,7 @@ describe('قسم الاعتماد', () => {
 
 describe('قسم التصدير', () => {
   it('بلا إصدارٍ معتمد لا كشف صرف، ويُذكر أنّ التصدير ليس سداداً', () => {
-    wrap(<ExportSection v={view()} act={act} />);
+    wrap(<ExportSection v={view()} act={act} ask={ask} />);
     expect(screen.getByText(/كشف الصرف غير متاح/)).toBeTruthy();
     expect(screen.getByText(/التصدير لا يعني السداد/)).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'EUR' })).toBeNull();
@@ -56,7 +56,7 @@ describe('قسم التصدير', () => {
     wrap(<ExportSection v={view({ versions: [
       { id: 'v2', version_no: 2, status: 'approved', totals: {}, currencies: ['USD'], decided_by_name: 'O' },
       { id: 'v1', version_no: 1, status: 'superseded', totals: {}, currencies: ['EUR'], decided_by_name: 'O' },
-    ] })} act={act} />);
+    ] })} act={act} ask={ask} />);
     expect(screen.getAllByRole('button', { name: 'USD' })).toHaveLength(1);
     expect(screen.getAllByRole('button', { name: 'EUR' })).toHaveLength(1);
     expect(screen.getByText(/تاريخيّ/)).toBeTruthy();

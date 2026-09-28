@@ -114,7 +114,7 @@ export default function CycleView({ id, onBack }: { id: string; onBack: () => vo
         {tab === 'calc' && <CalcSection v={v} act={act} ask={ask} />}
         {tab === 'bank' && <BankSection v={v} act={act} ask={ask} />}
         {tab === 'approve' && <ApprovalSection v={v} act={act} ask={ask} />}
-        {tab === 'export' && <ExportSection v={v} act={act} />}
+        {tab === 'export' && <ExportSection v={v} act={act} ask={ask} />}
       </div>
     </div>
   );

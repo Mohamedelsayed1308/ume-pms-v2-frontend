@@ -210,6 +210,19 @@ export interface VersionRow {
   submitted_by_name?: string; submitted_at?: string; submit_reason?: string; decided_by_name?: string; decided_at?: string | null; decision_reason?: string;
 }
 export interface ExportRow { id: string; kind: string; batch_no: string; currency: string | null; row_count: number; is_redownload: boolean; exported_by_name: string; exported_at: string; version_id?: string | null }
+/** صفٌّ خرج فعلاً في دفعة — عضويّة الدفعة (لا بيانات بنك). */
+export interface BatchLine {
+  id: string; export_id: string; batch_no: string; version_no: number; entry_key: string; crew_id: string; currency: string;
+  amount: string; balance: string; row_kind: 'full' | 'settlement'; status: 'active' | 'replaced'; resolution_id: string | null; replaced_by: string | null; created_at: string;
+}
+/** حالةٌ خرجت ثمّ تغيّرت — تنتظر قرار المالك أو قُرِّرت. */
+export interface BatchDecision {
+  state: 'pending' | 'decided' | 'kept'; entry_key: string; crew_id: string; name: string; currency: string;
+  version_id: string; version_no: number; balance: string; row_id: string;
+  prior: { batch_no: string; amount: string; currency: string; row_kind: string; version_no: number }[];
+  amount_changed: boolean | null; bank_changed: boolean | null;
+  resolution: { action: 'replace' | 'settle' | 'keep'; amount: string | null; reason: string; decided_by_name: string } | null;
+}
 export interface AuditRow { id: string; action: string; user_name: string; user_email: string; reason: string; occurred_at: string }
 export interface UnmatchedRow { row: { name: string; rank?: string; beneficiary?: string; label?: string; eur?: string; provenance?: Provenance; line?: number }; match: Match }
 export interface Unresolved {
@@ -233,6 +246,7 @@ export interface CycleViewData {
   approved_version: { id: string; version_no: number; decided_at?: string | null; decided_by_name?: string } | null;
   changed_since_approval: boolean;
   versions: VersionRow[]; exports: ExportRow[]; audit: AuditRow[];
+  export_rows?: BatchLine[]; batch_decisions?: BatchDecision[];
 }
 export interface CycleListItem {
   id: string; vessel: string; month: string; status: string;

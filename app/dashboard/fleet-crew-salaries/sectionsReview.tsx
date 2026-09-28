@@ -4,11 +4,10 @@ import api from '@/lib/api';
 import { Badge, Button, Callout, Card, CardHeader, EmptyState, Field, Input, Select, Table, TBody, TD, TH, THead, TR, cx, useToast } from '@/components/ui';
 import {
   REVIEW_TONE, VERSION_TONE, currencyCards, entryBlockers, fmtAmount, serverError, usdPerUnit,
-  type BankAccount, type CycleViewData, type Entry, type UnmatchedRow, type VersionRow, type VersionTotals,
+  type BankAccount, type BatchDecision, type Entry, type UnmatchedRow, type VersionRow, type VersionTotals,
 } from '@/lib/crewSalaries';
 import { useCrewT } from '@/lib/crewSalariesI18n';
 import { Amount, base, download, fmtDate, type P } from './sectionsData';
-import type { Act } from './CycleView';
 
 function Blockers({ e }: { e: Entry }) {
   const { t, tk } = useCrewT();
@@ -413,7 +412,72 @@ export function ApprovalSection({ v, act, ask }: P) {
 }
 
 /* ═════════════ ٦) التصدير وسجلّ الإصدارات ═════════════ */
-export function ExportSection({ v, act }: { v: CycleViewData; act: Act }) {
+
+/** حالاتٌ خرجت ثمّ تغيّرت — «خرج» ليس «صُرف»: المالك يقرّر لكلّ حالة، ولا خصم ولا إعادة آليّة. */
+function BatchDecisions({ v, act, ask }: P) {
+  const { t } = useCrewT();
+  const rows = v.batch_decisions || [];
+  const [choice, setChoice] = useState<Record<string, { action: string; amount: string }>>({});
+  if (!rows.length) return null;
+  const canDecide = v.permissions.can_approve;
+  const record = async (d: BatchDecision) => {
+    const c = choice[d.row_id] || { action: '', amount: '' };
+    if (!c.action) return;
+    const reason = await ask({
+      title: t(`batch.act.${c.action}` as 'batch.act.keep'),
+      label: t(`batch.reason.${c.action}` as 'batch.reason.keep'),
+      hint: `${d.crew_id} · ${d.name} — ${d.prior.map((p) => `${p.batch_no}: ${fmtAmount(p.amount)} ${p.currency}`).join(' + ')}`,
+    });
+    if (!reason) return;
+    await act('batch', () => api.post(`${base}/cycles/${v.cycle.id}/decisions`, {
+      kind: 'batch_resolution', row_id: d.row_id, entry_key: d.entry_key, action: c.action, amount: c.action === 'settle' ? c.amount : undefined, reason,
+    }), t('batch.saved'));
+  };
+  return (
+    <Card>
+      <CardHeader title={t('batch.title')} subtitle={t('batch.subtitle')} />
+      {!canDecide && <div className="px-4 pt-3"><Callout tone="neutral">{t('batch.ownerOnly')}</Callout></div>}
+      <Table density="compact" minWidth={900}>
+        <THead><TR>
+          <TH>{t('batch.crew')}</TH><TH>{t('batch.prior')}</TH><TH className="text-end">{t('batch.now')}</TH><TH>{t('batch.change')}</TH><TH>{t('batch.state')}</TH>
+          {canDecide && <TH>{t('batch.action')}</TH>}
+        </TR></THead>
+        <TBody>
+          {rows.map((d) => {
+            const c = choice[d.row_id] || { action: '', amount: '' };
+            const set = (x: Partial<typeof c>) => setChoice((s) => ({ ...s, [d.row_id]: { ...c, ...x } }));
+            return (
+              <TR key={d.row_id}>
+                <TD><div className="text-sm">{d.name}</div><div dir="ltr" className="text-xs text-gray-500">{d.crew_id} · {d.currency} · V{d.version_no}</div></TD>
+                <TD className="text-xs">{d.prior.map((p) => <div key={p.batch_no + p.amount}><span dir="ltr">{p.batch_no}</span>: <Amount v={p.amount} /> {p.currency}</div>)}</TD>
+                <TD className="text-end"><Amount v={d.balance} /> {d.currency}</TD>
+                <TD className="text-xs">{[d.amount_changed && t('batch.change.amount'), d.bank_changed && t('batch.change.bank')].filter(Boolean).join(' · ') || '—'}</TD>
+                <TD>
+                  <Badge tone={d.state === 'pending' ? 'warning' : 'neutral'}>{t(`batch.state.${d.state}` as 'batch.state.pending')}</Badge>
+                  {d.resolution && <div className="mt-1 text-xs text-gray-600">{d.resolution.decided_by_name}: {d.resolution.reason}{d.resolution.amount ? ` (${d.resolution.amount})` : ''}</div>}
+                </TD>
+                {canDecide && (
+                  <TD>
+                    <div className="flex flex-wrap items-end gap-2">
+                      <Select aria-label={t('batch.action')} value={c.action} onChange={(e) => set({ action: e.target.value })} className="max-w-[18rem]">
+                        <option value="">—</option>
+                        {(['replace', 'settle', 'keep'] as const).map((a) => <option key={a} value={a}>{t(`batch.act.${a}`)}</option>)}
+                      </Select>
+                      {c.action === 'settle' && <Input aria-label={t('batch.amount')} inputMode="decimal" dir="ltr" className="w-28" placeholder={t('batch.amount')} value={c.amount} onChange={(e) => set({ amount: e.target.value })} />}
+                      <Button size="sm" disabled={!c.action || (c.action === 'settle' && !(Number(c.amount) > 0))} onClick={() => record(d)}>{t('batch.save')}</Button>
+                    </div>
+                  </TD>
+                )}
+              </TR>
+            );
+          })}
+        </TBody>
+      </Table>
+    </Card>
+  );
+}
+
+export function ExportSection({ v, act, ask }: P) {
   const { t, lang } = useCrewT();
   const toast = useToast();
   const cycleId = v.cycle.id;
@@ -425,8 +489,10 @@ export function ExportSection({ v, act }: { v: CycleViewData; act: Act }) {
     catch (e) { (await serverError(e, t('export.failed'), lang)).forEach((m) => toast.error(m)); }
     finally { setBusy(''); }
   };
+  const lines = v.export_rows || [];
   return (
     <div className="space-y-4">
+      <BatchDecisions v={v} act={act} ask={ask} />
       <Card>
         <CardHeader title={t('export.title')} subtitle={t('export.subtitle')} />
         <div className="p-4 space-y-3">
@@ -440,6 +506,8 @@ export function ExportSection({ v, act }: { v: CycleViewData; act: Act }) {
                   const r = await download(`${base}/cycles/${cycleId}/export/payments`, `crew-salaries-${c}.xlsx`, { currency: c, version_id: ver.id });
                   if (r.headers?.['x-historical'] === '1') toast.info(t('export.historicalToast'));
                   else if (r.headers?.['x-redownload'] === '1') toast.info(t('export.redownload'));
+                  const pending = Number(r.headers?.['x-pending-decisions'] || 0);
+                  if (pending > 0) toast.info(t('export.pendingToast', { n: pending }));
                 })}>{c}</Button>
               ))}
             </div>
@@ -448,8 +516,8 @@ export function ExportSection({ v, act }: { v: CycleViewData; act: Act }) {
           <p className="text-xs text-gray-500">{t('export.generic')}</p>
         </div>
         {v.exports?.length > 0 && (
-          <Table density="compact" minWidth={760}>
-            <THead><TR><TH>{t('time')}</TH><TH>{t('export.kind')}</TH><TH>{t('export.batch')}</TH><TH>{t('currency')}</TH><TH className="text-end">{t('export.rows')}</TH><TH>{t('export.by')}</TH></TR></THead>
+          <Table density="compact" minWidth={820}>
+            <THead><TR><TH>{t('time')}</TH><TH>{t('export.kind')}</TH><TH>{t('export.batch')}</TH><TH>{t('currency')}</TH><TH className="text-end">{t('export.rows')}</TH><TH>{t('export.by')}</TH><TH><span className="sr-only">{t('export.download')}</span></TH></TR></THead>
             <TBody>
               {v.exports.map((x) => (
                 <TR key={x.id}>
@@ -457,12 +525,36 @@ export function ExportSection({ v, act }: { v: CycleViewData; act: Act }) {
                   <TD className="text-xs">{x.kind === 'review' ? t('export.kind.review') : x.is_redownload ? t('export.kind.payAgain') : t('export.kind.pay')}</TD>
                   <TD dir="ltr" className="text-xs">{x.batch_no}</TD><TD>{x.currency || '—'}</TD>
                   <TD className="text-end tabular-nums">{x.row_count}</TD><TD className="text-xs">{x.exported_by_name}</TD>
+                  <TD>
+                    {x.kind === 'approved_payments' && !x.is_redownload && (
+                      <Button size="sm" variant="ghost" icon="download" aria-label={`${t('export.download')} ${x.batch_no}`} loading={busy === `x:${x.id}`}
+                        onClick={() => run(`x:${x.id}`, async () => { await download(`${base}/exports/${x.id}/file`, `${x.batch_no}.xlsx`); toast.info(t('export.redownload')); })} />
+                    )}
+                  </TD>
                 </TR>
               ))}
             </TBody>
           </Table>
         )}
       </Card>
+      {lines.length > 0 && (
+        <Card>
+          <CardHeader title={t('batch.lines')} subtitle={t('export.generic')} />
+          <Table density="compact" minWidth={760}>
+            <THead><TR><TH>{t('export.batch')}</TH><TH>{t('batch.crew')}</TH><TH>{t('currency')}</TH><TH className="text-end">{t('batch.balanceAtIssue')}</TH><TH className="text-end">{t('batch.out')}</TH><TH>{t('export.kind')}</TH><TH>{t('batch.state')}</TH></TR></THead>
+            <TBody>
+              {lines.map((l) => (
+                <TR key={l.id} className={cx(l.status === 'replaced' && 'opacity-60')}>
+                  <TD dir="ltr" className="text-xs">{l.batch_no}</TD><TD dir="ltr" className="text-xs">{l.crew_id}</TD><TD>{l.currency}</TD>
+                  <TD className="text-end"><Amount v={l.balance} /></TD><TD className="text-end"><Amount v={l.amount} /></TD>
+                  <TD className="text-xs">{t(`batch.kind.${l.row_kind}`)}</TD>
+                  <TD><Badge tone={l.status === 'active' ? 'success' : 'neutral'}>{t(`batch.status.${l.status}`)}</Badge></TD>
+                </TR>
+              ))}
+            </TBody>
+          </Table>
+        </Card>
+      )}
       <Card>
         <CardHeader title={t('audit.title')} subtitle={t('audit.subtitle')} />
         <Table density="compact" minWidth={760}>
