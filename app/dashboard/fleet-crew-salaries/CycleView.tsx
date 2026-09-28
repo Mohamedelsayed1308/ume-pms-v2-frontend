@@ -24,12 +24,15 @@ export default function CycleView({ id, onBack }: { id: string; onBack: () => vo
   const [state, setState] = useState<'loading' | 'ok' | 'error' | 'forbidden' | 'missing'>('loading');
   const [tab, setTab] = useState<string>('files');
   const [busy, setBusy] = useState(false);
+  const [denied, setDenied] = useState('');
 
   // الجلب يكتب الحالة بعد الردّ وحده؛ و«جاري التحميل» عند التحديث اليدويّ فقط
   const fetchView = useCallback(() => api.get(`/api/crew-salaries/cycles/${id}`)
     .then((r) => { setV(r.data); setState('ok'); })
-    .catch((e: { response?: { status?: number } }) => {
+    .catch((e: { response?: { status?: number; data?: { message?: unknown } } }) => {
       const s = e?.response?.status;
+      const msg = e?.response?.data?.message;
+      setDenied(typeof msg === 'string' ? msg : '');
       setState(s === 403 ? 'forbidden' : s === 404 || s === 400 ? 'missing' : 'error');
     }), [id]);
   useEffect(() => { fetchView(); }, [fetchView]);
@@ -55,7 +58,7 @@ export default function CycleView({ id, onBack }: { id: string; onBack: () => vo
   const stage = useMemo(() => (v ? stageIndex(v) : 0), [v]);
 
   if (state === 'loading') return <Card className="p-4"><TableSkeleton rows={6} cols={6} /></Card>;
-  if (state === 'forbidden') return <Card><ErrorState title={t('noAccess')} /></Card>;
+  if (state === 'forbidden') return <Card><ErrorState title={t('noAccess')} description={denied || undefined} /></Card>;
   if (state === 'missing') return <Card><ErrorState title={t('cycle.missing')} onRetry={onBack} retryLabel={t('back')} /></Card>;
   if (state === 'error' || !v) return <Card><ErrorState title={t('loadError')} onRetry={() => load()} retryLabel={t('retry')} /></Card>;
 

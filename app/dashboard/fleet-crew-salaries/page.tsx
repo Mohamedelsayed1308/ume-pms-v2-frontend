@@ -29,10 +29,16 @@ function CyclesList({ onOpen }: { onOpen: (id: string | null) => void }) {
   const { t, tk } = useCrewT();
   const [data, setData] = useState<CyclesData | null>(null);
   const [state, setState] = useState<'loading' | 'ok' | 'error' | 'forbidden'>('loading');
+  // سبب الرفض من الخادم: الميزة مغلقةٌ بعد، أو لم تُمنح الشاشة صراحةً
+  const [denied, setDenied] = useState('');
   // الجلب يكتب الحالة في ردّه فقط — و«جاري التحميل» تُكتب عند إعادة المحاولة لا داخل الأثر
   const fetchList = useCallback(() => api.get('/api/crew-salaries/cycles')
     .then((r) => { setData(r.data); setState('ok'); })
-    .catch((e: { response?: { status?: number } }) => setState(e?.response?.status === 403 ? 'forbidden' : 'error')), []);
+    .catch((e: { response?: { status?: number; data?: { message?: unknown } } }) => {
+      const msg = e?.response?.data?.message;
+      setDenied(typeof msg === 'string' ? msg : '');
+      setState(e?.response?.status === 403 ? 'forbidden' : 'error');
+    }), []);
   useEffect(() => { fetchList(); }, [fetchList]);
   const load = () => { setState('loading'); fetchList(); };
 
@@ -40,7 +46,7 @@ function CyclesList({ onOpen }: { onOpen: (id: string | null) => void }) {
     <div className="space-y-4">
       <PageHeader title={t('title')} subtitle={t('subtitle')} />
       {state === 'forbidden' ? (
-        <Card><ErrorState title={t('noAccess')} description={t('noAccess.hint')} /></Card>
+        <Card><ErrorState title={t('noAccess')} description={denied || t('noAccess.hint')} /></Card>
       ) : (
         <>
           <Card>
