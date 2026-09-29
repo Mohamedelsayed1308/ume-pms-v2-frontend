@@ -2,6 +2,7 @@
 import { useMemo, useState } from 'react';
 import { costSegments, type ExecData } from './VesselExecReport';
 import { useI18n } from '@/lib/i18n';
+import SaveAsMenu from '@/components/SaveAsMenu';
 
 /**
  * ── تقرير صافي الربح — النسخة المالية ──
@@ -143,6 +144,14 @@ const CSS = `
   #vf-doc h2, #vf-doc h3 { break-after: avoid; page-break-after: avoid; }
 }
 #vf-doc { color:#0f172a; font-size:9pt; line-height:1.45; background:#fff; }
+/*
+ * القسم يحتوي هوامش أبنائه.
+ *
+ * بلا ذلك يعبر الهامش السفليّ لآخر جدولٍ حدَّ القسم على الشاشة، ويسقط في نسخة
+ * «حفظ باسم → PDF» التي تُثبّت ارتفاع كلّ عنصر، فتنزاح مواضع قطع الصفحات ٦ بكسل
+ * عند كلّ قسم. والمسافة المرئيّة واحدةٌ في الحالتين.
+ */
+#vf-doc .vf-sec { display:flow-root; }
 #vf-doc .dh { display:flex; align-items:center; justify-content:space-between;
   border-bottom:2.5pt solid #0f2c5c; padding-bottom:8px; margin-bottom:12px; }
 #vf-doc .brand { font-size:17pt; font-weight:800; color:#0f2c5c; letter-spacing:.3pt; }
@@ -293,6 +302,9 @@ export default function VesselFinReport({
           <button onClick={() => setEn((v) => !v)} className="border text-sm px-3 py-2 rounded-lg hover:bg-gray-50" title={T('النسخة الإنجليزيّة', 'Arabic version')}>
             {en ? 'عربي' : 'EN'}
           </button>
+          <SaveAsMenu en={en} target={() => document.getElementById('vf-doc')}
+            title={`${T('التقرير المالي', 'Financial Report')} — ${cfg.vessel}`}
+            fileName={`UME_${cfg.vessel}_${T('التقرير-المالي', 'Financial-Report')}_${isRange ? `${month}_${monthTo}` : month}`} />
           <button onClick={() => window.print()} className="bg-gray-800 text-white text-sm px-4 py-2 rounded-lg hover:bg-black">{T('🖨️ طباعة / PDF', '🖨️ Print / PDF')}</button>
           <button onClick={onClose} className="border text-sm px-4 py-2 rounded-lg hover:bg-gray-50">{T('إغلاق', 'Close')}</button>
         </div>
@@ -338,7 +350,8 @@ export default function VesselFinReport({
               {hasGap && (
                 <tr className="gap">
                   <td className="lbl">{bookGap > 0 ? '+' : '−'} {T('فروق دفتر المركب (عمود BALANCE)', 'Vessel ledger variance (BALANCE column)')}</td>
-                  <td className="amt">{fmt(Math.abs(bookGap))}</td>
+                  {/* القيمة بإشارتها لـ«حفظ باسم»: النصّ مطلقٌ والإشارة في عنوان السطر */}
+                  <td className="amt" data-x={bookGap}>{fmt(Math.abs(bookGap))}</td>
                   <td className="shr">{pct(Math.abs(bookGap), R)}</td>
                   <td className="ref">{T('انظر الحاشية', 'See note')}</td>
                 </tr>
@@ -512,7 +525,7 @@ export default function VesselFinReport({
                   </tr>
                   {g.rows.map(({ inv, share }) => (
                     <tr key={inv.id + g.name}>
-                      <td>{inv.number}{inv.amount < 0 ? T(' (إشعار دائن)', ' (credit note)') : ''}</td>
+                      <td data-x="text">{inv.number}{inv.amount < 0 ? T(' (إشعار دائن)', ' (credit note)') : ''}</td>
                       <td>{inv.date || '—'}</td>
                       <td>{inv.supplier}</td>
                       <td>{fmt(inv.amount)} {inv.currency} · {inv.nMonths > 1 ? `${inv.seq}/${inv.nMonths}` : T('كامل', 'in full')}</td>
@@ -553,9 +566,9 @@ export default function VesselFinReport({
                 ] as const).map((r) => (
                   <tr key={r.label}>
                     <td>{r.label}</td>
-                    <td>{r.e.toLocaleString()}</td>
-                    <td>{r.i.toLocaleString()}</td>
-                    <td>{(r.e + r.i).toLocaleString()}</td>
+                    <td>{r.e.toLocaleString('en-US')}</td>
+                    <td>{r.i.toLocaleString('en-US')}</td>
+                    <td>{(r.e + r.i).toLocaleString('en-US')}</td>
                     <td>{fmt(r.e / (data.count || 1))}</td>
                     <td>{fmt(r.i / (data.count || 1))}</td>
                   </tr>
