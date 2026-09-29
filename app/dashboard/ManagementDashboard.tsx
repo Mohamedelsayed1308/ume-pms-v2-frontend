@@ -380,6 +380,7 @@ export default function ManagementDashboard() {
               { href: '/dashboard/purchase-orders', icon: 'clipboard', k: 'qa.addPO' },
               { href: '/dashboard/tasks', icon: 'check', k: 'qa.addTask' },
               { href: '/dashboard/reports', icon: 'chart', k: 'qa.reports' },
+              { href: '/dashboard/fleet-crew-salaries', icon: 'users', k: 'qa.crewSalaries' },
             ].filter((a) => canDo(a.href));
             if (!actions.length) return null;
             return (

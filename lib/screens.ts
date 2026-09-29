@@ -73,6 +73,8 @@ export const SCREENS: Screen[] = [
   { href: '/dashboard/vessels', label: 'السفن', icon: '🚢', iconName: 'ship', group: 'fleet' },
   { href: '/dashboard/profit-distribution', label: 'توزيع الأرباح', icon: '💰', iconName: 'coins', group: 'fleet' },
   { href: '/dashboard/market', label: 'تحليل السوق الملاحي', icon: '📈', iconName: 'chart', group: 'fleet' },
+  // مرتّبات الأطقم: تُمنح صراحةً ولا `always` — والاعتماد فيها لمعرّف مستخدمٍ ثابتٍ على الخادم لا للأدمن
+  { href: '/dashboard/fleet-crew-salaries', label: 'مرتّبات أطقم السفن', icon: '👥', iconName: 'users', group: 'fleet' },
 
   // ── المحاسبة · P1.1A ──
   // لا تُمنح لأحد تلقائياً: لا `always` ولا تعديل على allowed_screens لأي مستخدم.

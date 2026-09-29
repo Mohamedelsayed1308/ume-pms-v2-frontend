@@ -156,6 +156,7 @@ const DICT: Record<string, { ar: string; en: string }> = {
   'qa.addPO': { ar: 'أمر شراء', en: 'Purchase order' },
   'qa.addTask': { ar: 'مهمة جديدة', en: 'New task' },
   'qa.reports': { ar: 'التقارير', en: 'Reports' },
+  'qa.crewSalaries': { ar: 'مرتّبات الأطقم', en: 'Crew salaries' },
 
   'st.unpaid': { ar: 'غير مدفوعة', en: 'Unpaid' },
   'st.partial': { ar: 'مدفوعة جزئياً', en: 'Partial' },

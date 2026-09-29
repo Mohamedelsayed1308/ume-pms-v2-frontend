@@ -19,6 +19,26 @@ const MONTH_AR = ['يناير', 'فبراير', 'مارس', 'أبريل', 'ما�
 const monthLabel = (m: string) => { const [y, mm] = m.split('-'); return `${MONTH_AR[+mm - 1]} ${y}`; };
 const nowMonth = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; };
 
+/**
+ * ما يُحفظ للشهر: الأسعار المحفوظة كما قُرئت، معدَّلةً بعملات البطاقة وحدها — فعملةٌ أدخلتها
+ * شاشةٌ أخرى (مرتّبات الأطقم مثلاً) لا تُحذف لأنّها ليست في قائمة البطاقة. والحقل الفارغ يحذف عملته.
+ */
+export function mergeRates(saved: Record<string, unknown>, edited: Record<string, string>, codes: string[]): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const [k, v] of Object.entries(saved || {})) if (!codes.includes(k) && Number(v) > 0) out[k] = Number(v);
+  for (const c of codes) { const v = parseFloat(edited[c]); if (v > 0) out[c] = v; }
+  return out;
+}
+
+/** رسالة فشل الحفظ: تغيّرت الأسعار منذ فتحها (409)، أو صفحةٌ قديمة بلا base (428). */
+const statusOf = (e: unknown) => (e as { response?: { status?: number } } | null)?.response?.status;
+function saveError(e: unknown): string {
+  const st = statusOf(e);
+  if (st === 409) return 'تغيّرت أسعار هذا الشهر منذ فتحتَها — أُعيد تحميلها، راجِعها ثمّ احفظ';
+  if (st === 428) return 'حدِّث الصفحة ثمّ احفظ';
+  return 'فشل الحفظ';
+}
+
 export default function ExchangeRatesCard() {
   const [all, setAll] = useState<Record<string, Record<string, any>>>({});
   const [month, setMonth] = useState(nowMonth());
@@ -29,7 +49,8 @@ export default function ExchangeRatesCard() {
   const [savingDef, setSavingDef] = useState(false);
   const [defMsg, setDefMsg] = useState('');
 
-  useEffect(() => { api.get('/api/exchange-rates').then((r) => setAll(r.data || {})).catch(() => {}); }, []);
+  const reload = () => api.get('/api/exchange-rates').then((r) => setAll(r.data || {})).catch(() => {});
+  useEffect(() => { reload(); }, []);
 
   useEffect(() => {
     const m = all[month] || {};
@@ -50,25 +71,25 @@ export default function ExchangeRatesCard() {
 
   async function saveDefaults() {
     setSavingDef(true); setDefMsg('');
-    const payload: Record<string, number> = {};
-    for (const c of CURRENCIES) { const v = parseFloat(defRates[c.code]); if (v > 0) payload[c.code] = v; }
+    const base = all['default'] || {};
+    const payload = mergeRates(base, defRates, CURRENCIES.map((c) => c.code));
     try {
-      await api.put('/api/exchange-rates/default', { rates: payload });
-      setAll((prev) => ({ ...prev, default: payload }));
+      const r = await api.put('/api/exchange-rates/default', { rates: payload, base });
+      setAll((prev) => ({ ...prev, default: r.data?.rates || payload }));
       setDefMsg('تم الحفظ ✅'); setTimeout(() => setDefMsg(''), 2500);
-    } catch { setDefMsg('فشل الحفظ'); }
+    } catch (e) { setDefMsg(saveError(e)); if (statusOf(e) === 409) reload(); }
     finally { setSavingDef(false); }
   }
 
   async function save() {
     setSaving(true); setMsg('');
-    const payload: Record<string, number> = {};
-    for (const c of CURRENCIES) { const v = parseFloat(rates[c.code]); if (v > 0) payload[c.code] = v; }
+    const base = all[month] || {};
+    const payload = mergeRates(base, rates, CURRENCIES.map((c) => c.code));
     try {
-      await api.put(`/api/exchange-rates/${month}`, { rates: payload });
-      setAll((prev) => ({ ...prev, [month]: payload }));
+      const r = await api.put(`/api/exchange-rates/${month}`, { rates: payload, base });
+      setAll((prev) => ({ ...prev, [month]: r.data?.rates || payload }));
       setMsg('تم الحفظ ✅'); setTimeout(() => setMsg(''), 2500);
-    } catch { setMsg('فشل الحفظ'); }
+    } catch (e) { setMsg(saveError(e)); if (statusOf(e) === 409) reload(); }
     finally { setSaving(false); }
   }
 
@@ -79,7 +100,7 @@ export default function ExchangeRatesCard() {
         <div className="flex items-center justify-between flex-wrap gap-2 mb-1">
           <h3 className="font-bold text-amber-800">⭐ الأسعار الافتراضية</h3>
           <div className="flex items-center gap-3">
-            {defMsg && <span className="text-sm text-emerald-600 font-medium">{defMsg}</span>}
+            {defMsg && <span role="status" className={`text-sm font-medium ${defMsg.includes('✅') ? 'text-emerald-600' : 'text-red-600'}`}>{defMsg}</span>}
             <button onClick={saveDefaults} disabled={savingDef}
               className="bg-amber-600 text-white text-sm px-4 py-1.5 rounded-lg hover:bg-amber-700 disabled:opacity-50">
               {savingDef ? '...' : '💾 حفظ الافتراضي'}
@@ -133,7 +154,7 @@ export default function ExchangeRatesCard() {
             className="bg-blue-600 text-white text-sm px-5 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50">
             {saving ? 'جاري الحفظ...' : `💾 حفظ أسعار ${monthLabel(month)}`}
           </button>
-          {msg && <span className="text-sm text-emerald-600 font-medium">{msg}</span>}
+          {msg && <span role="status" className={`text-sm font-medium ${msg.includes('✅') ? 'text-emerald-600' : 'text-red-600'}`}>{msg}</span>}
         </div>
       </div>
 

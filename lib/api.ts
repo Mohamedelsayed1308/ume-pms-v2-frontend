@@ -1,7 +1,13 @@
 import axios from 'axios';
 
+/*
+ * عنوان الباك: الإنتاج افتراضيّاً كما كان. وبيئة تطويرٍ أو اختبارٍ منفصلة تضبط
+ * `NEXT_PUBLIC_API_URL` (يُدمج وقت البناء) — فلا تلمس الإنتاج ولا جلساته.
+ */
+export const API_BASE_URL = (process.env.NEXT_PUBLIC_API_URL || '').trim() || 'https://ume-pms-v2-backend-production.up.railway.app';
+
 const api = axios.create({
-  baseURL: 'https://ume-pms-v2-backend-production.up.railway.app',
+  baseURL: API_BASE_URL,
 });
 
 api.interceptors.request.use((config) => {
