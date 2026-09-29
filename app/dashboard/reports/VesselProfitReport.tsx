@@ -2,7 +2,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import * as XLSX from 'xlsx';
 import api from '@/lib/api';
-import VesselExecReport, { ExecData, costSegments } from './VesselExecReport';
+import VesselExecReport, { ExecData, costSegments, bucketsFromCodes } from './VesselExecReport';
+import { getUser } from '@/lib/auth';
 import VesselFinReport from './VesselFinReport';
 import VesselBoardReport from './VesselBoardReport';
 import BassamAccountCard from './BassamAccountCard';
@@ -10,7 +11,7 @@ import { DEFAULT_RATES } from './ExchangeRatesCard';
 import CogsImportPanel, { type CogsEntry } from './CogsImportPanel';
 
 // التوزيع الافتراضي لبنود المصروفات على مجموعات هيكل التكاليف (مفتاح البند → المجموعة)
-const COST_BUCKET_DEFAULTS: Record<string, string> = {
+export const COST_BUCKET_DEFAULTS: Record<string, string> = {
   fuel: 'fuel', salaries: 'fixed', telcome: 'fixed', purchases: 'purchases',
   // صادر (Alcudia)
   otherExpsE: 'other', dischargeOrderTax: 'port', disShiOrder60: 'agent', frtDep: 'agent',
@@ -21,6 +22,9 @@ const COST_BUCKET_DEFAULTS: Record<string, string> = {
   // Pelagos-specific
   comm15: 'agent', shipOrder60: 'agent', freeZone2: 'other', toursVeh12: 'agent',
   toursPks12: 'agent', cargo: 'port', others: 'other',
+  // Poseidon — رسوم الميناء في الجهتين: كانت بلا تصنيفٍ فتقع في «أخرى»، وظهرت
+  // بجدول تفصيل الرموز (٢٩ سبتمبر ٢٠٢٦) تحت F بنحو 116 ألفاً من رسوم ميناء السعودية
+  ksaPortE: 'port', egyPortI: 'port',
 };
 
 // توزيع البنكر والمرتبات والمشتريات على الرحلات — مجموع الصافي = الصافي النهائي دائماً
@@ -473,6 +477,30 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
    */
   const [invLoading, setInvLoading] = useState(true);
   const [rates, setRates] = useState<Record<string, Record<string, number>>>({});
+
+  /*
+   * رموز هيكل التكاليف المحفوظة (A / D / F لبنود الوكلاء) — تُدمج فوق الافتراضيّ في
+   * الكود. وإن تعذّرت القراءة (الباك لم يُنشر بعد، أو لا صلاحيّة) يبقى الافتراضيّ.
+   */
+  const [costCodes, setCostCodes] = useState<Record<string, string>>({});
+  // فشلٌ غير 404 يُعلَن: وإلّا طُبع التقرير بالتصنيف الافتراضيّ ورأى الأدمن «افتراضي»
+  // لبندٍ محفوظٍ له رمز. و404 وحده صامت — الباك لم يُنشر بعد.
+  const [costCodesWarn, setCostCodesWarn] = useState(false);
+  useEffect(() => {
+    api.get('/api/cost-structure/codes')
+      .then((r) => { setCostCodesWarn(false); setCostCodes(Object.fromEntries((r.data || []).map((x: { item_key: string; code: string }) => [x.item_key, x.code]))); })
+      .catch((e) => { setCostCodes({}); setCostCodesWarn(e?.response?.status !== 404); });
+  }, []);
+  const isAdmin = typeof window !== 'undefined' && getUser()?.role === 'admin';
+  const setCostCode = useCallback(async (key: string, code: string | null) => {
+    if (code) await api.put(`/api/cost-structure/codes/${encodeURIComponent(key)}`, { code });
+    else await api.delete(`/api/cost-structure/codes/${encodeURIComponent(key)}`);
+    setCostCodes((prev) => {
+      const next = { ...prev };
+      if (code) next[key] = code; else delete next[key];
+      return next;
+    });
+  }, []);
   // مصاريف المركب من دفتر الشركة — تُقرأ من جدولها ولا تُخلط بجدول الفواتير
   const [cogs, setCogs] = useState<CogsEntry[]>([]);
   const loadCogs = useCallback(() => (!cfg.cogs || !cfg.dbVesselName
@@ -939,9 +967,9 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
       bookGap: data.net - (data.revenue - (data.expE + data.expI) - data.bunkerCost - data.salaries),
       count: data.count,
       costLines,
-      defaultBuckets: COST_BUCKET_DEFAULTS,
+      defaultBuckets: { ...COST_BUCKET_DEFAULTS, ...bucketsFromCodes(costCodes) },
     };
-  }, [data, sel, purchases, labelOf, cfg.ledgerExcluded]);
+  }, [data, sel, purchases, labelOf, cfg.ledgerExcluded, costCodes]);
 
   // صافي كل رحلة بعد توزيع البنكر والمرتبات والمشتريات على كل الرحلات (حسب الإيراد)
   const allocVoy = useMemo(() => {
@@ -1654,6 +1682,8 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
           month={month} monthTo={toMonth} monthLabel={periodLabel}
           data={data as any} purchases={purchases} exec={execData}
           allocVoy={allocVoy} labelOf={labelOf} revRows={REV_ROWS}
+          costCodes={costCodes} defaultBuckets={COST_BUCKET_DEFAULTS} costCodesWarn={costCodesWarn}
+          onSetCostCode={isAdmin && !costCodesWarn ? setCostCode : undefined}
           onClose={() => setShowFin(false)}
         />
       )}

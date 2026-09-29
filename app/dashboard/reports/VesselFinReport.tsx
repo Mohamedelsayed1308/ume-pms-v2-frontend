@@ -1,6 +1,6 @@
 'use client';
 import { useMemo, useState } from 'react';
-import { costSegments, type ExecData } from './VesselExecReport';
+import { costSegments, costBreakdown, BUCKETS, CODE_OF_BUCKET, ASSIGNABLE_CODES, LOCKED_COST_KEYS, type ExecData } from './VesselExecReport';
 import { useI18n } from '@/lib/i18n';
 import SaveAsMenu from '@/components/SaveAsMenu';
 
@@ -64,6 +64,14 @@ interface Props {
   allocVoy: { ref: string; revenue: number; net: number }[];
   labelOf: Record<string, string>;
   revRows: readonly RevRow[];
+  /** رموز هيكل التكاليف المحفوظة لبنود الوكلاء: `{ broker: 'A' }` */
+  costCodes?: Record<string, string>;
+  /** التصنيف الافتراضيّ في الكود — ليُعرض بجوار كلّ بندٍ رمزُه لو لم يُحفظ له شيء */
+  defaultBuckets?: Record<string, string>;
+  /** للأدمن وحده: حفظ رمز بند (`null` = رجوعٌ إلى الافتراضيّ) */
+  onSetCostCode?: (key: string, code: string | null) => Promise<void>;
+  /** تعذّرت قراءة الرموز المحفوظة: التقرير معروضٌ بالتصنيف الافتراضيّ */
+  costCodesWarn?: boolean;
   onClose: () => void;
 }
 
@@ -190,6 +198,10 @@ const CSS = `
 #vf-doc .dn svg { width:160px; height:160px; flex-shrink:0; }
 #vf-doc .sw { display:inline-block; width:8px; height:8px; border-radius:50%; margin-left:6px; }
 #vf-doc .bar { height:11px; border-radius:2px; display:block; }
+#vf-doc td.code { font-weight:800; color:#0f2c5c; width:1%; text-align:center !important; }
+#vf-doc table tr.sub td { background:#eef2ff; color:#0f2c5c; font-weight:800; border-top:1pt solid #c7d2fe; }
+#vf-doc table tr.gap td { background:#fef3c7; color:#92400e; }
+#vf-doc .cs-detail td.item { padding-inline-start:18px; }
 #vf-doc .foot { margin-top:14px; border-top:.75pt solid #cbd5e1; padding-top:6px;
   font-size:7.5pt; color:#94a3b8; display:flex; justify-content:space-between; }
 #vf-doc table, #vf-doc .cols, #vf-doc .dn { page-break-inside:avoid; break-inside:avoid; }
@@ -218,8 +230,12 @@ const CSS = `
 
 export default function VesselFinReport({
   cfg, month, monthTo, monthLabel, data, purchases, exec, allocVoy, labelOf, revRows, onClose,
+  costCodes = {}, defaultBuckets = {}, onSetCostCode, costCodesWarn = false,
 }: Props) {
   const [showVoy, setShowVoy] = useState(true);
+  const [showCodes, setShowCodes] = useState(false);
+  const [codeBusy, setCodeBusy] = useState<string | null>(null);
+  const [codeErr, setCodeErr] = useState('');
   const { locale } = useI18n();
   const [en, setEn] = useState(locale === 'en');
   const T = (ar: string, eng: string) => (en ? eng : ar);
@@ -249,6 +265,46 @@ export default function VesselFinReport({
 
   const segs = useMemo(() => costSegments(exec), [exec]);
   const segTotal = segs.reduce((s, x) => s + x.value, 0) || 1;
+
+  /*
+   * تفصيل الهيكل برموزه — بأمر المالك ٢٩ سبتمبر ٢٠٢٦: كلّ بند مصروفٍ فعليّ في
+   * الفترة تحت رمز مجموعته، ومجموع كلّ رمزٍ = سطره في الحلقة.
+   */
+  const groups = useMemo(() => costBreakdown(exec, { purchasesByItem: purchases?.byItem }), [exec, purchases]);
+  const groupsTotal = groups.reduce((s, g) => s + g.value, 0) || 1;
+  const segName = (id: string) => {
+    const b = BUCKETS.find((x) => x.id === id);
+    return en ? (SEG_EN[id] || b?.en || id) : (b?.ar || id);
+  };
+  const detailLabel = (key: string, label: string, kind?: string) => {
+    if (key === 'fuel') return T('البنكر المستهلك (أول المدة + التموينات − آخر المدة)', 'Bunkers consumed (opening + supplied − closing)');
+    if (key === 'salaries') return T('مرتبات الطاقم', 'Crew wages');
+    if (key.startsWith('item:')) return itemName(label);
+    if (key === 'purchases') return kind === 'residual'
+      ? T('مشتريات لم تُنسب إلى بند', 'Purchases not assigned to an item')
+      : T('مشتريات العبّارة / مصاريف أخرى', 'Purchases & services');
+    if (kind === 'residual') return T('باقي سطر الوكلاء — بنودٌ دون حدّ العرض', 'Rest of the agency line — items below the display threshold');
+    if (kind === 'gap') return T('فروق دفتر المركب (عمود BALANCE)', 'Vessel ledger variance (BALANCE column)');
+    return expLabel(key);
+  };
+
+  /** بنود سطر الوكلاء التي يُختار رمزها، برمزها المحفوظ أو الافتراضيّ */
+  const agencyItems = exec.costLines.filter((l) => !LOCKED_COST_KEYS.includes(l.key));
+  const defaultCode = (key: string) => {
+    const b = defaultBuckets[key] || 'other';
+    return CODE_OF_BUCKET[b === 'agent' || b === 'port' ? b : 'other'];
+  };
+  const saveCode = async (key: string, code: string) => {
+    if (!onSetCostCode) return;
+    setCodeBusy(key); setCodeErr('');
+    try {
+      await onSetCostCode(key, code || null);
+    } catch {
+      setCodeErr(T('تعذّر حفظ الرمز — أعد المحاولة.', 'Could not save the code — try again.'));
+    } finally {
+      setCodeBusy(null);
+    }
+  };
 
   /*
    * الفواتير مجمَّعة تحت بنودها بترتيب جدول البنود نفسه.
@@ -294,11 +350,22 @@ export default function VesselFinReport({
 
       <div className="sticky top-0 z-10 bg-white border-b shadow-sm px-4 py-3 flex items-center gap-3 flex-wrap print:hidden">
         <span className="font-bold text-gray-800">{T('التقرير المالي (نسخة ٢)', 'Financial Report (v2)')} — {cfg.vessel} · {period}</span>
+        {costCodesWarn && (
+          <span role="status" className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded px-2 py-1">
+            {T('تعذّرت قراءة رموز البنود — الهيكل معروضٌ بالتصنيف الافتراضيّ.', 'Could not load item codes — the structure uses the default classification.')}
+          </span>
+        )}
         <label className="text-sm text-gray-600 flex items-center gap-1.5">
           <input type="checkbox" checked={showVoy} onChange={(e) => setShowVoy(e.target.checked)} />
           {T('ربحية كل رحلة', 'Per-voyage profitability')}
         </label>
         <div className="mr-auto flex gap-2">
+          {onSetCostCode && (
+            <button type="button" onClick={() => setShowCodes((v) => !v)} aria-expanded={showCodes}
+              className="border text-sm px-3 py-2 rounded-lg hover:bg-gray-50">
+              🏷️ {T('رموز البنود', 'Item codes')}
+            </button>
+          )}
           <button onClick={() => setEn((v) => !v)} className="border text-sm px-3 py-2 rounded-lg hover:bg-gray-50" title={T('النسخة الإنجليزيّة', 'Arabic version')}>
             {en ? 'عربي' : 'EN'}
           </button>
@@ -309,6 +376,36 @@ export default function VesselFinReport({
           <button onClick={onClose} className="border text-sm px-4 py-2 rounded-lg hover:bg-gray-50">{T('إغلاق', 'Close')}</button>
         </div>
       </div>
+
+      {showCodes && onSetCostCode && (
+        <div className="bg-white border-b px-4 py-3 print:hidden" dir={en ? 'ltr' : 'rtl'}>
+          <p className="text-sm text-gray-600 mb-2">
+            {T('اختر رمز كلّ بندٍ من بنود «مصروفات الوكلاء». يُحفظ للأسطول كلّه ويظهر في كلّ التقارير.',
+              'Choose the code of each agency-expense item. It is saved for the whole fleet and shows in every report.')}
+          </p>
+          <p className="text-xs text-gray-500 mb-3">
+            {T('B البنكر وC المشتريات وE المرتّبات سطورٌ ثابتة من قائمة الدخل، فلا تُختار هنا.',
+              'B bunkers, C purchases and E crew wages are fixed income-statement lines, so they are not chosen here.')}
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+            {agencyItems.map((l) => (
+              <label key={l.key} className="flex items-center justify-between gap-2 border rounded px-2 py-1.5 text-sm">
+                <span className="truncate" title={l.key}>{expLabel(l.key)}</span>
+                <select value={costCodes[l.key] || ''} disabled={codeBusy === l.key}
+                  onChange={(e) => saveCode(l.key, e.target.value)}
+                  aria-label={expLabel(l.key)}
+                  className="border rounded px-1 py-0.5 text-sm">
+                  <option value="">{T('افتراضي', 'Default')} ({defaultCode(l.key)})</option>
+                  {ASSIGNABLE_CODES.map((c) => (
+                    <option key={c} value={c}>{c} · {segName(BUCKETS.find((b) => b.code === c)!.id)}</option>
+                  ))}
+                </select>
+              </label>
+            ))}
+          </div>
+          {codeErr && <p role="alert" className="text-sm text-red-700 mt-2">{codeErr}</p>}
+        </div>
+      )}
 
       <div className="max-w-4xl mx-auto my-5 bg-white shadow-xl print:shadow-none print:my-0 print:max-w-none">
         <div id="vf-doc" dir={en ? 'ltr' : 'rtl'} className={`p-6 print:p-0${en ? ' en' : ''}`}>
@@ -617,14 +714,44 @@ export default function VesselFinReport({
                 <tbody>
                   {segs.map((s) => (
                     <tr key={s.id}>
+                      <td className="code">{s.code}</td>
                       <td><span className="sw" style={{ background: s.color }} />{en ? (SEG_EN[s.id] || s.en || s.ar) : s.ar}</td>
                       <td>{fmt(s.value)}</td>
                       <td style={{ color: s.value < 0 ? '#b91c1c' : '#64748b' }}>{((s.value / segTotal) * 100).toFixed(1)}%</td>
                     </tr>
                   ))}
-                  <tr className="tot"><td>{T('إجمالي المصروفات', 'Total Operating Costs')}</td><td>{fmt(segTotal)}</td><td>100%</td></tr>
+                  <tr className="tot"><td></td><td>{T('إجمالي المصروفات', 'Total Operating Costs')}</td><td>{fmt(segTotal)}</td><td>100%</td></tr>
                 </tbody>
               </table>
+            </div>
+
+            <h3>{T('تفصيل هيكل التكاليف — البنود الفعليّة برموزها', 'Cost structure detail — actual items by code')}</h3>
+            <table className="long cs-detail">
+              <thead><tr>
+                <th scope="col">{T('الرمز', 'Code')}</th><th scope="col">{T('البند', 'Item')}</th>
+                <th scope="col">{T('المبلغ', 'Amount')}</th><th scope="col">%</th>
+              </tr></thead>
+              <tbody>
+                {groups.map((g) => [
+                  <tr key={g.code} className="sub">
+                    <td className="code">{g.code}</td><td>{segName(g.id)}</td>
+                    <td>{fmt(g.value)}</td><td>{pct(g.value, groupsTotal)}</td>
+                  </tr>,
+                  ...g.items.map((it) => (
+                    <tr key={`${g.code}:${it.key}`} className={it.kind === 'gap' ? 'gap' : undefined}>
+                      <td className="code">{g.code}</td>
+                      <td className="item">{detailLabel(it.key, it.label, it.kind)}</td>
+                      <td>{fmt(it.value)}</td>
+                      <td style={{ color: '#64748b' }}>{pct(it.value, g.value || 1)}</td>
+                    </tr>
+                  )),
+                ])}
+                <tr className="tot"><td></td><td>{T('إجمالي المصروفات', 'Total Operating Costs')}</td><td>{fmt(groupsTotal)}</td><td>100%</td></tr>
+              </tbody>
+            </table>
+            <div className="note">
+              {T('سطر المجموعة نسبته من إجمالي المصروفات، وسطر البند نسبته من مجموعته. ومجموع بنود كلّ رمزٍ = سطره في الحلقة أعلاه.',
+                'A group line shows its share of total costs; an item line shows its share of its group. The items under each code add up to that code\'s line above.')}
             </div>
 
             {showVoy && allocVoy.length > 0 && (
