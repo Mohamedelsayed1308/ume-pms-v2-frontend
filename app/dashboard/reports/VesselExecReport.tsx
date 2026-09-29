@@ -23,15 +23,44 @@ export interface ExecData {
 type Lang = 'ar' | 'en' | 'both';
 type Alloc = 'mixed' | 'revenue' | 'equal';
 
+/*
+ * لكلّ مجموعةٍ حرفها — بأمر المالك ٢٩ سبتمبر ٢٠٢٦: يُربط به كلّ بند مصروفٍ فعليّ
+ * بمجموعته في الهيكل، ويُقرأ في جدول التفصيل تحت الحلقة.
+ */
 export const BUCKETS = [
-  { id: 'fuel', ar: 'الوقود (بنكر)', en: 'Fuel (bunker)', color: '#1e3a5f' },
-  { id: 'agent', ar: 'عمولات الوكلاء', en: 'Agent commissions', color: '#5b9e77' },
-  { id: 'port', ar: 'ميناء ومناولة', en: 'Port & handling', color: '#9cc3ac' },
-  { id: 'fixed', ar: 'تكاليف تشغيل ثابتة', en: 'Fixed operating', color: '#3f5f8a' },
-  { id: 'purchases', ar: 'المشتريات', en: 'Purchases', color: '#c98b6b' },
-  { id: 'other', ar: 'أخرى', en: 'Other', color: '#c0c7d0' },
+  { id: 'fuel', code: 'B', ar: 'الوقود (بنكر)', en: 'Fuel (bunker)', color: '#1e3a5f' },
+  { id: 'agent', code: 'A', ar: 'عمولات الوكلاء', en: 'Agent commissions', color: '#5b9e77' },
+  { id: 'port', code: 'D', ar: 'ميناء ومناولة', en: 'Port & handling', color: '#9cc3ac' },
+  { id: 'fixed', code: 'E', ar: 'تكاليف تشغيل ثابتة', en: 'Fixed operating', color: '#3f5f8a' },
+  { id: 'purchases', code: 'C', ar: 'المشتريات', en: 'Purchases', color: '#c98b6b' },
+  { id: 'other', code: 'F', ar: 'أخرى', en: 'Other', color: '#c0c7d0' },
 ];
 const BUCKET_IDS = BUCKETS.map((b) => b.id);
+
+/** رمز المجموعة ← معرّفها، ومعرّفها ← رمزها */
+export const BUCKET_OF_CODE: Record<string, string> = Object.fromEntries(BUCKETS.map((b) => [b.code, b.id]));
+export const CODE_OF_BUCKET: Record<string, string> = Object.fromEntries(BUCKETS.map((b) => [b.id, b.code]));
+
+/**
+ * الرموز التي يُختار بينها لبنود «مصروفات الوكلاء». وB وC وE سطورٌ ثابتة من
+ * قائمة الدخل لا يدخلها بندٌ من الوكلاء — والباك والقاعدة يرفضان غير هذه الثلاثة.
+ */
+export const ASSIGNABLE_CODES = ['A', 'D', 'F'] as const;
+export const LOCKED_COST_KEYS = ['fuel', 'salaries', 'purchases'];
+
+/**
+ * الربط المحفوظ في القاعدة (`{ broker: 'D' }`) ← خريطة مجموعاتٍ تُدمج فوق
+ * الافتراضيّ. والرمز غير المعروف أو المقفل يُتجاهَل فلا يكسر الهيكل.
+ */
+export function bucketsFromCodes(codes: Record<string, string>): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, c] of Object.entries(codes || {})) {
+    if (LOCKED_COST_KEYS.includes(k)) continue;
+    if (!(ASSIGNABLE_CODES as readonly string[]).includes(c)) continue;
+    out[k] = BUCKET_OF_CODE[c];
+  }
+  return out;
+}
 
 /**
  * هيكل التكاليف — **مشتقٌّ من بنود المصروف في قائمة الدخل وحدها**.
@@ -84,6 +113,53 @@ export function costSegments(exec: ExecData, buckets?: Record<string, string>) {
     .sort((a, b) => b.value - a.value);
 }
 
+export interface CostDetailItem { key: string; label: string; value: number; kind?: 'residual' | 'gap' }
+export interface CostDetailGroup { id: string; code: string; value: number; items: CostDetailItem[] }
+
+/**
+ * تفصيل هيكل التكاليف: كلّ مجموعةٍ برمزها وبنودها الفعليّة في الفترة.
+ *
+ * يُبنى بالقواعد نفسها التي تبني `costSegments`، فمجموع بنود كلّ رمزٍ = سطره في
+ * الحلقة بناءً: B البنكر المستهلك وحده، وE المرتّبات، وC بنود المشتريات بأقساط
+ * الفترة، وA وD وF بنود سطر الوكلاء بحسب ربطها. وما لم يُفصَّل من سطر الوكلاء
+ * وفرقُ الدفتر يُعرضان في F سطرين صريحين — لا يُخفيان داخل رقمٍ مجمَّع.
+ */
+export function costBreakdown(
+  exec: ExecData,
+  opts: { buckets?: Record<string, string>; purchasesByItem?: { name: string; value: number }[] } = {},
+): CostDetailGroup[] {
+  const items: Record<string, CostDetailItem[]> = {};
+  for (const id of BUCKET_IDS) items[id] = [];
+  if (Math.abs(exec.bunkerCost) >= 0.005) items.fuel.push({ key: 'fuel', label: 'fuel', value: exec.bunkerCost });
+  if (Math.abs(exec.salaries) >= 0.005) items.fixed.push({ key: 'salaries', label: 'salaries', value: exec.salaries });
+  const byItem = (opts.purchasesByItem || []).filter((b) => Math.abs(b.value) >= 0.005);
+  for (const b of byItem) items.purchases.push({ key: `item:${b.name}`, label: b.name, value: b.value });
+  const byItemSum = byItem.reduce((s, b) => s + b.value, 0);
+  if (Math.abs(exec.purchasesTotal - byItemSum) >= 0.005) {
+    items.purchases.push({ key: 'purchases', label: 'purchases', value: exec.purchasesTotal - byItemSum, kind: byItem.length ? 'residual' : undefined });
+  }
+  let split = 0;
+  for (const l of exec.costLines) {
+    if (LOCKED_COST_KEYS.includes(l.key)) continue;
+    const b = (opts.buckets && opts.buckets[l.key]) || exec.defaultBuckets[l.key] || 'other';
+    const id = b === 'agent' || b === 'port' ? b : 'other';
+    items[id].push({ key: l.key, label: l.label, value: l.value });
+    split += l.value;
+  }
+  const residual = exec.agentExp - split;
+  if (Math.abs(residual) >= 0.005) items.other.push({ key: 'residual', label: 'residual', value: residual, kind: 'residual' });
+  if (Math.abs(exec.bookGap) >= 0.005) items.other.push({ key: 'bookGap', label: 'bookGap', value: -exec.bookGap, kind: 'gap' });
+  return BUCKETS
+    .map((b) => ({
+      id: b.id, code: b.code,
+      items: items[b.id].sort((x, y) => y.value - x.value),
+      value: items[b.id].reduce((s, x) => s + x.value, 0),
+    }))
+    // عتبة الحلقة نفسها: مجموعةٌ صافيها دون نصف دولار تغيب عن الجدولين معاً
+    .filter((g) => g.items.length && Math.abs(g.value) > 0.5)
+    .sort((a, b) => a.code.localeCompare(b.code));
+}
+
 const fmtFull = (n: number) => Math.round(n).toLocaleString('en-US');
 const fmtAbbr = (n: number) => {
   const a = Math.abs(n);
@@ -100,11 +176,16 @@ export default function VesselExecReport({
   const [lang, setLang] = useState<Lang>('both');
   const [alloc, setAlloc] = useState<Alloc>('revenue');
   const [showMap, setShowMap] = useState(false);
-  const [buckets, setBuckets] = useState<Record<string, string>>(() => {
+  /*
+   * الخريطة مشتقّةٌ من الافتراضيّ (وفيه الرموز المحفوظة) فوقه تعديلات هذه النافذة.
+   * فالرموز التي تصل بعد فتح النافذة تظهر فيها — لا تُؤخَذ لقطةً عند الفتح وحده.
+   */
+  const [edits, setEdits] = useState<Record<string, string>>({});
+  const buckets = useMemo(() => {
     const b: Record<string, string> = {};
-    for (const l of exec.costLines) b[l.key] = exec.defaultBuckets[l.key] || 'other';
+    for (const l of exec.costLines) b[l.key] = edits[l.key] || exec.defaultBuckets[l.key] || 'other';
     return b;
-  });
+  }, [exec.costLines, exec.defaultBuckets, edits]);
 
   const dir = lang === 'en' ? 'ltr' : 'rtl';
   const L = (ar: string, en: string) => (lang === 'ar' ? ar : lang === 'en' ? en : `${ar} · ${en}`);
@@ -177,7 +258,7 @@ export default function VesselExecReport({
             {exec.costLines.filter((l) => l.key !== 'purchases' && l.key !== 'fuel' && l.key !== 'salaries').map((l) => (
               <div key={l.key} className="flex items-center gap-2 text-sm border rounded-lg px-3 py-1.5">
                 <span className="flex-1 truncate">{l.label} <span className="text-gray-400">({fmtFull(l.value)})</span></span>
-                <select value={buckets[l.key]} onChange={(e) => setBuckets((b) => ({ ...b, [l.key]: e.target.value }))}
+                <select value={buckets[l.key]} onChange={(e) => setEdits((b) => ({ ...b, [l.key]: e.target.value }))}
                   className="border rounded-md px-2 py-1 text-xs">
                   {BUCKETS.filter((b) => b.id === 'agent' || b.id === 'port' || b.id === 'other').map((b) => <option key={b.id} value={b.id}>{b.ar}</option>)}
                 </select>
