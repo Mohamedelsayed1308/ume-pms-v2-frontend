@@ -1,12 +1,12 @@
 'use client';
 import { useEffect, useState, type ReactNode } from 'react';
 import api from '@/lib/api';
-import { CURRENCIES } from '@/lib/currencies';
 import { useInitialQuery } from '@/lib/useInitialQuery';
 import { getUser } from '@/lib/auth';
 import { useI18n } from '@/lib/i18n';
 import { Card, Button, Badge, Select as UISelect, Drawer, Icon, cx, TableSkeleton, Callout } from '@/components/ui';
-import { fmtNum, fmtMoney, fmtMoneyC, ccyEntries, n0, sumByCurrency, fmtCcyMap } from '@/lib/format';
+import { fmtNum, fmtMoney, fmtMoneyC, ccyEntries, n0, fmtCcyMap } from '@/lib/format';
+import { type PayRow, autoAllocate, isCreditNote, remainingOf, availableOf, usedByNote, summarize, validate, batchPayload, r2 } from '@/lib/payments/creditAllocation';
 
 interface Payment {
   id: string;
@@ -28,15 +28,18 @@ interface Payment {
   };
 }
 
-interface InvoiceRow {
+type InvoiceRow = PayRow & { vessel: { name: string } | null };
+
+/** تطبيق إشعارٍ دائن على فاتورة — من `GET /api/payments/allocations` */
+interface Allocation {
   id: string;
-  invoice_number: string;
-  vessel: { name: string } | null;
-  total_amount: number;
-  paid_amount: number;
-  checked: boolean;
   amount: string;
   currency: string;
+  allocation_date: string;
+  reference: string;
+  created_by: string;
+  credit_note: { id: string; invoice_number: string; supplier?: { name: string } } | null;
+  invoice: { id: string; invoice_number: string; vessel?: { name: string } | null } | null;
 }
 
 const typeLabel: Record<string, string> = { advance: 'مقدم', installment: 'قسط', full: 'سداد كامل' };
@@ -80,6 +83,8 @@ export default function PaymentsPage() {
   const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'high' | 'low'>('newest');
   const [detail, setDetail] = useState<Payment | null>(null);
   const [delTarget, setDelTarget] = useState<Payment | null>(null);
+  const [allocations, setAllocations] = useState<Allocation[]>([]);
+  const [delAlloc, setDelAlloc] = useState<Allocation | null>(null);
   useEffect(() => { setUser(getUser()); }, []);
   const HIGH_VALUE = 100000; // documented threshold (payment's own currency)
 
@@ -105,6 +110,8 @@ export default function PaymentsPage() {
       setAllInvoices(invRes.data.filter((i: any) => i.status !== 'paid' && i.status !== 'cancelled'));
       setSuppliers(supRes.data);
       setListError('');
+      // منفصلٌ عمداً: تعذّر قائمة التطبيقات لا يُخفي المدفوعات
+      api.get('/api/payments/allocations').then((r) => setAllocations(r.data || [])).catch(() => setAllocations([]));
     } catch {
       setListError('تعذّر تحميل المدفوعات — حدّث الصفحة أو أعد المحاولة.');
     } finally {
@@ -127,16 +134,18 @@ export default function PaymentsPage() {
     setError('');
     setInvoiceAttachments({});
     const filtered = allInvoices.filter((i) => i.supplier?.id === supplierId);
-    setInvoiceRows(filtered.map((inv) => ({
+    // الإشعارات الدائنة (فواتير سالبة) تظهر مع الفواتير — تُختار فيُخصم رصيدها من التحويل
+    setInvoiceRows(autoAllocate(filtered.map((inv) => ({
       id: inv.id,
       invoice_number: inv.invoice_number,
       vessel: inv.vessel,
       total_amount: +inv.total_amount,
       paid_amount: +inv.paid_amount,
       checked: false,
-      amount: String(Math.max(0, +inv.total_amount - +inv.paid_amount)),
+      amount: '',
+      credit: '',
       currency: inv.currency || 'USD',
-    })));
+    }))) as InvoiceRow[]);
     // Load attachments for all invoices
     const attMap: Record<string, any[]> = {};
     await Promise.all(filtered.map(async (inv: any) => {
@@ -148,42 +157,35 @@ export default function PaymentsPage() {
     setInvoiceAttachments(attMap);
   }
 
-  function toggleRow(id: string) {
-    setInvoiceRows((rows) => rows.map((r) => r.id === id ? { ...r, checked: !r.checked } : r));
+  // تغيّر الاختيار يعيد التوزيع التلقائيّ للإشعارات — ثمّ يعدّل المستخدم ما شاء
+  const reselect = (f: (r: InvoiceRow) => boolean) =>
+    setInvoiceRows((rows) => autoAllocate(rows.map((r) => ({ ...r, checked: f(r) }))) as InvoiceRow[]);
+  const toggleRow = (id: string) => reselect((r) => (r.id === id ? !r.checked : r.checked));
+  const selectAll = () => reselect(() => true);
+
+  // تعديل «من الإشعار» يضبط النقديّ ليبقى مجموعهما المتبقّي؛ وتعديل النقديّ لا يمسّ الإشعار
+  function updateRow(id: string, field: 'amount' | 'credit', val: string) {
+    setInvoiceRows((rows) => rows.map((r) => {
+      if (r.id !== id) return r;
+      if (field === 'amount') return { ...r, amount: val };
+      return { ...r, credit: val, amount: String(r2(Math.max(0, remainingOf(r) - (parseFloat(val) || 0)))) };
+    }));
   }
 
-  function updateRow(id: string, field: 'amount' | 'currency', val: string) {
-    setInvoiceRows((rows) => rows.map((r) => r.id === id ? { ...r, [field]: val } : r));
-  }
-
-  function selectAll() {
-    setInvoiceRows((rows) => rows.map((r) => ({ ...r, checked: true })));
-  }
-
-  const checkedRows = invoiceRows.filter((r) => r.checked);
-  // إجمالي المحدَّد مفصول بالعملة — لا يُجمع مبلغان بعملتين مختلفتين
-  const checkedTotals = sumByCurrency(checkedRows, (r: any) => +r.amount || 0, (r: any) => r.currency);
+  // التحويل (النقديّ) والمخصوم من الإشعارات — كلاهما مفصولٌ بالعملة، لا يُجمع مبلغان بعملتين
+  const batch = summarize(invoiceRows);
+  const used = usedByNote(invoiceRows);
+  const anyCredit = invoiceRows.some(isCreditNote);
 
   async function handleSaveAll() {
-    if (checkedRows.length === 0) { setError('اختر فاتورة واحدة على الأقل'); return; }
-    const invalid = checkedRows.find((r) => !r.amount || +r.amount <= 0);
-    if (invalid) { setError(`المبلغ غير صحيح للفاتورة ${invalid.invoice_number}`); return; }
+    const why = validate(invoiceRows);
+    if (why) { setError(why); return; }
     if (!shared.payment_date) { setError('تاريخ الدفع مطلوب'); return; }
     setSaving(true);
     setError('');
     try {
-      await Promise.all(checkedRows.map((r) =>
-        api.post('/api/payments', {
-          invoice_id: r.id,
-          amount: parseFloat(r.amount),
-          currency: r.currency,
-          payment_date: shared.payment_date,
-          payment_type: shared.payment_type,
-          payment_method: shared.payment_method,
-          reference: shared.reference || null,
-          notes: shared.notes || null,
-        })
-      ));
+      // نداءٌ واحدٌ ذرّيّ: السدادات وتطبيقات الإشعارات تُسجَّل معاً أو لا يُسجَّل شيء
+      await api.post('/api/payments/batch', batchPayload(selectedSupplierId, invoiceRows, shared));
       setShowModal(false);
       load();
     } catch (err: any) {
@@ -191,6 +193,13 @@ export default function PaymentsPage() {
     } finally {
       setSaving(false);
     }
+  }
+
+  async function doDeleteAlloc() {
+    if (!delAlloc) return;
+    try { await api.delete(`/api/payments/allocations/${delAlloc.id}`); } catch { /* surfaced via reload */ }
+    setDelAlloc(null);
+    load();
   }
 
   async function doDelete() {
@@ -357,6 +366,60 @@ export default function PaymentsPage() {
       </div>
       <p className="text-[11px] text-gray-400 text-center">{t('note.currency')}</p>
 
+      {/* تطبيقات الإشعارات الدائنة — تسويةٌ داخل حساب المورّد، ليست تحويلاً بنكيّاً */}
+      {allocations.length > 0 && (
+        <Card className="p-4">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="font-bold text-gray-800 text-sm">الإشعارات الدائنة المطبَّقة على الفواتير <span className="text-gray-400 font-normal">({allocations.length})</span></h3>
+            <span className="text-[11px] text-gray-400">خصمٌ من حساب المورّد — لا يمسّ البنك</span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm whitespace-nowrap">
+              <thead className="text-gray-500 text-xs border-b border-gray-100"><tr>
+                <th scope="col" className="text-start py-2 px-3">التاريخ</th>
+                <th scope="col" className="text-start py-2 px-3">الإشعار الدائن</th>
+                <th scope="col" className="text-start py-2 px-3">طُبّق على الفاتورة</th>
+                <th scope="col" className="text-start py-2 px-3">المورد</th>
+                <th scope="col" className="text-start py-2 px-3">المبلغ</th>
+                <th scope="col" className="text-start py-2 px-3">المرجع</th>
+                {canWrite && <th scope="col" className="text-start py-2 px-3"></th>}
+              </tr></thead>
+              <tbody>
+                {allocations.map((a) => (
+                  <tr key={a.id} className="border-b border-gray-50 last:border-0">
+                    <td className="px-3 py-2 text-gray-500 tabular-nums">{a.allocation_date?.slice(0, 10) || '—'}</td>
+                    <td className="px-3 py-2 font-mono text-emerald-700">{a.credit_note?.invoice_number || '—'}</td>
+                    <td className="px-3 py-2 font-mono text-brand-700">{a.invoice?.invoice_number || '—'}</td>
+                    <td className="px-3 py-2 text-gray-700" dir="auto">{a.credit_note?.supplier?.name || '—'}</td>
+                    <td className="px-3 py-2 font-medium tabular-nums">{fmtMoney(+a.amount)} <span className="text-[11px] text-gray-400">{a.currency}</span></td>
+                    <td className="px-3 py-2 text-gray-600 font-mono">{a.reference || '—'}</td>
+                    {canWrite && <td className="px-3 py-2"><button onClick={() => setDelAlloc(a)} className="text-xs text-red-400 hover:text-red-600">إلغاء التطبيق</button></td>}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
+      {delAlloc && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setDelAlloc(null)}>
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-5" onClick={(e) => e.stopPropagation()}>
+            <h3 className="font-bold text-gray-800 mb-2">إلغاء تطبيق الإشعار الدائن؟</h3>
+            <div className="rounded-xl border border-gray-100 p-3 text-sm space-y-1 mb-3">
+              <div className="flex justify-between"><span className="text-gray-500">الإشعار</span><span className="font-mono text-emerald-700">{delAlloc.credit_note?.invoice_number || '—'}</span></div>
+              <div className="flex justify-between"><span className="text-gray-500">الفاتورة</span><span className="font-mono text-brand-700">{delAlloc.invoice?.invoice_number || '—'}</span></div>
+              <div className="flex justify-between"><span className="text-gray-500">المبلغ</span><span className="font-bold tabular-nums">{fmtMoney(+delAlloc.amount, delAlloc.currency)}</span></div>
+            </div>
+            <p className="text-xs text-amber-700 bg-amber-50 rounded-lg p-2 mb-3">يعود المبلغ رصيداً في الإشعار، ويرتفع متبقّي الفاتورة بمقداره. السداد النقديّ لا يُمسّ.</p>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setDelAlloc(null)}>{t('common.cancel')}</Button>
+              <Button variant="danger" onClick={doDeleteAlloc}>إلغاء التطبيق</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Payment detail drawer */}
       <Drawer open={!!detail} onClose={() => setDetail(null)} title={detail ? fmtMoney(detail.amount, detail.currency) : ''}>
         {detail && (() => {
@@ -467,7 +530,7 @@ export default function PaymentsPage() {
                             <th scope="col" className="px-3 py-2 w-8">
                               <input type="checkbox"
                                 checked={invoiceRows.length > 0 && invoiceRows.every(r => r.checked)}
-                                onChange={(e) => setInvoiceRows(rows => rows.map(r => ({ ...r, checked: e.target.checked })))}
+                                onChange={(e) => { const on = e.target.checked; reselect(() => on); }}
                                 className="w-4 h-4 cursor-pointer" />
                             </th>
                             <th scope="col" className="px-3 py-2">رقم الفاتورة</th>
@@ -475,23 +538,27 @@ export default function PaymentsPage() {
                             <th scope="col" className="px-3 py-2">إجمالي الفاتورة</th>
                             <th scope="col" className="px-3 py-2">المدفوع</th>
                             <th scope="col" className="px-3 py-2 text-red-500">المتبقي</th>
-                            <th scope="col" className="px-3 py-2 text-blue-600">المبلغ المراد دفعه</th>
+                            {anyCredit && <th scope="col" className="px-3 py-2 text-emerald-600">من الإشعار الدائن</th>}
+                            <th scope="col" className="px-3 py-2 text-blue-600">{anyCredit ? 'نقداً (التحويل)' : 'المبلغ المراد دفعه'}</th>
                             <th scope="col" className="px-3 py-2 text-blue-600">العملة</th>
                           </tr>
                         </thead>
                         <tbody>
                           {invoiceRows.map((row) => {
-                            const remaining = row.total_amount - row.paid_amount;
-                            const isPartial = row.checked && +row.amount > 0 && +row.amount < remaining;
+                            const cn = isCreditNote(row);
+                            const remaining = remainingOf(row);
+                            const settled = (+row.amount || 0) + (+row.credit || 0);
+                            const isPartial = !cn && row.checked && settled > 0 && settled < remaining - 0.005;
                             return (
-                              <tr key={row.id} className={`border-t transition-colors ${row.checked ? 'bg-blue-50' : 'hover:bg-gray-50'}`}>
+                              <tr key={row.id} className={`border-t transition-colors ${row.checked ? (cn ? 'bg-emerald-50' : 'bg-blue-50') : 'hover:bg-gray-50'}`}>
                                 <td className="px-3 py-2 text-center">
                                   <input type="checkbox" checked={row.checked} onChange={() => toggleRow(row.id)}
                                     className="w-4 h-4 cursor-pointer" />
                                 </td>
                                 <td className="px-3 py-2">
                                   <div className="flex items-center gap-2">
-                                    <span className="font-mono text-blue-700 font-medium">{row.invoice_number}</span>
+                                    <span className={`font-mono font-medium ${cn ? 'text-emerald-700' : 'text-blue-700'}`}>{row.invoice_number}</span>
+                                    {cn && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 whitespace-nowrap">إشعار دائن</span>}
                                     {invoiceAttachments[row.id]?.length > 0 && (
                                       <div className="flex gap-1">
                                         {invoiceAttachments[row.id].map((att: any, i: number) => (
@@ -508,43 +575,68 @@ export default function PaymentsPage() {
                                 <td className="px-3 py-2 text-gray-600">{row.vessel?.name || '—'}</td>
                                 <td className="px-3 py-2 text-gray-600">{row.total_amount.toLocaleString()}</td>
                                 <td className="px-3 py-2 text-green-600">{row.paid_amount.toLocaleString()}</td>
-                                <td className="px-3 py-2 font-bold text-red-600">{remaining.toLocaleString()}</td>
-                                <td className="px-3 py-2">
-                                  <div className="flex items-center gap-1">
-                                    <input
-                                      type="number"
-                                      value={row.amount}
-                                      onChange={(e) => updateRow(row.id, 'amount', e.target.value)}
-                                      disabled={!row.checked}
-                                      className="w-28 border rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:bg-gray-100 disabled:text-gray-400 text-right"
-                                    />
-                                    {isPartial && (
-                                      <span className="text-xs text-orange-500 whitespace-nowrap">جزئي</span>
+                                <td className={`px-3 py-2 font-bold ${cn ? 'text-emerald-700' : 'text-red-600'}`}>{remaining.toLocaleString()}</td>
+                                {cn ? (
+                                  // سطر الإشعار: رصيدٌ لك يُخصم من التحويل — لا يُسدَّد
+                                  <td colSpan={2} className="px-3 py-2 text-xs text-emerald-700 whitespace-nowrap">
+                                    {row.checked
+                                      ? <>مستعمَل <b className="tabular-nums">{fmtMoney(used[row.id] || 0)}</b> من <span className="tabular-nums">{fmtMoney(availableOf(row))}</span></>
+                                      : <>رصيدٌ لك <span className="tabular-nums">{fmtMoney(availableOf(row))}</span> — اختره ليُخصم من التحويل</>}
+                                  </td>
+                                ) : (
+                                  <>
+                                    {anyCredit && (
+                                      <td className="px-3 py-2">
+                                        <input
+                                          type="number" min="0"
+                                          aria-label={`من الإشعار الدائن ${row.invoice_number}`}
+                                          value={row.credit}
+                                          onChange={(e) => updateRow(row.id, 'credit', e.target.value)}
+                                          disabled={!row.checked}
+                                          className="w-24 border rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-emerald-400 disabled:bg-gray-100 disabled:text-gray-400 text-right"
+                                        />
+                                      </td>
                                     )}
-                                  </div>
-                                </td>
-                                <td className="px-3 py-2">
-                                  <select
-                                    value={row.currency}
-                                    onChange={(e) => updateRow(row.id, 'currency', e.target.value)}
-                                    disabled={!row.checked}
-                                    className="border rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:bg-gray-100 disabled:text-gray-400">
-                                    {CURRENCIES.map(c => <option key={c.code} value={c.code}>{c.code}</option>)}
-                                  </select>
-                                </td>
+                                    <td className="px-3 py-2">
+                                      <div className="flex items-center gap-1">
+                                        <input
+                                          type="number" min="0"
+                                          aria-label={`المبلغ النقدي ${row.invoice_number}`}
+                                          value={row.amount}
+                                          onChange={(e) => updateRow(row.id, 'amount', e.target.value)}
+                                          disabled={!row.checked}
+                                          className="w-28 border rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:bg-gray-100 disabled:text-gray-400 text-right"
+                                        />
+                                        {isPartial && (
+                                          <span className="text-xs text-orange-500 whitespace-nowrap">جزئي</span>
+                                        )}
+                                      </div>
+                                    </td>
+                                  </>
+                                )}
+                                {/* العملة عملة الفاتورة — الخادم يرفض غيرها، ولا تحويل عملات */}
+                                <td className="px-3 py-2 text-gray-600 font-mono text-xs">{row.currency}</td>
                               </tr>
                             );
                           })}
                         </tbody>
-                        {checkedRows.length > 0 && (
+                        {batch.invoices > 0 && (
                           <tfoot className="bg-blue-50 border-t-2 border-blue-200">
+                            {ccyEntries(batch.applied).length > 0 && (
+                              <tr>
+                                <td colSpan={6} className="px-3 py-1.5 text-sm text-emerald-700 text-right">مخصومٌ من الإشعارات الدائنة:</td>
+                                <td colSpan={anyCredit ? 3 : 2} className="px-3 py-1.5 text-sm font-semibold text-emerald-700">
+                                  <div className="flex flex-col gap-0.5">{ccyEntries(batch.applied).map(({ ccy, value }) => <span key={ccy}>{fmtMoney(value, ccy)}</span>)}</div>
+                                </td>
+                              </tr>
+                            )}
                             <tr>
                               <td colSpan={6} className="px-3 py-2 text-sm font-bold text-blue-700 text-right">
-                                إجمالي الدفع ({checkedRows.length} فاتورة):
+                                {ccyEntries(batch.applied).length > 0 ? 'صافي التحويل' : 'إجمالي الدفع'} ({batch.invoices} فاتورة):
                               </td>
-                              <td colSpan={2} className="px-3 py-2 text-sm font-bold text-blue-700">
+                              <td colSpan={anyCredit ? 3 : 2} className="px-3 py-2 text-sm font-bold text-blue-700">
                                 <div className="flex flex-col gap-0.5">
-                                  {ccyEntries(checkedTotals).map(({ ccy, value }) => (
+                                  {ccyEntries(batch.transfer).map(({ ccy, value }) => (
                                     <span key={ccy}>{fmtMoney(value, ccy)}</span>
                                   ))}
                                 </div>
@@ -610,12 +702,12 @@ export default function PaymentsPage() {
             <div className="border-t px-6 py-4">
               {error && <p className="text-red-500 text-sm mb-3">{error}</p>}
               <div className="flex gap-3">
-                <button onClick={handleSaveAll} disabled={saving || checkedRows.length === 0}
+                <button onClick={handleSaveAll} disabled={saving || batch.invoices === 0}
                   className="flex-1 bg-blue-600 text-white py-2.5 rounded-lg hover:bg-blue-700 disabled:opacity-50 font-medium text-sm">
                   {saving
                     ? 'جاري الحفظ...'
-                    : checkedRows.length > 0
-                      ? `حفظ ${checkedRows.length} فاتورة — ${fmtCcyMap(checkedTotals)}`
+                    : batch.invoices > 0
+                      ? `حفظ ${batch.invoices} فاتورة — تحويل ${fmtCcyMap(batch.transfer)}`
                       : 'حفظ'}
                 </button>
                 <button onClick={() => setShowModal(false)}
