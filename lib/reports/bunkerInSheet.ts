@@ -18,6 +18,30 @@ export interface BunkerCopy { ref: string; month: string; amount: number }
 
 const CENT = 0.005;
 
+/*
+ * سطر بنكرٍ في الشيت يُشطب من الكارت — حين يكون هو النسخة، والفاتورة محمَّلةٌ في شهرها.
+ * يُنزع من تموينات رحلته ويُعاد إلى صافيها، لأنّ BALANCE خصمه أصلاً. ويُعرَّف بالشهر
+ * والرحلة والمبلغ معاً: أرقام الرحلات تعود إلى ١ كلّ سنة، وإن صحّح الوكيل السطر في ملفّ
+ * المركب تغيّر مبلغه فلا يُشطب مرّتين.
+ */
+export interface SheetBunkerCut { month: string; ref: string; amount: number; reason: string }
+
+export function cutSheetBunker<V extends { month: string | null; ref: unknown; bunker: number; net: number }>(
+  voyages: V[],
+  rules: SheetBunkerCut[] = [],
+): { voyages: V[]; cut: SheetBunkerCut[] } {
+  const cut: SheetBunkerCut[] = [];
+  if (!rules.length) return { voyages, cut };
+  const out = voyages.map((v) => {
+    const r = rules.find((x) => x.month === v.month && x.ref === String(v.ref) && Math.abs(v.bunker - x.amount) < CENT);
+    if (!r) return v;
+    cut.push(r);
+    const r2 = (n: number) => Math.round(n * 100) / 100;
+    return { ...v, bunker: r2(v.bunker - r.amount), net: r2(v.net + r.amount) };
+  });
+  return { voyages: out, cut };
+}
+
 export function matchBunkerInSheet(
   docs: BunkerDoc[],
   lines: SheetBunkerLine[],

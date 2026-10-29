@@ -9,7 +9,7 @@ import VesselBoardReport from './VesselBoardReport';
 import BassamAccountCard from './BassamAccountCard';
 import { DEFAULT_RATES } from './ExchangeRatesCard';
 import CogsImportPanel, { type CogsEntry } from './CogsImportPanel';
-import { matchBunkerInSheet } from '@/lib/reports/bunkerInSheet';
+import { matchBunkerInSheet, cutSheetBunker } from '@/lib/reports/bunkerInSheet';
 
 // التوزيع الافتراضي لبنود المصروفات على مجموعات هيكل التكاليف (مفتاح البند → المجموعة)
 export const COST_BUCKET_DEFAULTS: Record<string, string> = {
@@ -109,6 +109,11 @@ export interface VesselConfig {
    */
   bunkerInSheet?: { pinned?: Record<string, string> };
   /*
+   * سطور بنكرٍ في الشيت تُشطب من الكارت لأنّها نسخةٌ من فواتير محمَّلةٍ في شهورها.
+   * تُعرَّف بالشهر والرحلة والمبلغ معاً — أرقام الرحلات تعود إلى ١ كلّ سنة.
+   */
+  sheetBunkerExcluded?: { month: string; ref: string; amount: number; reason: string }[];
+  /*
    * إهلاك المركب: مبلغٌ ثابتٌ بالدولار يُحمَّل كلَّ شهرٍ ضمن المشتريات (بعد صافي التشغيل).
    * يبدأ من `depreciationFrom` ('YYYY-MM') إن وُجد، وإلا من أوّل شهرٍ في الشيت.
    */
@@ -199,6 +204,11 @@ export const POSEIDON: VesselConfig = {
    * الشيت صافيتين من العمولة المردودة (1,020.55) فتُربطان برحلتيهما.
    */
   bunkerInSheet: { pinned: { 'B-26083': '79', 'B-26091': '80' } },
+  /*
+   * سطر رحلة 78 (16 أغسطس) = B-26022 + B-26037 بالقرش — فاتورتان في النظام في فبراير وأبريل،
+   * وQuickBooks يحملهما في شهريهما ولا يحمل السطر. شُطب بأمر المالك ٢٩ أكتوبر ٢٠٢٦.
+   */
+  sheetBunkerExcluded: [{ month: '2026-08', ref: '78', amount: 104646.42, reason: 'B-26022 + B-26037' }],
   /*
    * مرتّبات الشهر — من حساب 5312 في ملفّ COGS USD (يناير–يوليو ٢٠٢٦)، ثُبّتت
    * بأمر المالك ٨ سبتمبر ٢٠٢٦ قبل تشغيل الاستيراد. **وهي تتغلّب على QuickBooks**
@@ -804,7 +814,14 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
     }
     return best;
   }, [voyages]);
-  const sel = useMemo(() => voyages.filter((v) => !!v.month && v.month >= month && v.month <= toMonth), [voyages, month, toMonth]);
+  /*
+   * سطور بنكرٍ في الشيت مشطوبةٌ من الكارت — تُنزع من تموينات رحلتها وتُعاد إلى صافيها،
+   * لأنّ BALANCE خصمها أصلاً. ولا يُشطب السطر إلا إن بقي مبلغه كما هو: إن صحّحه الوكيل
+   * في ملفّ المركب لم يُشطب مرّتين.
+   */
+  const { voyages: voyagesEff, cut: sheetBunkerCut } = useMemo(() => cutSheetBunker(voyages, cfg.sheetBunkerExcluded), [voyages, cfg.sheetBunkerExcluded]);
+  const sel = useMemo(() => voyagesEff.filter((v) => !!v.month && v.month >= month && v.month <= toMonth), [voyagesEff, month, toMonth]);
+  const sheetBunkerCutSel = sheetBunkerCut.filter((x) => x.month >= month && x.month <= toMonth);
 
   /*
    * الرحلات التي وسَمَها الدفتر — في الشهر المعروض وفي المركب كلِّه.
@@ -828,9 +845,9 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
     if (!cfg.bunkerInSheet || !cfg.linkInvoices) return new Map<string, { ref: string; month: string; amount: number }>();
     const docs = costDocs.map((inv) => ({ id: String(inv.id), number: String(inv.invoice_number || ''), date: String(inv.invoice_date || '').slice(0, 10), usd: bunkerUSDOf(inv) }))
       .filter((d) => d.usd > 0);
-    const lines = voyages.filter((v) => v.month && v.bunker > 0).map((v) => ({ ref: String(v.ref), month: v.month as string, date: v.date, amount: v.bunker }));
+    const lines = voyagesEff.filter((v) => v.month && v.bunker > 0).map((v) => ({ ref: String(v.ref), month: v.month as string, date: v.date, amount: v.bunker }));
     return matchBunkerInSheet(docs, lines, cfg.bunkerInSheet.pinned);
-  }, [cfg.bunkerInSheet, cfg.linkInvoices, costDocs, voyages, rates]);
+  }, [cfg.bunkerInSheet, cfg.linkInvoices, costDocs, voyagesEff, rates]);
 
   // فواتير البنكر للشهر (بند = Bunker) — بالدولار، تُحمّل كاملة في شهرها (بدون إهلاك)، إلا ما في الشيت أصلاً
   const { bunkerInvoiceUSD, bunkerSkipped } = useMemo(() => {
@@ -1076,6 +1093,7 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
       { البند: 'إجمالي المصروفات', القيمة: data.expenses },
       { البند: 'بنكر — رصيد أول المدة', القيمة: data.opening },
       { البند: 'بنكر — تموينات الشهر', القيمة: data.supplies },
+      ...(sheetBunkerCutSel.length ? [{ البند: 'بنكر — سطور شُطبت من الإكسيل (نسخ فواتير)', القيمة: sheetBunkerCutSel.reduce((s, x) => s + x.amount, 0) }] : []),
       ...(bunkerSkipped.length ? [{ البند: 'بنكر — فواتير لم تُحمَّل (في الشيت أصلاً)', القيمة: bunkerSkipped.reduce((s, x) => s + x.usd, 0) }] : []),
       { البند: 'بنكر — مخزون آخر المدة', القيمة: data.closing },
       { البند: 'بنكر — المستهلك', القيمة: data.bunkerCost },
@@ -1401,6 +1419,11 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
               </div>
               {isRange && <p className="text-xs text-blue-700 mt-2">📅 فترة {periodLabel}: الرصيد الافتتاحيّ من أوّل شهر، ومخزون آخر المدة من آخر شهر، والتموينات والفواتير مجموع الفترة. لتعديل قيمةٍ اختر شهراً واحداً.</p>}
               {data.bunkerInvoiceUSD > 0 && <p className="text-xs text-amber-600 mt-2">⛽ فواتير بند «Bunker» ({fmt(data.bunkerInvoiceUSD)}) اتحمّلت هنا مش في المشتريات. مخزون آخر المدة بيترحّل رصيد افتتاحي للشهر الجاي.</p>}
+              {sheetBunkerCutSel.length > 0 && (
+                <p className="text-xs text-gray-600 mt-2">✂️ سطور شُطبت من تموينات الإكسيل لأنّها نسخةٌ من فواتير محمَّلة في شهورها:{' '}
+                  {sheetBunkerCutSel.map((x) => <span key={x.month + x.ref}>رحلة {x.ref} ({monthLabel(x.month)}) · {fmt(x.amount)} = <span dir="ltr" className="font-mono">{x.reason}</span></span>)}
+                </p>
+              )}
               {bunkerSkipped.length > 0 && (
                 <div className="text-xs text-gray-600 mt-2">
                   <p>🔁 فواتير بنكر لم تُحمَّل لأنّها في عمود الإكسيل أصلاً ({fmt(bunkerSkipped.reduce((s, x) => s + x.usd, 0))}) — الفاتورة باقية للسداد:</p>

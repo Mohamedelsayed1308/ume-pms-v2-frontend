@@ -1,5 +1,28 @@
 import { describe, expect, it } from 'vitest';
-import { matchBunkerInSheet } from '@/lib/reports/bunkerInSheet';
+import { matchBunkerInSheet, cutSheetBunker } from '@/lib/reports/bunkerInSheet';
+
+describe('cutSheetBunker', () => {
+  const rule = { month: '2026-08', ref: '78', amount: 104646.42, reason: 'B-26022 + B-26037' };
+  const v = (month: string, ref: number, bunker: number, net: number) => ({ month, ref, bunker, net });
+
+  it('يشطب السطر من التموينات ويعيده إلى الصافي', () => {
+    const { voyages, cut } = cutSheetBunker([v('2026-08', 78, 104646.42, 50000), v('2026-08', 79, 60591.81, 1)], [rule]);
+    expect(voyages[0]).toMatchObject({ bunker: 0, net: 154646.42 });
+    expect(voyages[1]).toMatchObject({ bunker: 60591.81, net: 1 });
+    expect(cut).toEqual([rule]);
+  });
+
+  it('لا يشطب رحلةً بالرقم نفسه في سنةٍ أخرى، ولا سطراً تغيّر مبلغه', () => {
+    const { voyages, cut } = cutSheetBunker([v('2027-08', 78, 104646.42, 5), v('2026-08', 78, 104646.41, 5)], [rule]);
+    expect(voyages.map((x) => x.bunker)).toEqual([104646.42, 104646.41]);
+    expect(cut).toHaveLength(0);
+  });
+
+  it('بلا قواعد يعيد المصفوفة نفسها', () => {
+    const list = [v('2026-08', 78, 1, 1)];
+    expect(cutSheetBunker(list).voyages).toBe(list);
+  });
+});
 
 // أرقام بوسيدون الحقيقيّة (٢٩ أكتوبر ٢٠٢٦)
 const lines = [
