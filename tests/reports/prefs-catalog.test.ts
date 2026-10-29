@@ -68,8 +68,8 @@ describe('١٤ · الدليل: البحث والصلاحية والمثبّتة
     for (const id of ['a', 'b', 'c', 'a', 'd', 'e']) r = pushRecent(r, id);
     expect(r).toEqual(['e', 'd', 'a', 'c']);
   });
-  it('الدليل أربعة عشر تقريراً، ولكلٍّ سؤالٌ ونوع نتيجةٍ وفلاتر', () => {
-    expect(REPORTS.length).toBe(14);
+  it('الدليل خمسة عشر تقريراً، ولكلٍّ سؤالٌ ونوع نتيجةٍ وفلاتر', () => {
+    expect(REPORTS.length).toBe(15);
     for (const r of REPORTS) { expect(r.question.ar && r.question.en && r.resultType.ar && r.needs.ar).toBeTruthy(); expect(REPORT_REQUIRES[r.id]).toBeTruthy(); }
   });
 });

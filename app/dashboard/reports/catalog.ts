@@ -11,7 +11,7 @@
 export interface Bi { ar: string; en: string }
 export type CatKey = 'fleet' | 'suppliers' | 'cash' | 'ops' | 'tools';
 export type ReportId =
-  | 'fleet-dashboard' | 'vessel-profit' | 'alcudia-profit' | 'poseidon-profit' | 'daleela-line' | 'gubal-profit'
+  | 'fleet-dashboard' | 'vessel-profit' | 'alcudia-profit' | 'poseidon-profit' | 'daleela-line' | 'monte-line' | 'gubal-profit'
   | 'supplier-statement' | 'unpaid-supplier' | 'vessel-suppliers'
   | 'due-alerts' | 'unpaid-vessel'
   | 'dept-delays' | 'user-activity'
@@ -45,6 +45,7 @@ export const REPORTS: ReportMeta[] = [
   { id: 'alcudia-profit', cat: 'fleet', icon: 'coins', title: B('ربحية Alcudia', 'Alcudia Profitability'), desc: B('إيرادات ومصروفات ومشتريات الكوديا شهرياً', 'Monthly revenue, expenses & purchases — Alcudia'), question: B('هل تربح Alcudia كل شهر بعد المشتريات؟', 'Is Alcudia profitable each month after purchases?'), resultType: PNL, needs: R_OWN, keywords: 'alcudia الكوديا ربح profit مشتريات purchases' },
   { id: 'poseidon-profit', cat: 'fleet', icon: 'coins', title: B('ربحية Poseidon', 'Poseidon Profitability'), desc: B('إيرادات ومصروفات بوسيدون شهرياً — تشغيلي، بلا توزيع الأرباح', 'Monthly revenue & expenses — Poseidon (operational, excludes profit distribution)'), question: B('ما النتيجة التشغيلية لـ Poseidon كل شهر؟', 'What is Poseidon’s monthly operating result?'), resultType: PNL, needs: R_OWN, keywords: 'poseidon بوسيدون ربح profit' },
   { id: 'daleela-line', cat: 'fleet', icon: 'coins', title: B('ربحية دليلة — جدّة/سواكن', 'Daleela Profitability — Jeddah/Suakin'), desc: B('قالب خطّ جدّة/سواكن: قائمة الدخل والأعداد والاتّجاهان والمقارنة وسعر الجنيه', 'Jeddah/Suakin template: P&L, volumes, directions, peers & SDG rate'), question: B('هل تربح دليلة على خطّ جدّة/سواكن بعد الإيجار، وكم شاحنةً تتعادل بها الرحلة؟', 'Is Daleela profitable on the Jeddah/Suakin line after hire, and at how many trucks does a voyage break even?'), resultType: PNL, needs: R_OWN, keywords: 'daleela دليلة جدة سواكن jeddah suakin sudan السودان ربح profit تعادل break-even ايجار hire' },
+  { id: 'monte-line', cat: 'fleet', icon: 'coins', title: B('ربحية مونتي — جدّة/سواكن', 'Monte Profitability — Jeddah/Suakin'), desc: B('رحلات مونتي ببنودها والإشغال وشهراً بشهر من أبريل ومخزون الوقود وكشف الوكيل والمقارنة بدليلة', 'Monte voyages itemised, occupancy, monthly since April, fuel stock, agent statement & Daleela comparison'), question: B('كم تربح مونتي في الرحلة وبعد تكاليفها الثابتة، وأين تقف من أوّل أبريل؟', 'What does Monte earn per voyage and after fixed costs, and where does it stand since April?'), resultType: PNL, needs: R_OWN, keywords: 'monte مونتي express اكسبريس جدة سواكن jeddah suakin sudan السودان ربح profit وقود fuel اشغال occupancy وكيل agent' },
   { id: 'gubal-profit', cat: 'fleet', icon: 'coins', title: B('ربحية Gubal', 'Gubal Profitability'), desc: B('قائمة دخل شهرية / من فترة لفترة لمركب جوبال', 'Monthly / period income statement — Gubal'), question: B('ما قائمة دخل Gubal لفترة محددة؟', 'What is Gubal’s income statement for a period?'), resultType: PNL, needs: R_OWN, keywords: 'gubal جوبال قائمة دخل income statement' },
 
   { id: 'supplier-statement', cat: 'suppliers', icon: 'receipt', title: B('كشف حساب مورد', 'Supplier Statement'), desc: B('مدين / دائن / رصيد متراكم لكل عملة', 'Debit / credit / running balance per currency'), question: B('ما رصيدنا مع مورد بكل عملة، وكيف تكوّن؟', 'What is our balance with a supplier per currency, and how did it build up?'), resultType: B('دفتر حركات لكل عملة', 'Ledger per currency'), needs: R_SUP, keywords: 'رصيد مورد حساب مدين دائن دفتر ledger balance statement account' },
@@ -64,7 +65,7 @@ export const REPORTS: ReportMeta[] = [
 export const REPORT_REQUIRES: Record<ReportId, string> = {
   'fleet-dashboard': '/dashboard/vessels', 'vessel-profit': '/dashboard/vessels',
   'alcudia-profit': '/dashboard/vessels', 'gubal-profit': '/dashboard/vessels',
-  'poseidon-profit': '/dashboard/vessels', 'daleela-line': '/dashboard/vessels',
+  'poseidon-profit': '/dashboard/vessels', 'daleela-line': '/dashboard/vessels', 'monte-line': '/dashboard/vessels',
   'vessel-suppliers': '/dashboard/vessels',
   'supplier-statement': '/dashboard/suppliers', 'unpaid-supplier': '/dashboard/suppliers',
   'due-alerts': '/dashboard/invoices', 'unpaid-vessel': '/dashboard/invoices',

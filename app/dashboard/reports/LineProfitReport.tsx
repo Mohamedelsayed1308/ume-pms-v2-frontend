@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
+import MonteLineCard from './MonteLineCard';
 
 /*
  * ═══════════════════════════════════════════════════════════════════════════
@@ -36,11 +37,18 @@ export interface LineVesselConfig {
   ownership: 'chartered' | 'owned';
   hireInLedger: boolean;             // عمّان: نعم · دليلة: لا (يُدخَل يدويّاً)
   peers: { key: string; nameAr: string; nameEn: string; hireInLedger: boolean; ownership: 'chartered' | 'owned' }[];
+  source?: 'sheet' | 'package';      // الافتراضي الشيت · مونتي: حزمة `monte_pms.json`
 }
 
 export const DALEELA_JS: LineVesselConfig = {
   key: 'DaleelaJS', nameAr: 'دليلة', nameEn: 'Daleela', ownership: 'chartered', hireInLedger: false,
   peers: [{ key: 'AmmanJS', nameAr: 'عمّان', nameEn: 'Amman', hireInLedger: true, ownership: 'chartered' }],
+};
+
+// مونتي — المقارنة بدليلة وعمّان تأتي في الحزمة نفسها (`line_compare`)
+export const MONTE_JS: LineVesselConfig = {
+  key: 'MonteJS', nameAr: 'مونتي', nameEn: 'Monte Express', ownership: 'owned', hireInLedger: false,
+  peers: [], source: 'package',
 };
 
 // ── مسمّيات البنود — مفاتيحها أسماء الحمولة في الشيت الموحّد ──
@@ -175,7 +183,14 @@ function peerMetrics(vs: LineVoyage[], man: LineManual, ownership: 'chartered' |
   };
 }
 
+// مونتي بلا دفترٍ في الشيت — كارتها من حزمة رحلاتها (انظر `MonteLineCard`)
 export default function LineProfitReport({ config }: { config: LineVesselConfig }) {
+  return config.source === 'package'
+    ? <MonteLineCard key={config.key} config={config} />
+    : <SheetLineCard key={config.key} config={config} />;
+}
+
+function SheetLineCard({ config }: { config: LineVesselConfig }) {
   const cfg = config;
   const { locale } = useI18n();
   const en = locale === 'en';
