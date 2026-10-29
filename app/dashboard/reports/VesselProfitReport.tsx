@@ -9,6 +9,7 @@ import VesselBoardReport from './VesselBoardReport';
 import BassamAccountCard from './BassamAccountCard';
 import { DEFAULT_RATES } from './ExchangeRatesCard';
 import CogsImportPanel, { type CogsEntry } from './CogsImportPanel';
+import { matchBunkerInSheet } from '@/lib/reports/bunkerInSheet';
 
 // التوزيع الافتراضي لبنود المصروفات على مجموعات هيكل التكاليف (مفتاح البند → المجموعة)
 export const COST_BUCKET_DEFAULTS: Record<string, string> = {
@@ -102,6 +103,12 @@ export interface VesselConfig {
   /** بنود فواتير النظام التي لا تدخل الكارت لأنّ مصدرها الوثيقة (تأمين) — مطابقةٌ جزئيّة بلا حالة أحرف */
   ignoreInvoiceItems?: string[];
   /*
+   * فواتير بنكرٍ لها نسخةٌ في عمود البنكر بالشيت: لا تُحمَّل مرّةً ثانية (انظر
+   * `lib/reports/bunkerInSheet`). `true` للتطابق الآليّ بالقرش، و`pinned` يربط رقم
+   * فاتورةٍ برقم رحلتها حين يُسجّلها الشيت صافيةً فلا يتطابق المبلغان.
+   */
+  bunkerInSheet?: { pinned?: Record<string, string> };
+  /*
    * إهلاك المركب: مبلغٌ ثابتٌ بالدولار يُحمَّل كلَّ شهرٍ ضمن المشتريات (بعد صافي التشغيل).
    * يبدأ من `depreciationFrom` ('YYYY-MM') إن وُجد، وإلا من أوّل شهرٍ في الشيت.
    */
@@ -186,6 +193,12 @@ export const POSEIDON: VesselConfig = {
    * لأنّ التأمين يُستحقّ من الوثيقة سطراً سنويّاً.
    */
   cogsUntil: '2026-07-31', ignoreInvoiceItems: ['P&I', 'H&M', 'war'], // والوقود مستثنىً من الحدّ — انظر costDocs
+  /*
+   * ازدواج البنكر — بقرار المالك ٢٩ أكتوبر ٢٠٢٦: الفاتورة تبقى للسداد، والكارت يتركها
+   * إن كانت في عمود الشيت. ثمانٍ حتّى أكتوبر (713,520.93)، منها اثنتان مسجّلتان في
+   * الشيت صافيتين من العمولة المردودة (1,020.55) فتُربطان برحلتيهما.
+   */
+  bunkerInSheet: { pinned: { 'B-26083': '79', 'B-26091': '80' } },
   /*
    * مرتّبات الشهر — من حساب 5312 في ملفّ COGS USD (يناير–يوليو ٢٠٢٦)، ثُبّتت
    * بأمر المالك ٨ سبتمبر ٢٠٢٦ قبل تشغيل الاستيراد. **وهي تتغلّب على QuickBooks**
@@ -804,20 +817,37 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
   const flaggedSel = useMemo(() => sel.filter((v) => v.broken), [sel]);
   const flaggedAll = useMemo(() => voyages.filter((v) => v.broken), [voyages]);
 
-  // فواتير البنكر للشهر (بند = Bunker) — بالدولار، تُحمّل كاملة في شهرها (بدون إهلاك)
-  const bunkerInvoiceUSD = useMemo(() => {
-    if (!cfg.linkInvoices || !month) return 0;
+  // جزء البنكر من الفاتورة بالدولار، بسعر شهرها
+  const bunkerUSDOf = (inv: any) => {
+    const pm = (inv.invoice_date || '').slice(0, 7);
+    const bp = bunkerPortion(inv), rate = rateFor(inv.currency || 'USD', pm);
+    return bp > 0 && rate > 0 ? bp / rate : 0;
+  };
+  // فواتير البنكر التي لها نسخةٌ في عمود الشيت — في كلّ الشهور، لأنّ النسخة قد تقع في شهرٍ غير شهر الفاتورة
+  const bunkerCopies = useMemo(() => {
+    if (!cfg.bunkerInSheet || !cfg.linkInvoices) return new Map<string, { ref: string; month: string; amount: number }>();
+    const docs = costDocs.map((inv) => ({ id: String(inv.id), number: String(inv.invoice_number || ''), date: String(inv.invoice_date || '').slice(0, 10), usd: bunkerUSDOf(inv) }))
+      .filter((d) => d.usd > 0);
+    const lines = voyages.filter((v) => v.month && v.bunker > 0).map((v) => ({ ref: String(v.ref), month: v.month as string, date: v.date, amount: v.bunker }));
+    return matchBunkerInSheet(docs, lines, cfg.bunkerInSheet.pinned);
+  }, [cfg.bunkerInSheet, cfg.linkInvoices, costDocs, voyages, rates]);
+
+  // فواتير البنكر للشهر (بند = Bunker) — بالدولار، تُحمّل كاملة في شهرها (بدون إهلاك)، إلا ما في الشيت أصلاً
+  const { bunkerInvoiceUSD, bunkerSkipped } = useMemo(() => {
+    const skipped: { number: string; usd: number; ref: string; month: string }[] = [];
+    if (!cfg.linkInvoices || !month) return { bunkerInvoiceUSD: 0, bunkerSkipped: skipped };
     let sum = 0;
     for (const inv of costDocs) {
       const pm = (inv.invoice_date || '').slice(0, 7);
       if (pm < month || pm > toMonth) continue;
-      const bp = bunkerPortion(inv);
-      if (bp <= 0) continue;
-      const rate = rateFor(inv.currency || 'USD', pm);
-      if (rate > 0) sum += bp / rate;
+      const usd = bunkerUSDOf(inv);
+      if (usd <= 0) continue;
+      const copy = bunkerCopies.get(String(inv.id));
+      if (copy) { skipped.push({ number: String(inv.invoice_number || ''), usd, ref: copy.ref, month: copy.month }); continue; }
+      sum += usd;
     }
-    return sum;
-  }, [cfg.linkInvoices, costDocs, rates, month, toMonth]);
+    return { bunkerInvoiceUSD: sum, bunkerSkipped: skipped };
+  }, [cfg.linkInvoices, costDocs, rates, month, toMonth, bunkerCopies]);
 
   const data = useMemo(() => {
     if (!sel.length) return null;
@@ -1046,6 +1076,7 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
       { البند: 'إجمالي المصروفات', القيمة: data.expenses },
       { البند: 'بنكر — رصيد أول المدة', القيمة: data.opening },
       { البند: 'بنكر — تموينات الشهر', القيمة: data.supplies },
+      ...(bunkerSkipped.length ? [{ البند: 'بنكر — فواتير لم تُحمَّل (في الشيت أصلاً)', القيمة: bunkerSkipped.reduce((s, x) => s + x.usd, 0) }] : []),
       { البند: 'بنكر — مخزون آخر المدة', القيمة: data.closing },
       { البند: 'بنكر — المستهلك', القيمة: data.bunkerCost },
       { البند: 'مرتبات الشهر', القيمة: data.salaries },
@@ -1370,6 +1401,16 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
               </div>
               {isRange && <p className="text-xs text-blue-700 mt-2">📅 فترة {periodLabel}: الرصيد الافتتاحيّ من أوّل شهر، ومخزون آخر المدة من آخر شهر، والتموينات والفواتير مجموع الفترة. لتعديل قيمةٍ اختر شهراً واحداً.</p>}
               {data.bunkerInvoiceUSD > 0 && <p className="text-xs text-amber-600 mt-2">⛽ فواتير بند «Bunker» ({fmt(data.bunkerInvoiceUSD)}) اتحمّلت هنا مش في المشتريات. مخزون آخر المدة بيترحّل رصيد افتتاحي للشهر الجاي.</p>}
+              {bunkerSkipped.length > 0 && (
+                <div className="text-xs text-gray-600 mt-2">
+                  <p>🔁 فواتير بنكر لم تُحمَّل لأنّها في عمود الإكسيل أصلاً ({fmt(bunkerSkipped.reduce((s, x) => s + x.usd, 0))}) — الفاتورة باقية للسداد:</p>
+                  <ul className="mt-1 space-y-0.5">
+                    {bunkerSkipped.map((x) => (
+                      <li key={x.number}><span dir="ltr" className="font-mono">{x.number}</span> · {fmt(x.usd)} ← رحلة {x.ref} ({monthLabel(x.month)})</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
 
             <div className="bg-white rounded-xl shadow p-4 flex items-end justify-between flex-wrap gap-3">
