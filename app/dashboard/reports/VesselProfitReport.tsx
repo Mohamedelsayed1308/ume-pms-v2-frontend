@@ -10,6 +10,8 @@ import BassamAccountCard from './BassamAccountCard';
 import { DEFAULT_RATES } from './ExchangeRatesCard';
 import CogsImportPanel, { type CogsEntry } from './CogsImportPanel';
 import { matchBunkerInSheet, cutSheetBunker } from '@/lib/reports/bunkerInSheet';
+import { itemContext, cardContext, REV_LABELS, type AnItem, type AnInput } from '@/lib/reports/vesselAnalyst';
+import VesselAnalystPanel, { AnalyzeButton, type AnalystAsk } from './VesselAnalystPanel';
 
 // التوزيع الافتراضي لبنود المصروفات على مجموعات هيكل التكاليف (مفتاح البند → المجموعة)
 export const COST_BUCKET_DEFAULTS: Record<string, string> = {
@@ -108,6 +110,8 @@ export interface VesselConfig {
    * فاتورةٍ برقم رحلتها حين يُسجّلها الشيت صافيةً فلا يتطابق المبلغان.
    */
   bunkerInSheet?: { pinned?: Record<string, string> };
+  /** المساعد الذكي: زرّ «🤖» لكلّ بند وخانة سؤالٍ حرّ (بطلب المالك ٣٠ أكتوبر ٢٠٢٦ — بوسيدون أوّلاً). */
+  analyst?: boolean;
   /*
    * سطور بنكرٍ في الشيت تُشطب من الكارت لأنّها نسخةٌ من فواتير محمَّلةٍ في شهورها.
    * تُعرَّف بالشهر والرحلة والمبلغ معاً — أرقام الرحلات تعود إلى ١ كلّ سنة.
@@ -161,7 +165,7 @@ export interface VesselConfig {
  * ═══════════════════════════════════════════════════════════════════════════
  */
 export const POSEIDON: VesselConfig = {
-  vessel: 'Poseidon', sheetKey: 'POSEIDON', agentExport: 'وكيل بدوي', agentImport: 'وكيل البسّام',
+  vessel: 'Poseidon', sheetKey: 'POSEIDON', agentExport: 'وكيل بدوي', agentImport: 'وكيل البسّام', analyst: true,
   /*
    * فواتير المركب من القاعدة — بأمر المالك ٨ سبتمبر ٢٠٢٦.
    *
@@ -1018,6 +1022,26 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
     };
   }, [data, sel, purchases, labelOf, cfg.ledgerExcluded, costCodes]);
 
+  // ── المساعد الذكي: السياق يُبنى من أرقام الكارت نفسها عند كلّ سؤال ──
+  const [analystAsk, setAnalystAsk] = useState<AnalystAsk | null>(null);
+  const askItem = (item: AnItem) => setAnalystAsk((p) => ({ item, nonce: (p?.nonce || 0) + 1 }));
+  const buildAnalystContext = (item: AnItem | null) => {
+    if (!data) return {};
+    const salarySource = (m: string) => (manual[m]?.salaries !== undefined && manual[m]?.salaries !== '' ? 'يدويّ' : cfg.salariesByMonth?.[m] != null ? 'إعداد المركب' : cfg.cogs && cogsSalaryOf(m) > 0 ? 'QuickBooks' : 'غير مُدخل');
+    const input: AnInput = {
+      vessel: cfg.vessel, agentExport: cfg.agentExport, agentImport: cfg.agentImport,
+      voyages: voyagesEff.map((v) => (cfg.ledgerExcluded?.length ? { ...v, E: { ...v.E, exp: Object.fromEntries(Object.entries(v.E.exp).filter(([k]) => !cfg.ledgerExcluded!.includes(k))) }, I: { ...v.I, exp: Object.fromEntries(Object.entries(v.I.exp).filter(([k]) => !cfg.ledgerExcluded!.includes(k))) } } : v)),
+      from: month, to: toMonth, labelOf, ledgerExcluded: cfg.ledgerExcluded,
+      totals: { revenue: data.revenue, expenses: data.expenses, net: data.net, count: data.count, revE: data.revE, revI: data.revI, expE: data.expE, expI: data.expI },
+      bunker: { opening: data.opening, suppliesExcel: data.suppliesExcel, invoicesUSD: data.bunkerInvoiceUSD, closing: data.closing, cost: data.bunkerCost, skipped: bunkerSkipped.map((x) => ({ number: x.number, usd: x.usd, ref: x.ref, month: x.month })), cuts: sheetBunkerCutSel },
+      salariesByMonth: months.map((m) => ({ month: m, amount: parseFloat(salaryOf(m)) || 0, source: salarySource(m) })),
+      purchases: purchases ? { total: purchases.total, byItem: purchases.byItem, items: purchases.items.map((x: { number: string; supplier: string; item: string; date: string; installment: number; nMonths: number }) => ({ number: x.number, supplier: x.supplier, item: x.item, date: x.date, installment: x.installment, nMonths: x.nMonths })) } : undefined,
+      manualRevenues: (cfg.manualRevenues || []).map((r) => ({ key: r.key, label: r.label, byMonth: months.map((m) => ({ month: m, amount: parseFloat(manual[m]?.[r.key] ?? '') || 0 })) })),
+      costLines: execData?.costLines,
+    };
+    return item ? itemContext(input, item) : cardContext(input);
+  };
+
   // صافي كل رحلة بعد توزيع البنكر والمرتبات والمشتريات على كل الرحلات (حسب الإيراد)
   const allocVoy = useMemo(() => {
     if (!execData) return [];
@@ -1354,6 +1378,8 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
               </div>
             </div>
 
+            {cfg.analyst && <VesselAnalystPanel vessel={cfg.vessel} period={periodLabel} buildContext={buildAnalystContext} ask={analystAsk} />}
+
             <div className="grid md:grid-cols-2 gap-4">
               {([
                 { key: 'E', label: `صادر — ${cfg.agentExport}`, rev: data.revE, exp: data.expE, side: data.E, color: 'indigo' },
@@ -1367,16 +1393,16 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
                       {REV_ROWS.map((r) => {
                         const cnt = (panel.side as any)[r.cKey] as number;
                         const amt = (panel.side as any)[r.key] as number;
-                        return (<tr key={r.key} className="border-t"><td className="py-1">{r.label}</td><td className="py-1 text-gray-500">{cnt || '—'}</td><td className="py-1 font-medium">{fmt(amt)}</td><td className="py-1 text-blue-600">{cnt ? fmt(amt / cnt) : '—'}</td></tr>);
+                        return (<tr key={r.key} className="border-t"><td className="py-1">{r.label}{cfg.analyst && <AnalyzeButton label={r.label} onClick={() => askItem({ kind: 'revenue', key: r.key, side: panel.key, label: `${r.label} — ${panel.label}` })} />}</td><td className="py-1 text-gray-500">{cnt || '—'}</td><td className="py-1 font-medium">{fmt(amt)}</td><td className="py-1 text-blue-600">{cnt ? fmt(amt / cnt) : '—'}</td></tr>);
                       })}
-                      <tr className="border-t"><td className="py-1">إذن الشحن</td><td /><td className="py-1 font-medium">{fmt(panel.side.discharge)}</td><td /></tr>
+                      <tr className="border-t"><td className="py-1">إذن الشحن{cfg.analyst && <AnalyzeButton label={REV_LABELS.discharge} onClick={() => askItem({ kind: 'revenue', key: 'discharge', side: panel.key, label: `${REV_LABELS.discharge} — ${panel.label}` })} />}</td><td /><td className="py-1 font-medium">{fmt(panel.side.discharge)}</td><td /></tr>
                       <tr className="border-t bg-gray-50 font-bold"><td className="py-1">إجمالي الإيراد</td><td /><td className="py-1">{fmt(panel.rev)}</td><td /></tr>
                     </tbody>
                   </table>
                   <table className="w-full text-sm">
                     <thead className="text-gray-500 text-xs"><tr><th scope="col" className="text-right py-1">المصروف</th><th scope="col" className="text-right py-1">المبلغ</th></tr></thead>
                     <tbody>
-                      {Object.entries(panel.side.exp).filter(([, v]) => Math.abs(v) >= 0.005).map(([k, v]) => (<tr key={k} className="border-t"><td className="py-1">{labelOf[k] || k}</td><td className="py-1 text-red-600">{fmt(v)}</td></tr>))}
+                      {Object.entries(panel.side.exp).filter(([, v]) => Math.abs(v) >= 0.005).map(([k, v]) => (<tr key={k} className="border-t"><td className="py-1">{labelOf[k] || k}{cfg.analyst && <AnalyzeButton label={labelOf[k] || k} onClick={() => askItem({ kind: 'expense', key: k, side: panel.key, label: `${labelOf[k] || k} — ${panel.label}` })} />}</td><td className="py-1 text-red-600">{fmt(v)}</td></tr>))}
                       <tr className="border-t bg-gray-50 font-bold"><td className="py-1">إجمالي المصروفات</td><td className="py-1 text-red-700">{fmt(panel.exp)}</td></tr>
                     </tbody>
                   </table>
@@ -1398,7 +1424,7 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
             </div>
 
             <div className="bg-white rounded-xl shadow p-4">
-              <h3 className="font-bold text-gray-700 mb-3">⛽ البنكر (مخزون)</h3>
+              <h3 className="font-bold text-gray-700 mb-3">⛽ البنكر (مخزون){cfg.analyst && <AnalyzeButton label={'البنكر المستهلك'} onClick={() => askItem({ kind: 'bunker', label: 'البنكر المستهلك' })} />}</h3>
               <div className="grid grid-cols-2 md:grid-cols-5 gap-3 items-end text-sm">
                 <div>
                   <label className="block text-xs text-gray-500 mb-1">رصيد أول المدة {manual[month]?.opening === undefined || manual[month]?.opening === '' ? (openingOf(month) ? '(مُرحّل)' : '(يدوي)') : '(يدوي)'}</label>
@@ -1443,7 +1469,7 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
               {(cfg.manualRevenues || []).map((r) => (isRange
                 ? <div key={r.key}><p className="text-xs text-gray-500 mb-1">{r.label} (مجموع الفترة)</p><p className="border rounded-lg px-3 py-2 bg-gray-50 font-medium text-emerald-700">{fmt(data.manualRev.find((x) => x.key === r.key)?.amount || 0)}</p></div>
                 : <div key={r.key}><label className="block text-xs text-gray-500 mb-1">{r.label}{r.note ? ` (${r.note})` : ''}</label><input value={manualRevOf(r.key, month)} onChange={(e) => setCur({ [r.key]: e.target.value })} inputMode="decimal" placeholder="0" className="border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500" /></div>))}
-              <div className="text-right"><p className="text-xs text-gray-500">المبلغ المطروح من الصافي</p><p className="font-bold text-red-600 text-lg">{fmt(data.salaries)}</p></div>
+              <div className="text-right"><p className="text-xs text-gray-500">المبلغ المطروح من الصافي{cfg.analyst && <AnalyzeButton label={'المرتّبات'} onClick={() => askItem({ kind: 'salaries', label: 'المرتّبات' })} />}</p><p className="font-bold text-red-600 text-lg">{fmt(data.salaries)}</p></div>
             </div>
 
             {cfg.cogs && cfg.dbVesselName && <CogsImportPanel vessel={cfg.dbVesselName} until={cfg.cogsUntil} onChanged={loadCogs} />}
@@ -1455,7 +1481,7 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
 
             {purchases && (
               <div className="bg-white rounded-xl shadow p-4">
-                <h3 className="font-bold text-gray-700 mb-3">🧾 المشتريات (فواتير المركب{cfg.cogs ? ' + دفتر الشركة' : ''}) — بالدولار</h3>
+                <h3 className="font-bold text-gray-700 mb-3">🧾 المشتريات (فواتير المركب{cfg.cogs ? ' + دفتر الشركة' : ''}) — بالدولار{cfg.analyst && <AnalyzeButton label={'المشتريات'} onClick={() => askItem({ kind: 'purchases', label: 'المشتريات' })} />}</h3>
                 {purchases.missingList.length > 0 && (
                   <div className="bg-red-50 border border-red-200 text-red-800 text-sm rounded-lg px-3 py-2 mb-3">
                     ⚠️ فواتير مفيش لها سعر صرف (ولا افتراضي) — مش محتسبة:
