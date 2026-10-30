@@ -66,6 +66,14 @@ describe('itemContext', () => {
     expect(c.bunker).toMatchObject({ opening: 10000, closing: 15000, cost: 40000 });
   });
 
+  it('البنكر: الرصيد غير المُدخَل يصل «لم يُدخَل»، والسلسلة الشهريّة موصوفةٌ تموينات لا استهلاكاً', () => {
+    const bunker = { opening: 0, suppliesExcel: 40000, invoicesUSD: 0, closing: 0, cost: 40000, openingEntered: false, closingEntered: false, skipped: [], cuts: [] };
+    const c = itemContext(input({ bunker }), { kind: 'bunker', label: 'البنكر المستهلك' }) as any;
+    expect(c.bunker).toMatchObject({ openingEntered: false, closingEntered: false });
+    expect(c.bunker.note).toContain('لا «ما استُهلك»');
+    expect(c.bunker.note).toContain('openingEntered');
+  });
+
   it('المرتّبات: مجموع الفترة من شهورها', () => {
     const c = itemContext(input({ salariesByMonth: [{ month: '2026-09', amount: 70000, source: 'QuickBooks' }, { month: '2026-10', amount: 72000.004, source: 'يدويّ' }] }),
       { kind: 'salaries', label: 'المرتّبات' }) as any;

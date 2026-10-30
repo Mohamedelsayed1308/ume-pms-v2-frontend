@@ -40,6 +40,7 @@ export interface AnInput {
   };
   bunker?: {
     opening: number; suppliesExcel: number; invoicesUSD: number; closing: number; cost: number;
+    openingEntered?: boolean; closingEntered?: boolean;   // الخانة الفارغة تُحسب صفراً في الكارت، وهي «لم يُدخَل» لا «صفر»
     skipped: { number: string; usd: number; ref: string; month: string }[];
     cuts: { month: string; ref: string; amount: number; reason: string }[];
   };
@@ -151,7 +152,10 @@ export function itemContext(i: AnInput, it: AnItem) {
     byVoyage: per.slice(-150),
     byMonth,
     bunker: it.kind === 'bunker' && i.bunker ? {
-      ...i.bunker, note: 'تموينات الشيت في byVoyage، والفواتير المتروكة لأنّ نسختها في الشيت في skipped، والسطور المشطوبة في cuts',
+      ...i.bunker,
+      note: 'تموينات الشيت في byVoyage، والفواتير المتروكة لأنّ نسختها في الشيت في skipped (لم تُحسب مرّتين؛ تبقى للسداد فقط)، والسطور المشطوبة في cuts. '
+        + 'byMonth هنا تموينات الشيت الخام لكلّ شهر قبل المخزون والقطع، فهي «ما وُرِّد» لا «ما استُهلك»؛ لا تصفها بالاستهلاك ولا تقارن بها تكلفة الفترة. '
+        + 'إن كان openingEntered أو closingEntered false فالرصيد لم يُدخَل بعد وحُسب صفراً، فالتكلفة تقريبيّة: قل ذلك صراحةً في الخلاصة واطلب إدخال رصيد القبطان.',
     } : undefined,
     source,
   };
