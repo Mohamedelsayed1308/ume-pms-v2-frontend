@@ -1032,7 +1032,11 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
       vessel: cfg.vessel, agentExport: cfg.agentExport, agentImport: cfg.agentImport,
       voyages: voyagesEff.map((v) => (cfg.ledgerExcluded?.length ? { ...v, E: { ...v.E, exp: Object.fromEntries(Object.entries(v.E.exp).filter(([k]) => !cfg.ledgerExcluded!.includes(k))) }, I: { ...v.I, exp: Object.fromEntries(Object.entries(v.I.exp).filter(([k]) => !cfg.ledgerExcluded!.includes(k))) } } : v)),
       from: month, to: toMonth, labelOf, ledgerExcluded: cfg.ledgerExcluded,
-      totals: { revenue: data.revenue, expenses: data.expenses, net: data.net, count: data.count, revE: data.revE, revI: data.revI, expE: data.expE, expI: data.expI },
+      totals: {
+        revenue: data.revenue, expenses: data.expenses, net: data.net, count: data.count, revE: data.revE, revI: data.revI, expE: data.expE, expI: data.expI,
+        lineExpenses: data.expE + data.expI + data.bunkerCost + data.salaries,
+        bookGap: data.net - (data.revenue - (data.expE + data.expI) - data.bunkerCost - data.salaries),
+      },
       bunker: { opening: data.opening, suppliesExcel: data.suppliesExcel, invoicesUSD: data.bunkerInvoiceUSD, closing: data.closing, cost: data.bunkerCost, skipped: bunkerSkipped.map((x) => ({ number: x.number, usd: x.usd, ref: x.ref, month: x.month })), cuts: sheetBunkerCutSel },
       salariesByMonth: months.map((m) => ({ month: m, amount: parseFloat(salaryOf(m)) || 0, source: salarySource(m) })),
       purchases: purchases ? { total: purchases.total, byItem: purchases.byItem, items: purchases.items.map((x: { number: string; supplier: string; item: string; date: string; installment: number; nMonths: number }) => ({ number: x.number, supplier: x.supplier, item: x.item, date: x.date, installment: x.installment, nMonths: x.nMonths })) } : undefined,

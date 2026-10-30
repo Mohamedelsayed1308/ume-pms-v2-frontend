@@ -43,6 +43,15 @@ describe('itemContext', () => {
     expect(c.source).toContain('وكيل بدوي');
   });
 
+  it('نسبة البند من مجموع بنود الكارت لا من المصروفات المشتقّة من BALANCE، مع فرق الدفتر', () => {
+    const base = input();
+    const c = itemContext(input({ totals: { ...base.totals, lineExpenses: 292000, bookGap: 132000 } }),
+      { kind: 'expense', key: 'portEgy', side: 'E', label: 'Port Authorities fees — EGY' }) as any;
+    expect(c.periodTotals.shareOfExpenses).toBe(50);
+    expect(c.card).toMatchObject({ expenses: 160000, lineExpenses: 292000, bookGap: 132000 });
+    expect(c.notes[0]).toContain('bookGap');
+  });
+
   it('بند إيراد: الوحدات وسعر الوحدة', () => {
     const c = itemContext(input(), { kind: 'revenue', key: 'truck', side: 'both', label: 'نولون شاحنات' }) as any;
     expect(c.periodTotals).toMatchObject({ total: 278000, units: 250, perUnit: 1112 });

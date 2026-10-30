@@ -33,7 +33,11 @@ export interface AnInput {
   from: string; to: string;            // الفترة المختارة
   labelOf: Record<string, string>;
   ledgerExcluded?: string[];
-  totals: { revenue: number; expenses: number; net: number; count: number; revE: number; revI: number; expE: number; expI: number };
+  totals: {
+    revenue: number; expenses: number; net: number; count: number; revE: number; revI: number; expE: number; expI: number;
+    // مجموع بنود الكارت (الوكيلان + البنكر + المرتّبات) وفرق BALANCE عنه — expenses مشتقّةٌ من BALANCE فلا تصلح مقاماً للنِّسب
+    lineExpenses?: number; bookGap?: number;
+  };
   bunker?: {
     opening: number; suppliesExcel: number; invoicesUSD: number; closing: number; cost: number;
     skipped: { number: string; usd: number; ref: string; month: string }[];
@@ -77,6 +81,9 @@ function stats(rows: { ref: string; value: number }[]) {
   return { n: rows.length, mean: r2(mean), median: r2(median), sd: r2(sd), max: { ref: max.ref, value: r2(max.value) }, min: { ref: min.ref, value: r2(min.value) }, zeros: rows.filter((r) => Math.abs(r.value) < 0.005).length, outliers };
 }
 
+const EXPENSES_NOTE = 'expenses = الإيراد − صافي الكارت المأخوذ من BALANCE (لا تشمل المشتريات). lineExpenses = مجموع بنود الكارت: مصاريف الوكيلين + البنكر بالمخزون + المرتّبات، وهي مقام نسبة البند من المصروفات. bookGap = صافي BALANCE ناقص الصافي محسوباً من البنود؛ إن لم يكن صفراً فالدفتر لا يطابق مكوّناته في بعض الرحلات، فاذكره ولا تنسب البند إلى expenses.';
+const expenseBase = (i: AnInput) => i.totals.lineExpenses ?? i.totals.expenses;
+
 const monthsOf = (vs: AnVoyage[]) => [...new Set(vs.map((v) => v.month).filter(Boolean) as string[])].sort();
 
 /** سياق بندٍ واحد: الفترة، والرحلات، والشهور كلّها، والمصادر. */
@@ -85,8 +92,13 @@ export function itemContext(i: AnInput, it: AnItem) {
   const base = {
     vessel: i.vessel,
     period: { from: i.from, to: i.to, voyages: sel.length },
-    card: { revenue: r2(i.totals.revenue), expenses: r2(i.totals.expenses), net: r2(i.totals.net) },
+    card: {
+      revenue: r2(i.totals.revenue), expenses: r2(i.totals.expenses), net: r2(i.totals.net),
+      lineExpenses: i.totals.lineExpenses != null ? r2(i.totals.lineExpenses) : undefined,
+      bookGap: i.totals.bookGap != null ? r2(i.totals.bookGap) : undefined,
+    },
     item: { label: it.label, kind: it.kind, side: 'side' in it ? sideName(it.side, i) : undefined },
+    notes: [EXPENSES_NOTE],
   };
 
   if (it.kind === 'salaries') {
@@ -131,7 +143,7 @@ export function itemContext(i: AnInput, it: AnItem) {
     periodTotals: {
       total: r2(total),
       shareOfRevenue: i.totals.revenue ? r2(total / i.totals.revenue * 100) : null,
-      shareOfExpenses: it.kind !== 'revenue' && i.totals.expenses ? r2(total / i.totals.expenses * 100) : null,
+      shareOfExpenses: it.kind !== 'revenue' && expenseBase(i) ? r2(total / expenseBase(i) * 100) : null,
       perVoyage: per.length ? r2(total / per.length) : null,
       units, perUnit: units ? r2(total / units) : null,
     },
@@ -175,7 +187,7 @@ export function cardContext(i: AnInput) {
     byVoyage: sel.map((v) => ({ ref: String(v.ref), month: v.month, revenue: r2(voyageRevenue(v)), ledgerNet: r2(v.net), sheetBunker: r2(v.bunker), trucks: v.E.truckC + v.I.truckC, broken: v.broken || undefined })).slice(-150),
     notes: [
       'ledgerNet صافي BALANCE في الدفتر قبل معالجات الكارت؛ صافي الكارت في totals.net.',
-      'المصروفات في totals.expenses = الإيراد − صافي الكارت (تشمل البنكر بالمخزون والمرتّبات، ولا تشمل المشتريات).',
+      EXPENSES_NOTE,
     ],
   };
 }
