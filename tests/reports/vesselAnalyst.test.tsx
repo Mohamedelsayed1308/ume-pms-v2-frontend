@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- السياق كائن JSON حرّ الشكل يُفحص هنا بقيمه */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, fireEvent, screen, waitFor } from '@testing-library/react';
-import { itemContext, cardContext, type AnInput, type AnVoyage } from '@/lib/reports/vesselAnalyst';
+import { itemContext, cardContext, stockEntered, type AnInput, type AnVoyage } from '@/lib/reports/vesselAnalyst';
 
 /*
  * دالّةٌ عاديّة تسجّل نداءاتها بدل vi.fn: مع vi.fn بعد mockReset أو mockClear يُبلَّغ
@@ -71,7 +71,25 @@ describe('itemContext', () => {
     const c = itemContext(input({ bunker }), { kind: 'bunker', label: 'البنكر المستهلك' }) as any;
     expect(c.bunker).toMatchObject({ openingEntered: false, closingEntered: false });
     expect(c.bunker.note).toContain('لا «ما استُهلك»');
+    expect(c.bunker.note).toContain('بعد حذف السطور المشطوبة');
     expect(c.bunker.note).toContain('openingEntered');
+  });
+
+  it('البنكر: الإجماليّ ونسبه من تكلفة الكارت بالمخزون، والتوريدات منفصلةٌ باسمها', () => {
+    const bunker = { opening: 50000, suppliesExcel: 40000, invoicesUSD: 0, closing: 30000, cost: 60000, skipped: [], cuts: [] };
+    const base = input();
+    const c = itemContext(input({ bunker, totals: { ...base.totals, lineExpenses: 120000 } }), { kind: 'bunker', label: 'البنكر المستهلك' }) as any;
+    expect(c.periodTotals).toMatchObject({ total: 60000, shareOfExpenses: 50, perVoyage: 20000 });
+    expect(c.sheetSupplies.total).toBe(40000);
+    expect(c.sheetSupplies.byVoyage.map((x: any) => x.value)).toEqual([0, 0, 40000]);
+    expect(c.byVoyage).toBeUndefined();
+    expect(c.byMonth).toBeUndefined();
+  });
+
+  it('خانة الرصيد مُدخَلةٌ إن كانت رقماً صالحاً فقط', () => {
+    expect(stockEntered('0')).toBe(true);
+    expect(stockEntered(' 1200.5 ')).toBe(true);
+    for (const s of [undefined, '', '  ', '-', 'n/a', '1,200']) expect(stockEntered(s)).toBe(false);
   });
 
   it('المرتّبات: مجموع الفترة من شهورها', () => {

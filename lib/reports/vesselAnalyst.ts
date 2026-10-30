@@ -138,28 +138,35 @@ export function itemContext(i: AnInput, it: AnItem) {
       ? `دفتر الرحلات في الشيت الموحّد — بند مصاريف الوكيل «${it.label}» (${sideName(it.side, i)})${i.ledgerExcluded?.includes(it.key) ? '؛ مستبعَدٌ من الصافي وبديله من QuickBooks' : ''}`
       : 'تكلفة البنكر = أوّل المدّة + تموينات الشيت + فواتير بند Bunker في النظام − آخر المدّة';
 
+  // البنكر: تكلفته في الكارت بالمخزون، وما في الرحلات والشهور توريدات الشيت — فلكلٍّ اسمه
+  const amount = it.kind === 'bunker' && i.bunker ? i.bunker.cost : total;
+  const series = { voyageStats: stats(per), byVoyage: per.slice(-150), byMonth };
   return {
     ...base,
     unit: it.kind === 'revenue' && it.key !== 'discharge' ? UNIT_LABEL[it.key] : undefined,
     periodTotals: {
-      total: r2(total),
-      shareOfRevenue: i.totals.revenue ? r2(total / i.totals.revenue * 100) : null,
-      shareOfExpenses: it.kind !== 'revenue' && expenseBase(i) ? r2(total / expenseBase(i) * 100) : null,
-      perVoyage: per.length ? r2(total / per.length) : null,
-      units, perUnit: units ? r2(total / units) : null,
+      total: r2(amount),
+      shareOfRevenue: i.totals.revenue ? r2(amount / i.totals.revenue * 100) : null,
+      shareOfExpenses: it.kind !== 'revenue' && expenseBase(i) ? r2(amount / expenseBase(i) * 100) : null,
+      perVoyage: per.length ? r2(amount / per.length) : null,
+      units, perUnit: units ? r2(amount / units) : null,
     },
-    voyageStats: stats(per),
-    byVoyage: per.slice(-150),
-    byMonth,
+    ...(it.kind === 'bunker' ? { sheetSupplies: { total: r2(total), ...series } } : series),
     bunker: it.kind === 'bunker' && i.bunker ? {
       ...i.bunker,
-      note: 'تموينات الشيت في byVoyage، والفواتير المتروكة لأنّ نسختها في الشيت في skipped (لم تُحسب مرّتين؛ تبقى للسداد فقط)، والسطور المشطوبة في cuts. '
-        + 'byMonth هنا تموينات الشيت الخام لكلّ شهر قبل المخزون والقطع، فهي «ما وُرِّد» لا «ما استُهلك»؛ لا تصفها بالاستهلاك ولا تقارن بها تكلفة الفترة. '
-        + 'إن كان openingEntered أو closingEntered false فالرصيد لم يُدخَل بعد وحُسب صفراً، فالتكلفة تقريبيّة: قل ذلك صراحةً في الخلاصة واطلب إدخال رصيد القبطان.',
+      note: 'periodTotals.total تكلفة البنكر في الكارت بالمخزون. sheetSupplies ما وُرِّد في الشيت لكلّ رحلةٍ وشهر بعد حذف السطور المشطوبة (المحذوف في cuts)، '
+        + 'فهو «ما وُرِّد» لا «ما استُهلك»: لا تصفه بالاستهلاك. والفواتير في skipped تُركت لأنّ نسختها في الشيت، فلم تُحسب مرّتين وتبقى للسداد. '
+        + 'إن كان openingEntered أو closingEntered false فالرصيد لم يُدخَل بعد وحُسب صفراً، فالتكلفة تقريبيّة: قل ذلك صراحةً واطلب إدخال رصيد القبطان.',
     } : undefined,
     source,
   };
 }
+
+/** خانة رصيدٍ يدويّة «مُدخَلة» إن كانت رقماً صالحاً — النصّ الذي يقرؤه الكارت صفراً ليس إدخالاً. */
+export const stockEntered = (raw?: string) => {
+  const s = (raw ?? '').trim();
+  return s !== '' && Number.isFinite(Number(s));
+};
 
 /** سياق السؤال الحرّ: ملخّص الكارت في الفترة، والسلسلة الشهريّة، والرحلات. */
 export function cardContext(i: AnInput) {

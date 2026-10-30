@@ -10,7 +10,7 @@ import BassamAccountCard from './BassamAccountCard';
 import { DEFAULT_RATES } from './ExchangeRatesCard';
 import CogsImportPanel, { type CogsEntry } from './CogsImportPanel';
 import { matchBunkerInSheet, cutSheetBunker } from '@/lib/reports/bunkerInSheet';
-import { itemContext, cardContext, REV_LABELS, type AnItem, type AnInput } from '@/lib/reports/vesselAnalyst';
+import { itemContext, cardContext, stockEntered, REV_LABELS, type AnItem, type AnInput } from '@/lib/reports/vesselAnalyst';
 import VesselAnalystPanel, { AnalyzeButton, type AnalystAsk } from './VesselAnalystPanel';
 
 // التوزيع الافتراضي لبنود المصروفات على مجموعات هيكل التكاليف (مفتاح البند → المجموعة)
@@ -1034,11 +1034,11 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
       from: month, to: toMonth, labelOf, ledgerExcluded: cfg.ledgerExcluded,
       totals: {
         revenue: data.revenue, expenses: data.expenses, net: data.net, count: data.count, revE: data.revE, revI: data.revI, expE: data.expE, expI: data.expI,
-        lineExpenses: data.expE + data.expI + data.bunkerCost + data.salaries,
-        bookGap: data.net - (data.revenue - (data.expE + data.expI) - data.bunkerCost - data.salaries),
+        lineExpenses: execData ? execData.agentExp + execData.bunkerCost + execData.salaries : undefined,
+        bookGap: execData?.bookGap,
       },
       bunker: { opening: data.opening, suppliesExcel: data.suppliesExcel, invoicesUSD: data.bunkerInvoiceUSD, closing: data.closing, cost: data.bunkerCost,
-        openingEntered: openingOf(month).trim() !== '', closingEntered: (manual[toMonth]?.closing ?? '').trim() !== '', skipped: bunkerSkipped.map((x) => ({ number: x.number, usd: x.usd, ref: x.ref, month: x.month })), cuts: sheetBunkerCutSel },
+        openingEntered: stockEntered(openingOf(month)), closingEntered: stockEntered(manual[toMonth]?.closing), skipped: bunkerSkipped.map((x) => ({ number: x.number, usd: x.usd, ref: x.ref, month: x.month })), cuts: sheetBunkerCutSel },
       salariesByMonth: months.map((m) => ({ month: m, amount: parseFloat(salaryOf(m)) || 0, source: salarySource(m) })),
       purchases: purchases ? { total: purchases.total, byItem: purchases.byItem, items: purchases.items.map((x: { number: string; supplier: string; item: string; date: string; installment: number; nMonths: number }) => ({ number: x.number, supplier: x.supplier, item: x.item, date: x.date, installment: x.installment, nMonths: x.nMonths })) } : undefined,
       manualRevenues: (cfg.manualRevenues || []).map((r) => ({ key: r.key, label: r.label, byMonth: months.map((m) => ({ month: m, amount: parseFloat(manual[m]?.[r.key] ?? '') || 0 })) })),
