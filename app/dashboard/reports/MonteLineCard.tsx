@@ -15,6 +15,8 @@ import {
  * الحزمة تُحفظ في `vessel_profit_data.manual.package` للمفتاح `MonteJS`، والحفظ يستبدل
  * `manual` كاملاً — فيُرفع ما سواها كما قُرئ، ولا حفظ قبل أن يُقرأ.
  * والرفع للأدمن وحده: الحزمة تولّدها جلسة مونتي، والملفّ لا يُعدَّل يدويّاً.
+ * ومنذ ٣٠ أكتوبر ٢٠٢٦ تدفعها الجلسة آليّاً (`push_pms.py` ← `api/vessel-profit-ingest/monte`)،
+ * والزرّ باقٍ بديلاً — وللرجوع المقصود إلى حزمةٍ أقدم، فالدفع الآليّ يرفض الأقدم.
  */
 
 const fmt = (n: number | null | undefined, d = 0) => (n == null ? '—' : Number(n).toLocaleString('en-US', { maximumFractionDigits: d, minimumFractionDigits: d }));
@@ -90,7 +92,7 @@ export default function MonteLineCard({ config: cfg }: { config: LineVesselConfi
     setSaving(true);
     try {
       // تُحفظ الحزمة كما وصلت — والحجب والتحقّق عند العرض
-      const next = { ...manual, package: pending.raw, packageFile: pending.file, packageSavedAt: new Date().toISOString() };
+      const next = { ...manual, package: pending.raw, packageFile: pending.file, packageSavedAt: new Date().toISOString(), packageSource: 'upload' };
       const r = await api.put(`/api/vessel-profit/${cfg.key}`, { manual: next });
       setManual(next); setUpdatedAt(r.data?.updated_at || ''); setPending(null);
       setSavedMsg(T('✓ حُفظت الحزمة', '✓ Package saved'));
@@ -119,6 +121,8 @@ export default function MonteLineCard({ config: cfg }: { config: LineVesselConfi
             {T('مركبٌ مملوك', 'Owned vessel')}{' · '}{T('من حزمة رحلات مونتي', 'From the Monte voyage package')}
             {pkg ? ` · ${T('وُلِّدت', 'generated')} ${pkg.generated_at.replace('T', ' ').slice(0, 16)}` : ''}
             {updatedAt ? ` · ${T('حُفظت', 'saved')} ${new Date(updatedAt).toLocaleString(en ? 'en-GB' : 'ar-EG')}` : ''}
+            {/* الدفع الآليّ من جلسة مونتي يكتب monte-session (انظر monte-ingest في الباك)، والزرّ upload */}
+            {pkg && manual.packageSource === 'monte-session' ? ` · ${T('وصلت آليّاً من جلسة مونتي', 'pushed from the Monte session')}` : ''}
           </p>
         </div>
         <div className="flex items-center gap-2 ms-auto">
