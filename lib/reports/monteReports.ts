@@ -14,6 +14,10 @@
  *    القبطان · وبنود `fixed_items` بأسمائها.
  *
  * فالصافي النهائي = مجموع صافي أشهر المدى في الحزمة بناءً، ويُفحص ذلك في الاختبار.
+ *
+ * وأشهر ما قبل التشغيل (قبل أوّل شهرٍ فيه رحلات في الحزمة) إن دخلت مدىً فيه رحلات
+ * — بقرار المالك ٣١ أكتوبر — تُجمع كلّ تكاليفها (مرتّبات · تأمين · تموضع · ثابتة)
+ * بنداً واحداً في سطر C باسمه، ولا تُوزَّع على الرحلات (`profile.preLine`).
  */
 import type { ExecData } from '@/app/dashboard/reports/VesselExecReport';
 import type { FinData, RevRow } from '@/app/dashboard/reports/VesselFinReport';
@@ -70,7 +74,16 @@ export function monteReportData(p: MontePackage, from: string, to: string = from
     .filter((v) => inRange(monthOf(v.dep)))
     .sort((x, y) => String(x.dep).localeCompare(String(y.dep)));
   const sum = (f: (v: (typeof voyages)[number]) => number) => r2(voyages.reduce((s, v) => s + n0(f(v)), 0));
-  const sumM = (f: (m: (typeof monthly)[number]) => number | null | undefined) => r2(monthly.reduce((s, m) => s + n0(f(m)), 0));
+  /*
+   * أشهر ما قبل التشغيل تُفصل حين يضمّ المدى رحلات؛ فإن لم يضمّها فلا توزيع
+   * يُضلَّل، وتبقى البنود بأسمائها.
+   */
+  const firstLine = p.monthly.find((m) => (m.trips || 0) > 0)?.month || '';
+  const preMonths = voyages.length && firstLine ? monthly.filter((m) => m.month < firstLine) : [];
+  const opMonths = monthly.filter((m) => !preMonths.includes(m));
+  const sumM = (f: (m: (typeof monthly)[number]) => number | null | undefined, ms = opMonths) =>
+    r2(ms.reduce((s, m) => s + n0(f(m)), 0));
+  const preCost = r2(-sumM((m) => m.net, preMonths));
 
   // ── الحمولات: الركّاب من ملفّ الربح، والمركبات من الإشغال (بعض الرِّجال بلا أرقام) ──
   const ids = new Set(voyages.map((v) => String(v.voyage)));
@@ -109,7 +122,7 @@ export function monteReportData(p: MontePackage, from: string, to: string = from
   add('التأمين (من الوثائق)', -sumM((m) => m.ins));
   add('مصاريف البحّارة', -sumM((m) => m.crew_misc));
   add('نقديّة القبطان', -sumM((m) => m.ctm));
-  for (const m of monthly) for (const i of m.fixed_items || []) add(i.label, -n0(i.usd));
+  for (const m of opMonths) for (const i of m.fixed_items || []) add(i.label, -n0(i.usd));
   const byItem = [...byItemMap].map(([name, value]) => ({ name, value })).sort((x, y) => y.value - x.value);
   /*
    * الثابتة في الحزمة مجموعُ مكوّناتٍ غير مقرَّبة ثمّ قُرّبت، والمكوّنات قُرّب كلٌّ وحده —
@@ -119,6 +132,11 @@ export function monteReportData(p: MontePackage, from: string, to: string = from
   const salariesOf = -sumM((m) => n0(m.sal_usd) + n0(m.sal_eur));
   const cent = r2(-sumM((m) => m.fixed) - salariesOf - byItem.reduce((s, x) => s + x.value, 0));
   if (byItem.length && cent !== 0 && Math.abs(cent) < 0.05) byItem[0] = { ...byItem[0], value: r2(byItem[0].value + cent) };
+  const preLabel = preMonths.length
+    ? { ar: `تكاليف ما قبل التشغيل (${preMonths[0].month} → ${preMonths[preMonths.length - 1].month})`,
+        en: `Pre-operating costs (${preMonths[0].month} → ${preMonths[preMonths.length - 1].month})` }
+    : null;
+  if (preLabel && preCost) byItem.push({ name: preLabel.ar, value: preCost });
   const purchasesTotal = r2(byItem.reduce((s, x) => s + x.value, 0));
 
   const salaries = r2(salariesOf);
@@ -167,10 +185,11 @@ export function monteReportData(p: MontePackage, from: string, to: string = from
     shippingOrder: false,
     invoices: false,
     defaultAlloc: 'mixed',
+    ...(preLabel && preCost ? { preLine: { ...preLabel, value: preCost } } : {}),
   };
   return {
     months, exec, fin, labelOf, profile,
     purchases: { byItem, items: [], total: purchasesTotal },
-    packageNet: sumM((m) => m.net),
+    packageNet: sumM((m) => m.net, monthly),
   };
 }

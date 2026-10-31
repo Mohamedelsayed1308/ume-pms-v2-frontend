@@ -3,6 +3,7 @@ import { render } from '@testing-library/react';
 import { existsSync, readFileSync } from 'node:fs';
 import { validateMontePackage, type MontePackage, type MonteVoyage } from '@/lib/reports/montePackage';
 import { monteReportData, MONTE_REV_ROWS, MONTE_SIDES } from '@/lib/reports/monteReports';
+import { allocatablePurchases } from '@/lib/reports/reportProfile';
 import { allocateVoyageNets } from '@/app/dashboard/reports/VesselProfitReport';
 import VesselFinReport from '@/app/dashboard/reports/VesselFinReport';
 import VesselBoardReport from '@/app/dashboard/reports/VesselBoardReport';
@@ -60,13 +61,20 @@ describe('محوِّل مونتي إلى نوافذ التقارير', () => {
     expect(alloc.reduce((s, v) => s + v.net, 0)).toBeCloseTo(3420, 2);
   });
 
-  it('المدى يجمع الأشهر: وقود التموضع في البنكر، والصافي = مجموع الأشهر', () => {
+  it('المدى يجمع الأشهر، وما قبل التشغيل سطرٌ واحد لا يُوزَّع على الرحلات', () => {
     const r = monteReportData(pkg, '2026-09', '2026-10');
     expect(r.months).toEqual(['2026-09', '2026-10']);
-    expect(r.fin.bunkerCost).toBe(2500);
-    expect(r.profile.bunkerRows?.map((x) => x.value)).toEqual([1800, 700]);
+    // سبتمبر قبل أوّل رحلة: تموضعه ومرتّباته وتأمينه في بندٍ واحد، لا في البنكر والمرتّبات
+    expect(r.fin.bunkerCost).toBe(1800);
+    expect(r.fin.salaries).toBe(230);
+    expect(r.profile.bunkerRows?.map((x) => x.value)).toEqual([1800]);
+    expect(r.profile.preLine).toEqual({ ar: 'تكاليف ما قبل التشغيل (2026-09 → 2026-09)', en: 'Pre-operating costs (2026-09 → 2026-09)', value: 850 });
+    expect(r.purchases.byItem.at(-1)).toEqual({ name: 'تكاليف ما قبل التشغيل (2026-09 → 2026-09)', value: 850 });
     expect(r.exec.opNet - r.exec.purchasesTotal).toBeCloseTo(2570, 2);
     expect(r.packageNet).toBe(2570);
+    // الرحلات تحمل أكتوبر وحده: مجموعها صافي أكتوبر
+    const alloc = allocateVoyageNets(r.exec.perVoyage, { ...r.exec, purchasesTotal: allocatablePurchases(r.exec.purchasesTotal, r.profile) }, 'mixed');
+    expect(alloc.reduce((s, v) => s + v.net, 0)).toBeCloseTo(3420, 2);
   });
 
   it('شهرٌ بلا رحلات: لا إيراد، والتكاليف الثابتة وحدها', () => {
@@ -89,6 +97,31 @@ describe.skipIf(!real)('تقارير مونتي من الحزمة الحقيقي
     const all = monteReportData(real!, '2026-04', '2026-10');
     expect(Math.round((all.exec.opNet - all.exec.purchasesTotal) * 100) / 100).toBe(-8970.44);
     expect(all.packageNet).toBe(-8970.44);
+  });
+
+  it('أبريل–أكتوبر: لا رحلة خاسرة بتكاليف ما قبل التشغيل، والمجموع يبقى −8,970.44', () => {
+    const r = monteReportData(real!, '2026-04', '2026-10');
+    expect(r.profile.preLine?.value).toBe(954479.37);
+    const alloc = allocateVoyageNets(r.exec.perVoyage, { ...r.exec, purchasesTotal: allocatablePurchases(r.exec.purchasesTotal, r.profile) }, 'mixed');
+    expect(alloc.every((v) => v.net > 0)).toBe(true);
+    expect(Math.round(alloc.reduce((s, v) => s + v.net, 0) * 100) / 100).toBe(945508.93);
+    const { container } = render(
+      <VesselBoardReport cfg={{ vessel: 'Monte Express', ...MONTE_SIDES }} month="2026-04" monthTo="2026-10" monthLabel="2026-04 → 2026-10"
+        data={r.fin} purchases={r.purchases} exec={r.exec} allocVoy={alloc} labelOf={r.labelOf}
+        revRows={MONTE_REV_ROWS} profile={r.profile} onClose={() => {}} />,
+    );
+    const t = container.textContent || '';
+    expect(t).toContain(fmt(-8970.44));
+    expect(t).toContain('Pre-operating costs (2026-04 → 2026-09)');
+    expect(t).not.toContain('رحلةٌ خاسرة');
+    expect(t).not.toContain('Δ');
+    const fin = render(
+      <VesselFinReport cfg={{ vessel: 'Monte Express', ...MONTE_SIDES }} month="2026-04" monthTo="2026-10" monthLabel="2026-04 → 2026-10"
+        data={r.fin} purchases={r.purchases} exec={r.exec} allocVoy={alloc} labelOf={r.labelOf}
+        revRows={MONTE_REV_ROWS} defaultBuckets={r.exec.defaultBuckets} profile={r.profile} onClose={() => {}} />,
+    ).container.textContent || '';
+    expect(fin).toContain('تكاليف ما قبل التشغيل (2026-04 → 2026-09)');
+    expect(fin).toContain(fmt(954479.37));
   });
 
   it('الماليّ: يُخفي ما لا بيانات له، ويسمّي سطر C باسمه', () => {

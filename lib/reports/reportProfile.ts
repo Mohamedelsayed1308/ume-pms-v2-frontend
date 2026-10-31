@@ -29,7 +29,17 @@ export interface ReportProfile {
   truckLabel?: { ar: string; en: string };
   /** ملاحظة تحت قسم البنكر */
   bunkerNote?: { ar: string; en: string };
+  /**
+   * تكاليف أشهرٍ قبل أوّل رحلة دخلت المدى (مونتي: أبريل–سبتمبر). هي داخل سطر C
+   * ومجموعه، لكنّها تُعرض سطراً مستقلّاً ولا تُوزَّع على الرحلات — وإلّا ظهرت رحلاتٌ
+   * رابحة خاسرةً بتكاليف لم تصنعها.
+   */
+  preLine?: { ar: string; en: string; value: number };
 }
+
+/** ما يُوزَّع من سطر C على الرحلات — كلّه إلّا تكاليف ما قبل التشغيل */
+export const allocatablePurchases = (purchasesTotal: number, profile?: ReportProfile) =>
+  purchasesTotal - (profile?.preLine?.value || 0);
 
 export const DEFAULT_PROFILE: ReportProfile = {
   purchases: { ar: 'المشتريات', en: 'Purchases' },

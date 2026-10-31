@@ -9,6 +9,7 @@ import VesselFinReport from './VesselFinReport';
 import VesselBoardReport from './VesselBoardReport';
 import { allocateVoyageNets } from './VesselProfitReport';
 import { monteReportData, MONTE_REV_ROWS, MONTE_SIDES } from '@/lib/reports/monteReports';
+import { allocatablePurchases } from '@/lib/reports/reportProfile';
 import {
   validateMontePackage, packageTotals, itemTotals, fixedItemColumns, HIDDEN_VOYAGES,
   type MontePackage, type MonteCheck,
@@ -95,7 +96,7 @@ export default function MonteLineCard({ config: cfg }: { config: LineVesselConfi
   const rep = useMemo(() => (pkg && rFrom ? monteReportData(pkg, rFrom, rTo) : null), [pkg, rFrom, rTo]);
   // وقود كلّ رحلة عليها (المختلط يوزّع البنكر بنسبة وقود الرحلة)، والمرتّبات والثابتة بنسبة الإيراد
   const repAlloc = useMemo(() => (rep ? allocateVoyageNets(rep.exec.perVoyage,
-    { bunkerCost: rep.exec.bunkerCost, salaries: rep.exec.salaries, purchasesTotal: rep.exec.purchasesTotal }, 'mixed') : []), [rep]);
+    { bunkerCost: rep.exec.bunkerCost, salaries: rep.exec.salaries, purchasesTotal: allocatablePurchases(rep.exec.purchasesTotal, rep.profile) }, 'mixed') : []), [rep]);
   const repLabel = rFrom === rTo ? rFrom : `${rFrom} → ${rTo}`;
   const repCfg = { vessel: 'Monte Express', ...MONTE_SIDES };
 

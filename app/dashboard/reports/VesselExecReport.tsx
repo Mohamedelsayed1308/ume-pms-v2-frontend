@@ -2,7 +2,7 @@
 import { useMemo, useState } from 'react';
 import type { VesselConfig } from './VesselProfitReport';
 import { allocateVoyageNets } from './VesselProfitReport';
-import { DEFAULT_PROFILE, type ReportProfile } from '@/lib/reports/reportProfile';
+import { allocatablePurchases, DEFAULT_PROFILE, type ReportProfile } from '@/lib/reports/reportProfile';
 
 export interface ExecLine { key: string; label: string; value: number }
 export interface ExecVoyage { ref: string; revenue: number; expenses: number; net: number; supplies: number }
@@ -198,14 +198,17 @@ export default function VesselExecReport({
 
   const totalExpenses = exec.opExpenses + exec.purchasesTotal;
   const finalNet = exec.opNet - exec.purchasesTotal;
+  // تكاليف ما قبل التشغيل لا تُوزَّع على الرحلات، ولا تدخل متوسّط الرحلة
+  const pre = profile.preLine;
+  const voyNet = finalNet + (pre?.value || 0);
   const margin = exec.revenue ? (finalNet / exec.revenue) * 100 : 0;
 
   // توزيع البنكر والمرتبات والمشتريات على الرحلات → صافي أقرب للحقيقة (مجموعه = الصافي النهائي)
   const allocVoyages = useMemo(
     () => allocateVoyageNets(exec.perVoyage,
-      { bunkerCost: exec.bunkerCost, salaries: exec.salaries, purchasesTotal: exec.purchasesTotal }, alloc)
+      { bunkerCost: exec.bunkerCost, salaries: exec.salaries, purchasesTotal: allocatablePurchases(exec.purchasesTotal, profile) }, alloc)
       .map((v) => ({ ...v, expenses: v.revenue - v.net })),
-    [exec, alloc]);
+    [exec, alloc, profile]);
 
   // تجميع التكاليف حسب المجموعة (مع بند تسوية داخل "أخرى" ليطابق إجمالي المصروفات)
   const cost = useMemo(
@@ -287,7 +290,7 @@ export default function VesselExecReport({
               { v: fmtAbbr(exec.revenue), l: L('إجمالي الإيراد', 'Total revenue'), green: false },
               { v: fmtAbbr(totalExpenses), l: L('إجمالي المصروفات', 'Total expenses'), green: false },
               { v: fmtAbbr(finalNet), l: L('صافي الربح', 'Net profit'), green: true },
-              { v: fmtAbbr(finalNet / (exec.count || 1)), l: L('متوسط الربح/رحلة', 'Avg. profit / voyage'), green: true },
+              { v: fmtAbbr(voyNet / (exec.count || 1)), l: pre ? L('متوسط الربح/رحلة — قبل ما قبل التشغيل', 'Avg. profit / voyage — before pre-operating') : L('متوسط الربح/رحلة', 'Avg. profit / voyage'), green: true },
               { v: pct(margin), l: L('هامش صافي الربح', 'Net profit margin'), green: true },
             ].map((k, i) => (
               <div key={i} className="bg-white rounded-xl border border-gray-100 shadow-sm px-4 py-8 text-center">
@@ -297,6 +300,8 @@ export default function VesselExecReport({
             ))}
           </div>
           <SlideNote text={bestHalfNote} />
+          {pre && <SlideNote text={L(`منها ${pre.ar}: ${fmtAbbr(pre.value)} — تكاليف أشهرٍ قبل أوّل رحلة، لا تُوزَّع على الرحلات.`,
+            `Includes ${pre.en}: ${fmtAbbr(pre.value)} — months before the first voyage, not allocated to voyages.`)} />}
         </Slide>
 
         {/* Slide 2 — Net Profit by Voyage */}

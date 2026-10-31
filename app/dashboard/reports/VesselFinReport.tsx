@@ -293,6 +293,7 @@ export default function VesselFinReport({
     ? T('مشتريات العبّارة / مصاريف أخرى (قسط الشهر)', 'Purchases & Services Expenses (monthly charge)')
     : T(profile.purchases.ar, profile.purchases.en);
   const purShort = profile.invoices ? T('مشتريات العبّارة', 'Purchases & services') : segName('purchases');
+  const pre = profile.preLine, preV = pre?.value || 0;
   const detailLabel = (key: string, label: string, kind?: string) => {
     if (key === 'fuel') return profile.bunkerStock
       ? T('البنكر المستهلك (أول المدة + التموينات − آخر المدة)', 'Bunkers consumed (opening + supplied − closing)')
@@ -480,10 +481,18 @@ export default function VesselFinReport({
               </tr>
               <tr className="neg">
                 <td className="lbl">− {purLine}</td>
-                <td className="amt">({fmt(purchTotal)})</td>
-                <td className="shr">{pct(purchTotal, R)}</td>
+                <td className="amt">({fmt(purchTotal - preV)})</td>
+                <td className="shr">{pct(purchTotal - preV, R)}</td>
                 <td className="ref">{purShort}</td>
               </tr>
+              {pre && (
+                <tr className="neg">
+                  <td className="lbl">− {T(pre.ar, pre.en)}</td>
+                  <td className="amt">({fmt(preV)})</td>
+                  <td className="shr">{pct(preV, R)}</td>
+                  <td className="ref">{T('لا توزَّع على الرحلات', 'Not allocated to voyages')}</td>
+                </tr>
+              )}
               <tr className="fin">
                 <td className="lbl">{T('= صافي الربح النهائي', '= Net Profit')}</td>
                 <td className="amt">{fmt(data.net - purchTotal)}</td>
@@ -815,10 +824,18 @@ export default function VesselFinReport({
                         </td>
                       </tr>
                     ))}
+                    {pre && (
+                      <tr>
+                        <td>{T(pre.ar, pre.en)}</td>
+                        <td>—</td>
+                        <td>{fmt(-preV)}</td>
+                        <td colSpan={2} style={{ color: '#64748b' }}>{T('لا توزَّع على الرحلات', 'Not allocated to voyages')}</td>
+                      </tr>
+                    )}
                     <tr className="tot">
                       <td>{T('الإجمالي', 'Total')}</td>
                       <td>{fmt(allocVoy.reduce((s, v) => s + v.revenue, 0))}</td>
-                      <td>{fmt(allocVoy.reduce((s, v) => s + v.net, 0))}</td>
+                      <td>{fmt(allocVoy.reduce((s, v) => s + v.net, 0) - preV)}</td>
                       <td colSpan={2}></td>
                     </tr>
                   </tbody>

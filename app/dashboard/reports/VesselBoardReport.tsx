@@ -152,6 +152,9 @@ export default function VesselBoardReport({
   const totalCost = opEx + purTotal;
   const netBefore = data.net;
   const netFinal = data.net - purTotal;
+  // تكاليف ما قبل التشغيل: في المجموع، وخارج مقاييس الرحلة
+  const pre = profile.preLine, preV = pre?.value || 0;
+  const netVoy = netFinal + preV;
 
   /*
    * فرق دفتر المركب.
@@ -294,7 +297,7 @@ export default function VesselBoardReport({
             <K l={purN.en.toUpperCase()} v={abbr(purTotal)} s={p1(purTotal, R) + ' من الإيراد'} />
             <K l="TOTAL COST" v={abbr(totalCost)} s={`Operating + ${purN.en}`} />
             <K l="COST-TO-REVENUE" v={p1(totalCost, R)} s="Total Cost ÷ Revenue" />
-            <K l="NET PROFIT / VOYAGE" v={abbr(netFinal / N)} s={`${f2(netFinal / N)} × ${N} voyages`} />
+            <K l="NET PROFIT / VOYAGE" v={abbr(netVoy / N)} s={pre ? `before pre-operating ${f2(preV)}` : `${f2(netFinal / N)} × ${N} voyages`} />
           </div>
 
           <h2>Executive Profit Bridge <span>· من الإيراد إلى صافي الربح النهائي</span></h2>
@@ -343,7 +346,7 @@ export default function VesselBoardReport({
             </span></div>
             <div className="li"><span className="d">·</span><span>
               الرحلة الواحدة: إيراد <b>{f2(data.revenue / N)}</b> وتكلفة <b>{f2(totalCost / N)}</b>،
-              فصافي <b>{f2(netFinal / N)}</b> — والصادر يحمل <b>{p1(data.revE, R)}</b> من الإيراد
+              فصافي <b>{f2(netVoy / N)}</b>{pre ? ' قبل تكاليف ما قبل التشغيل' : ''} — والصادر يحمل <b>{p1(data.revE, R)}</b> من الإيراد
               مقابل <b>{p1(data.revI, R)}</b> للوارد.
             </span></div>
           </div>
@@ -558,9 +561,10 @@ export default function VesselBoardReport({
                 <tr><td>Agent Expenses</td><td>{f2(agentExp)}</td><td>{f2(agentExp / N)}</td><td>{p1(agentExp, R)}</td></tr>
                 <tr><td>Bunker Consumed</td><td>{f2(data.bunkerCost)}</td><td>{f2(data.bunkerCost / N)}</td><td>{p1(data.bunkerCost, R)}</td></tr>
                 <tr><td>Salaries</td><td>{f2(data.salaries)}</td><td>{f2(data.salaries / N)}</td><td>{p1(data.salaries, R)}</td></tr>
-                <tr><td>{purN.en}</td><td>{f2(purTotal)}</td><td>{f2(purTotal / N)}</td><td>{p1(purTotal, R)}</td></tr>
+                <tr><td>{purN.en}</td><td>{f2(purTotal - preV)}</td><td>{f2((purTotal - preV) / N)}</td><td>{p1(purTotal - preV, R)}</td></tr>
+                {pre && <tr><td>{pre.en}</td><td>{f2(preV)}</td><td>—</td><td>{p1(preV, R)}</td></tr>}
                 <tr className="tot"><td>Total Cost</td><td>{f2(totalCost)}</td><td>{f2(totalCost / N)}</td><td>{p1(totalCost, R)}</td></tr>
-                <tr className="tot"><td>Final Net Profit</td><td>{f2(netFinal)}</td><td>{f2(netFinal / N)}</td><td>{p1(netFinal, R)}</td></tr>
+                <tr className="tot"><td>Final Net Profit</td><td>{f2(netFinal)}</td><td>{pre ? '—' : f2(netFinal / N)}</td><td>{p1(netFinal, R)}</td></tr>
               </tbody>
             </table>
 
@@ -585,8 +589,9 @@ export default function VesselBoardReport({
                     </tr>
                   );
                 })}
+                {pre && <tr><td>{pre.en}</td><td>—</td><td className="neg">{f2(-preV)}</td><td colSpan={2}>not allocated to voyages</td></tr>}
                 <tr className="tot"><td>Total</td><td>{f2(allocVoy.reduce((s, v) => s + v.revenue, 0))}</td>
-                  <td>{f2(allocVoy.reduce((s, v) => s + v.net, 0))}</td><td colSpan={2} /></tr>
+                  <td>{f2(allocVoy.reduce((s, v) => s + v.net, 0) - preV)}</td><td colSpan={2} /></tr>
               </tbody>
             </table>
             <div className="gap">
