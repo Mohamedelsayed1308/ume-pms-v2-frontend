@@ -2,6 +2,7 @@
 import { useMemo } from 'react';
 import { costSegments, type ExecData } from './VesselExecReport';
 import type { FinData, PurchaseItem, RevRow } from './VesselFinReport';
+import { DEFAULT_PROFILE, type ReportProfile } from '@/lib/reports/reportProfile';
 
 /**
  * ── Executive Vessel Performance & Profitability Report ──
@@ -33,6 +34,8 @@ interface Props {
   allocVoy: { ref: string; revenue: number; net: number }[];
   labelOf: Record<string, string>;
   revRows: readonly RevRow[];
+  /** ما تُخفيه النافذة وما تُسمّيه لمركبٍ بلا دفتر بوسيدون (مونتي) — انظر `reportProfile.ts` */
+  profile?: ReportProfile;
   onClose: () => void;
 }
 
@@ -135,8 +138,11 @@ const CSS = `
 `;
 
 export default function VesselBoardReport({
-  cfg, month, monthTo, monthLabel, data, purchases, exec, allocVoy, labelOf, revRows, onClose,
+  cfg, month, monthTo, monthLabel, data, purchases, exec, allocVoy, labelOf, revRows, onClose, profile = DEFAULT_PROFILE,
 }: Props) {
+  // سطر C باسمه: «Purchases» عند بوسيدون، و«تكاليف السفينة الثابتة» عند مونتي
+  const purN = profile.invoices ? { ar: 'المشتريات', en: 'Purchases' } : (profile.bucketNames?.purchases || profile.purchases);
+  const truckN = profile.truckLabel?.en || 'Trucks';
   const periodKey = monthTo && monthTo !== month ? `${month} → ${monthTo}` : month;
   const N = data.count || 1;
   const R = data.revenue || 1;
@@ -167,7 +173,7 @@ export default function VesselBoardReport({
    * صريحاً. والنسب تُقاس على الإجمالي الحقيقي لا على مجموع ما ظهر.
    * ولا تُغيَّر الدالّة نفسها لأن التقرير الإداري القديم يقرأ منها.
    */
-  const rawSegs = useMemo(() => costSegments(exec), [exec]);
+  const rawSegs = useMemo(() => costSegments(exec).map((s) => ({ ...s, ...(profile.bucketNames?.[s.id] || {}) })), [exec, profile]);
   const segs = useMemo(() => {
     const shown = rawSegs.reduce((s, x) => s + x.value, 0);
     const recon = totalCost - shown;
@@ -187,10 +193,10 @@ export default function VesselBoardReport({
       e: Number((data.E as any)[r.key]) || 0,
       i: Number((data.I as any)[r.key]) || 0,
     }));
-    out.push({ name: 'إذن الشحن', e: data.E.discharge || 0, i: data.I.discharge || 0 });
+    if (profile.shippingOrder) out.push({ name: 'إذن الشحن', e: data.E.discharge || 0, i: data.I.discharge || 0 });
     for (const r of (data.manualRev || [])) if (r.amount > 0) out.push({ name: r.label, e: r.amount, i: 0 });
     return out.map((x) => ({ ...x, total: x.e + x.i })).sort((a, b) => b.total - a.total);
-  }, [data, revRows]);
+  }, [data, revRows, profile.shippingOrder]);
   const revTop = segRev[0];
 
   // ── المشتريات: مورّدون وفواتير ──
@@ -221,12 +227,12 @@ export default function VesselBoardReport({
     const bars = [
       { l: 'Revenue', lo: 0, hi: data.revenue, c: NAVY, v: data.revenue },
       { l: 'Operating Exp.', lo: netBefore, hi: data.revenue, c: '#b91c1c', v: -opEx },
-      { l: 'Net b/f Purch.', lo: 0, hi: netBefore, c: '#3f5f8a', v: netBefore },
-      { l: 'Purchases', lo: netFinal, hi: netBefore, c: '#c98b6b', v: -purTotal },
+      { l: profile.invoices ? 'Net b/f Purch.' : 'Net b/f Fixed', lo: 0, hi: netBefore, c: '#3f5f8a', v: netBefore },
+      { l: profile.invoices ? 'Purchases' : 'Fixed Vessel', lo: netFinal, hi: netBefore, c: '#c98b6b', v: -purTotal },
       { l: 'Final Net', lo: 0, hi: netFinal, c: '#047857', v: netFinal },
     ];
     return { H, W, pad, bw, y, bars };
-  }, [data.revenue, netBefore, netFinal, opEx, purTotal]);
+  }, [data.revenue, netBefore, netFinal, opEx, purTotal, profile.invoices]);
 
   const Head = ({ p, sub }: { p: string; sub: string }) => (
     <>
@@ -282,11 +288,11 @@ export default function VesselBoardReport({
             <K cls="hero" l="FINAL NET PROFIT" v={abbr(netFinal)} s={`${f2(netFinal)} · ${p1(netFinal, R)} من الإيراد`} />
             <K l="REVENUE" v={abbr(data.revenue)} s={f2(data.revenue)} />
             <K cls="good" l="NET PROFIT MARGIN" v={p1(netFinal, R)} s="Final Net ÷ Revenue" />
-            <K l="NET BEFORE PURCHASES" v={abbr(netBefore)} s={p1(netBefore, R) + ' من الإيراد'} />
+            <K l={`NET BEFORE ${purN.en.toUpperCase()}`} v={abbr(netBefore)} s={p1(netBefore, R) + ' من الإيراد'} />
           </div>
           <div className="kpis">
-            <K l="PURCHASES" v={abbr(purTotal)} s={p1(purTotal, R) + ' من الإيراد'} />
-            <K l="TOTAL COST" v={abbr(totalCost)} s="Operating + Purchases" />
+            <K l={purN.en.toUpperCase()} v={abbr(purTotal)} s={p1(purTotal, R) + ' من الإيراد'} />
+            <K l="TOTAL COST" v={abbr(totalCost)} s={`Operating + ${purN.en}`} />
             <K l="COST-TO-REVENUE" v={p1(totalCost, R)} s="Total Cost ÷ Revenue" />
             <K l="NET PROFIT / VOYAGE" v={abbr(netFinal / N)} s={`${f2(netFinal / N)} × ${N} voyages`} />
           </div>
@@ -332,7 +338,7 @@ export default function VesselBoardReport({
               فالربحية رهنُ طرفين لا أكثر.
             </span></div>
             <div className="li"><span className="d">·</span><span>
-              المشتريات وحدها خفضت الصافي من <b>{f2(netBefore)}</b> إلى <b>{f2(netFinal)}</b>،
+              {purN.ar} وحدها خفضت الصافي من <b>{f2(netBefore)}</b> إلى <b>{f2(netFinal)}</b>،
               أي <b>{p1(purTotal, R)}</b> من الإيراد.
             </span></div>
             <div className="li"><span className="d">·</span><span>
@@ -453,7 +459,7 @@ export default function VesselBoardReport({
                 <table>
                   <thead><tr><th scope="col">Volume</th><th scope="col">Export</th><th scope="col">Import</th><th scope="col">Export %</th></tr></thead>
                   <tbody>
-                    <tr><td>Trucks</td><td>{f0(data.E.truckC)}</td><td>{f0(data.I.truckC)}</td><td>{p1(data.E.truckC, data.E.truckC + data.I.truckC || 1)}</td></tr>
+                    <tr><td>{truckN}</td><td>{f0(data.E.truckC)}</td><td>{f0(data.I.truckC)}</td><td>{p1(data.E.truckC, data.E.truckC + data.I.truckC || 1)}</td></tr>
                     <tr><td>Cars</td><td>{f0(data.E.vehC)}</td><td>{f0(data.I.vehC)}</td><td>{p1(data.E.vehC, data.E.vehC + data.I.vehC || 1)}</td></tr>
                     <tr><td>Passengers</td><td>{f0(data.E.passC)}</td><td>{f0(data.I.passC)}</td><td>{p1(data.E.passC, data.E.passC + data.I.passC || 1)}</td></tr>
                   </tbody>
@@ -469,7 +475,7 @@ export default function VesselBoardReport({
               </tr></thead>
               <tbody>
                 <tr><td>Number of Voyages</td><td colSpan={2} style={{ textAlign: 'center' }}>—</td><td><b>{N}</b></td><td>—</td></tr>
-                <tr><td>Trucks</td><td>{f0(data.E.truckC)}</td><td>{f0(data.I.truckC)}</td>
+                <tr><td>{truckN}</td><td>{f0(data.E.truckC)}</td><td>{f0(data.I.truckC)}</td>
                   <td>{f0(data.E.truckC + data.I.truckC)}</td><td>{((data.E.truckC + data.I.truckC) / N).toFixed(1)}</td></tr>
                 <tr><td>Cars</td><td>{f0(data.E.vehC)}</td><td>{f0(data.I.vehC)}</td>
                   <td>{f0(data.E.vehC + data.I.vehC)}</td><td>{((data.E.vehC + data.I.vehC) / N).toFixed(1)}</td></tr>
@@ -552,7 +558,7 @@ export default function VesselBoardReport({
                 <tr><td>Agent Expenses</td><td>{f2(agentExp)}</td><td>{f2(agentExp / N)}</td><td>{p1(agentExp, R)}</td></tr>
                 <tr><td>Bunker Consumed</td><td>{f2(data.bunkerCost)}</td><td>{f2(data.bunkerCost / N)}</td><td>{p1(data.bunkerCost, R)}</td></tr>
                 <tr><td>Salaries</td><td>{f2(data.salaries)}</td><td>{f2(data.salaries / N)}</td><td>{p1(data.salaries, R)}</td></tr>
-                <tr><td>Purchases</td><td>{f2(purTotal)}</td><td>{f2(purTotal / N)}</td><td>{p1(purTotal, R)}</td></tr>
+                <tr><td>{purN.en}</td><td>{f2(purTotal)}</td><td>{f2(purTotal / N)}</td><td>{p1(purTotal, R)}</td></tr>
                 <tr className="tot"><td>Total Cost</td><td>{f2(totalCost)}</td><td>{f2(totalCost / N)}</td><td>{p1(totalCost, R)}</td></tr>
                 <tr className="tot"><td>Final Net Profit</td><td>{f2(netFinal)}</td><td>{f2(netFinal / N)}</td><td>{p1(netFinal, R)}</td></tr>
               </tbody>
@@ -584,7 +590,9 @@ export default function VesselBoardReport({
               </tbody>
             </table>
             <div className="gap">
-              البنكر والمرتبات والمشتريات مصاريف شهرٍ لا رحلة، فتُوزَّع بنسبة إيراد كل رحلة.
+              {profile.bunkerStock
+                ? 'البنكر والمرتبات والمشتريات مصاريف شهرٍ لا رحلة، فتُوزَّع بنسبة إيراد كل رحلة.'
+                : `وقود كلّ رحلة عليها، والمرتبات و${purN.ar} مصاريف شهرٍ تُوزَّع بنسبة إيراد كل رحلة.`}
               الأعلى: رحلة <b>{bestV?.ref}</b> بـ{f2(bestV?.net || 0)} · الأدنى: رحلة{' '}
               <b>{worstV?.ref}</b> بـ{f2(worstV?.net || 0)}.
             </div>
@@ -592,14 +600,17 @@ export default function VesselBoardReport({
 
           {/* ══ PAGE 4 · PURCHASES & SUPPLIERS ══ */}
           <div className="vb-page">
-            <Head p="Page 4 · Purchases & Supplier Analysis" sub="Purchases Summary" />
+            <Head p={profile.invoices ? 'Page 4 · Purchases & Supplier Analysis' : `Page 4 · ${purN.en}`} sub={profile.invoices ? 'Purchases Summary' : `${purN.en} Summary`} />
 
             <div className="kpis">
-              <K l="TOTAL PURCHASES" v={abbr(purTotal)} s={f2(purTotal)} />
-              <K l="INVOICES" v={String(pur.count)} s={`${purchases?.byItem.length || 0} categories`} />
-              <K l="% OF REVENUE" v={p1(purTotal, R)} s="Purchases ÷ Revenue" />
-              <K l="% OF TOTAL COST" v={p1(purTotal, totalCost)} s="Purchases ÷ Total Cost" />
+              <K l={`TOTAL ${purN.en.toUpperCase()}`} v={abbr(purTotal)} s={f2(purTotal)} />
+              {profile.invoices
+                ? <K l="INVOICES" v={String(pur.count)} s={`${purchases?.byItem.length || 0} categories`} />
+                : <K l="ITEMS" v={String(purchases?.byItem.length || 0)} s="categories" />}
+              <K l="% OF REVENUE" v={p1(purTotal, R)} s={`${purN.en} ÷ Revenue`} />
+              <K l="% OF TOTAL COST" v={p1(purTotal, totalCost)} s={`${purN.en} ÷ Total Cost`} />
             </div>
+            {profile.invoices && (<>
             <table>
               <tbody>
                 <tr><td>Largest Purchase Category</td>
@@ -613,18 +624,21 @@ export default function VesselBoardReport({
               </tbody>
             </table>
 
-            <h3>Top 5 Purchase Categories</h3>
+            </>)}
+
+            <h3>{profile.invoices ? 'Top 5 Purchase Categories' : `${purN.en} by Item`}</h3>
             <table>
               <thead><tr><th scope="col">Category</th><th scope="col">Amount</th><th scope="col">% of Purchases</th>
                 <th scope="col" style={{ width: '30%' }}>Share</th></tr></thead>
               <tbody>
-                {(purchases?.byItem || []).slice(0, 5).map((b) => (
+                {(purchases?.byItem || []).slice(0, profile.invoices ? 5 : undefined).map((b) => (
                   <tr key={b.name}><td>{b.name}</td><td>{f2(b.value)}</td><td>{p1(b.value, purTotal || 1)}</td>
                     <td><span className="bar" style={{ width: `${(b.value / (purTotal || 1)) * 100}%`, background: '#c98b6b' }} /></td></tr>
                 ))}
               </tbody>
             </table>
 
+            {profile.invoices && (<>
             <h3>Top 5 Suppliers by Monthly Charge</h3>
             <table>
               <thead><tr><th scope="col">Supplier</th><th scope="col">Amount</th><th scope="col">% of Purchases</th>
@@ -640,6 +654,7 @@ export default function VesselBoardReport({
               المورّد تصنيفٌ مستقلٌّ عن بند المصروف فلا يُجمع الجدولان — وإجماليهما واحد:{' '}
               <b>{f2(pur.suppliers.reduce((s, x) => s + x.value, 0))}</b>.
             </div>
+            </>)}
 
             <h2>Management Opportunities</h2>
             <div className="box">
@@ -708,6 +723,7 @@ export default function VesselBoardReport({
             </div>
 
             <h3>Bunker &amp; Salaries</h3>
+            {profile.bunkerStock ? (
             <table>
               <thead><tr><th scope="col">Opening</th><th scope="col">+ Supplies</th><th scope="col">− Closing</th>
                 <th scope="col">= Consumed</th><th scope="col">Salaries</th></tr></thead>
@@ -716,14 +732,26 @@ export default function VesselBoardReport({
                 <td><b>{f2(data.bunkerCost)}</b></td><td>{f2(data.salaries)}</td>
               </tr></tbody>
             </table>
+            ) : (
+            <table>
+              <tbody>
+                {(profile.bunkerRows || []).map((r) => <tr key={r.en}><td>{r.en}</td><td>{f2(r.value)}</td></tr>)}
+                <tr className="tot"><td>Fuel Consumed</td><td>{f2(data.bunkerCost)}</td></tr>
+                <tr><td>Salaries</td><td>{f2(data.salaries)}</td></tr>
+              </tbody>
+            </table>
+            )}
 
+            {profile.liquidity && (<>
             <h3>Agents&apos; Liquidity <span style={{ fontWeight: 400 }}>— رصيدٌ لا مصروف، خارج قائمة الدخل</span></h3>
             <table>
               <thead><tr><th scope="col">{cfg.agentExport} (P−O)</th><th scope="col">{cfg.agentImport} (O)</th>
                 <th scope="col">Total Collection (P)</th></tr></thead>
               <tbody><tr><td>{f2(data.liqIttihad)}</td><td>{f2(data.liqBassam)}</td><td>{f2(data.P)}</td></tr></tbody>
             </table>
+            </>)}
 
+            {profile.invoices && (<>
             <h2>Appendix B · Purchase Details</h2>
             <table className="long">
               <thead><tr>
@@ -746,20 +774,23 @@ export default function VesselBoardReport({
                 <tr className="tot"><td colSpan={6}>Total Purchases</td><td>{f2(purTotal)}</td></tr>
               </tbody>
             </table>
+            </>)}
 
             <h2>Financial Validation</h2>
             <table>
               <thead><tr><th scope="col">Check</th><th scope="col">Computed</th><th scope="col">Reported</th><th scope="col">Result</th></tr></thead>
               <tbody>
                 {[
-                  ['Revenue = Export + Import', data.revE + data.revI, data.revenue],
+                  // الإيرادات اليدويّة (وأذون التسليم عند مونتي) بلا اتّجاه — تدخل الإجمالي فتدخل الفحص
+                  [(data.manualRev || []).some((r) => r.amount) ? 'Revenue = Export + Import + Other' : 'Revenue = Export + Import',
+                    data.revE + data.revI + (data.manualRev || []).reduce((s, r) => s + r.amount, 0), data.revenue],
                   ['Operating Exp. = Agents + Bunker + Salaries', agentExp + data.bunkerCost + data.salaries, data.revenue - netBefore],
-                  ['Net before Purchases', data.revenue - opEx - (hasGap ? -bookGap : 0), netBefore],
-                  ['Final Net = Net b/f − Purchases', netBefore - purTotal, netFinal],
-                  ['Total Cost = Operating + Purchases', opEx + purTotal, totalCost],
+                  [`Net before ${purN.en}`, data.revenue - opEx - (hasGap ? -bookGap : 0), netBefore],
+                  [`Final Net = Net b/f − ${purN.en}`, netBefore - purTotal, netFinal],
+                  [`Total Cost = Operating + ${purN.en}`, opEx + purTotal, totalCost],
                   ['Cost Structure = Total Cost', segTotal, totalCost],
-                  ['Purchases by category = Total', (purchases?.byItem || []).reduce((s, b) => s + b.value, 0), purTotal],
-                  ['Suppliers total = Purchases total', pur.suppliers.reduce((s, x) => s + x.value, 0), purTotal],
+                  [`${purN.en} by item = Total`, (purchases?.byItem || []).reduce((s, b) => s + b.value, 0), purTotal],
+                  ...(profile.invoices ? [['Suppliers total = Purchases total', pur.suppliers.reduce((s, x) => s + x.value, 0), purTotal]] : []),
                 ].map(([l, a, b]) => (
                   <tr key={l as string}>
                     <td style={{ textAlign: 'right' }}>{l as string}</td>

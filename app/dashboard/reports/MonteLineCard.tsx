@@ -4,6 +4,11 @@ import api from '@/lib/api';
 import { getUser } from '@/lib/auth';
 import { useI18n } from '@/lib/i18n';
 import type { LineVesselConfig } from './LineProfitReport';
+import VesselExecReport from './VesselExecReport';
+import VesselFinReport from './VesselFinReport';
+import VesselBoardReport from './VesselBoardReport';
+import { allocateVoyageNets } from './VesselProfitReport';
+import { monteReportData, MONTE_REV_ROWS, MONTE_SIDES } from '@/lib/reports/monteReports';
 import {
   validateMontePackage, packageTotals, itemTotals, fixedItemColumns, HIDDEN_VOYAGES,
   type MontePackage, type MonteCheck,
@@ -74,6 +79,25 @@ export default function MonteLineCard({ config: cfg }: { config: LineVesselConfi
   const pkg = check?.pkg || null;
   const tot = useMemo(() => (pkg ? packageTotals(pkg) : null), [pkg]);
   const fixedCols = useMemo(() => (pkg ? fixedItemColumns(pkg) : []), [pkg]);
+
+  /*
+   * تقارير بوسيدون الثلاثة لمونتي — بقرار المالك ٣١ أكتوبر ٢٠٢٦: النوافذ نفسها بمحوِّلٍ
+   * من الحزمة (`lib/reports/monteReports.ts`)، والفترة شهرٌ أو مدى من أشهر الحزمة.
+   * والافتراضيّ آخر شهرٍ فيه رحلات.
+   */
+  const months = useMemo(() => (pkg ? pkg.monthly.map((m) => m.month) : []), [pkg]);
+  const lastLine = useMemo(() => (pkg ? [...pkg.monthly].reverse().find((m) => (m.trips || 0) > 0)?.month || months[months.length - 1] : ''), [pkg, months]);
+  const [repFrom, setRepFrom] = useState('');
+  const [repTo, setRepTo] = useState('');
+  const [showRep, setShowRep] = useState<'' | 'exec' | 'fin' | 'board'>('');
+  const rFrom = months.includes(repFrom) ? repFrom : lastLine;
+  const rTo = months.includes(repTo) && repTo >= rFrom ? repTo : rFrom;
+  const rep = useMemo(() => (pkg && rFrom ? monteReportData(pkg, rFrom, rTo) : null), [pkg, rFrom, rTo]);
+  // وقود كلّ رحلة عليها (المختلط يوزّع البنكر بنسبة وقود الرحلة)، والمرتّبات والثابتة بنسبة الإيراد
+  const repAlloc = useMemo(() => (rep ? allocateVoyageNets(rep.exec.perVoyage,
+    { bunkerCost: rep.exec.bunkerCost, salaries: rep.exec.salaries, purchasesTotal: rep.exec.purchasesTotal }, 'mixed') : []), [rep]);
+  const repLabel = rFrom === rTo ? rFrom : `${rFrom} → ${rTo}`;
+  const repCfg = { vessel: 'Monte Express', ...MONTE_SIDES };
 
   const pickFile = async (f: File | undefined) => {
     if (!f) return;
@@ -179,6 +203,27 @@ export default function MonteLineCard({ config: cfg }: { config: LineVesselConfi
               {check!.warnings.map((w, i) => <p key={i}>⚠️ {w}</p>)}
             </div>
           )}
+
+          {/* ── التقارير ── */}
+          <div className="bg-white rounded-xl shadow p-3 flex items-center gap-2 flex-wrap text-sm print:hidden">
+            <span className="font-semibold text-gray-700">{T('التقارير', 'Reports')}</span>
+            <label className="flex items-center gap-1 text-gray-600">{T('من', 'From')}
+              <select aria-label={T('من شهر', 'From month')} value={rFrom} onChange={(e) => setRepFrom(e.target.value)} className="border rounded px-2 py-1">
+                {months.map((m) => <option key={m} value={m}>{m}</option>)}
+              </select>
+            </label>
+            <label className="flex items-center gap-1 text-gray-600">{T('إلى', 'To')}
+              <select aria-label={T('إلى شهر', 'To month')} value={rTo} onChange={(e) => setRepTo(e.target.value)} className="border rounded px-2 py-1">
+                {months.filter((m) => m >= rFrom).map((m) => <option key={m} value={m}>{m}</option>)}
+              </select>
+            </label>
+            {rep && !rep.exec.count && <span className="text-xs text-amber-700">{T('لا رحلات في هذه الفترة — التكاليف الثابتة وحدها', 'No voyages in this period — fixed costs only')}</span>}
+            <div className="ms-auto flex gap-2 flex-wrap">
+              <button onClick={() => setShowRep('exec')} className="border px-3 py-1.5 rounded-lg hover:bg-gray-50">📊 {T('تقرير إداري', 'Management report')}</button>
+              <button onClick={() => setShowRep('fin')} className="border px-3 py-1.5 rounded-lg hover:bg-gray-50">🧮 {T('تقرير مالي (نسخة ٢)', 'Financial report (v2)')}</button>
+              <button onClick={() => setShowRep('board')} className="border px-3 py-1.5 rounded-lg hover:bg-gray-50">🏛️ {T('تقرير تنفيذي (نسخة ٣)', 'Executive report (v3)')}</button>
+            </div>
+          </div>
 
           {/* ── المؤشّرات ── */}
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
@@ -451,6 +496,21 @@ export default function MonteLineCard({ config: cfg }: { config: LineVesselConfi
             </div>
           </div>
         </>
+      )}
+
+      {rep && showRep === 'exec' && (
+        <VesselExecReport cfg={repCfg} month={rFrom} monthLabel={repLabel} exec={rep.exec} profile={rep.profile} onClose={() => setShowRep('')} />
+      )}
+      {rep && showRep === 'fin' && (
+        <VesselFinReport cfg={repCfg} month={rFrom} monthTo={rTo} monthLabel={repLabel}
+          data={rep.fin} purchases={rep.purchases} exec={rep.exec} allocVoy={repAlloc}
+          labelOf={rep.labelOf} revRows={MONTE_REV_ROWS} defaultBuckets={rep.exec.defaultBuckets}
+          profile={rep.profile} onClose={() => setShowRep('')} />
+      )}
+      {rep && showRep === 'board' && (
+        <VesselBoardReport cfg={repCfg} month={rFrom} monthTo={rTo} monthLabel={repLabel}
+          data={rep.fin} purchases={rep.purchases} exec={rep.exec} allocVoy={repAlloc}
+          labelOf={rep.labelOf} revRows={MONTE_REV_ROWS} profile={rep.profile} onClose={() => setShowRep('')} />
       )}
     </div>
   );

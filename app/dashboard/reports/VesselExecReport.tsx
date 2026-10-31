@@ -2,6 +2,7 @@
 import { useMemo, useState } from 'react';
 import type { VesselConfig } from './VesselProfitReport';
 import { allocateVoyageNets } from './VesselProfitReport';
+import { DEFAULT_PROFILE, type ReportProfile } from '@/lib/reports/reportProfile';
 
 export interface ExecLine { key: string; label: string; value: number }
 export interface ExecVoyage { ref: string; revenue: number; expenses: number; net: number; supplies: number }
@@ -171,10 +172,10 @@ const fmtAbbr = (n: number) => {
 const pct = (n: number) => `${Math.round(n)}%`;
 
 export default function VesselExecReport({
-  cfg, month, monthLabel, exec, onClose,
-}: { cfg: VesselConfig; month: string; monthLabel: string; exec: ExecData; onClose: () => void }) {
+  cfg, month, monthLabel, exec, onClose, profile = DEFAULT_PROFILE,
+}: { cfg: Pick<VesselConfig, 'vessel'>; month: string; monthLabel: string; exec: ExecData; onClose: () => void; profile?: ReportProfile }) {
   const [lang, setLang] = useState<Lang>('both');
-  const [alloc, setAlloc] = useState<Alloc>('revenue');
+  const [alloc, setAlloc] = useState<Alloc>(profile.defaultAlloc || 'revenue');
   const [showMap, setShowMap] = useState(false);
   /*
    * الخريطة مشتقّةٌ من الافتراضيّ (وفيه الرموز المحفوظة) فوقه تعديلات هذه النافذة.
@@ -189,6 +190,11 @@ export default function VesselExecReport({
 
   const dir = lang === 'en' ? 'ltr' : 'rtl';
   const L = (ar: string, en: string) => (lang === 'ar' ? ar : lang === 'en' ? en : `${ar} · ${en}`);
+  const segL = (s: { id: string; ar: string; en: string }) => {
+    const o = profile.bucketNames?.[s.id];
+    return o ? L(o.ar, o.en) : L(s.ar, s.en);
+  };
+  const purAr = profile.bucketNames?.purchases?.ar || 'المشتريات', purEn = profile.bucketNames?.purchases?.en || 'purchases';
 
   const totalExpenses = exec.opExpenses + exec.purchasesTotal;
   const finalNet = exec.opNet - exec.purchasesTotal;
@@ -296,7 +302,7 @@ export default function VesselExecReport({
         {/* Slide 2 — Net Profit by Voyage */}
         <Slide>
           <SlideTitle title={L('صافي الربح لكل رحلة', 'Net Profit by Voyage')}
-            sub={L('بالدولار — بعد توزيع البنكر والمرتبات والمشتريات على الرحلات', 'USD — after allocating bunker, salaries and purchases to voyages')} />
+            sub={L(`بالدولار — بعد توزيع البنكر والمرتبات و${purAr} على الرحلات`, `USD — after allocating bunker, salaries and ${purEn.toLowerCase()} to voyages`)} />
           <div className="flex gap-4 mt-4">
             <div className="flex-1">
               <BarChart data={allocVoyages.map((v) => ({ label: v.ref, value: v.net }))} color="#5b9e77" />
@@ -337,7 +343,7 @@ export default function VesselExecReport({
               {cost.segs.map((s) => (
                 <div key={s.id} className="flex items-center bg-gray-50 rounded-lg px-4 py-3">
                   <span className="w-3.5 h-3.5 rounded-full inline-block ml-3 mr-0" style={{ background: s.color }} />
-                  <span className="flex-1 text-gray-700">{L(s.ar, s.en)}</span>
+                  <span className="flex-1 text-gray-700">{segL(s)}</span>
                   <span className="font-bold text-[#1e3a5f] mx-3">{fmtAbbr(s.value)}</span>
                   <span className="text-gray-400 text-sm w-10 text-left">{pct(s.share * 100)}</span>
                 </div>

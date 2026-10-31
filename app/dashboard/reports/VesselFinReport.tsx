@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react';
 import { costSegments, costBreakdown, BUCKETS, CODE_OF_BUCKET, ASSIGNABLE_CODES, LOCKED_COST_KEYS, type ExecData } from './VesselExecReport';
 import { useI18n } from '@/lib/i18n';
 import SaveAsMenu from '@/components/SaveAsMenu';
+import { DEFAULT_PROFILE, type ReportProfile } from '@/lib/reports/reportProfile';
 
 /**
  * ── تقرير صافي الربح — النسخة المالية ──
@@ -72,6 +73,8 @@ interface Props {
   onSetCostCode?: (key: string, code: string | null) => Promise<void>;
   /** تعذّرت قراءة الرموز المحفوظة: التقرير معروضٌ بالتصنيف الافتراضيّ */
   costCodesWarn?: boolean;
+  /** ما تُخفيه النافذة وما تُسمّيه لمركبٍ بلا دفتر بوسيدون (مونتي) — انظر `reportProfile.ts` */
+  profile?: ReportProfile;
   onClose: () => void;
 }
 
@@ -96,9 +99,16 @@ const EXP_EN: Record<string, string> = {
   otherExpsI: 'Other Expenses', othersI: 'Other Expenses', others: 'Other Expenses',
   shipOrder60: 'Shipping Order Commission 60%', freeZone2: 'Free Zone 2%', toursVeh12: 'Tours — Vehicles 12%',
   toursPks12: 'Tours — PKS 12%', cargo: 'Cargo', corona: 'Corona Test',
+  // مونتي — مفاتيح حقول حزمتها
+  cost_port_jed: 'Jeddah Port, Shipping & Discharge Charges', cost_comm_jed: 'Jeddah Agency Commission', cost_water: 'Fresh Water',
+  cost_agent_adj: 'Jeddah Agent Statement Adjustment', cost_gifts: 'Passenger Gifts', cost_catering: 'Voyage Catering',
+  cost_port_suk: 'Suakin Port Entry & Exit', cost_comm_suk30: 'Suakin Agency Commission 30%', cost_comm_suk: 'Suakin Agency Commission (cargo & passengers)',
 };
-const REV_EN: Record<string, string> = { truck: 'Truck Freight', veh: 'Vehicle Freight', pass: 'Passenger Fares' };
-const AGENT_EN: Record<string, string> = { 'وكيل بدوي': 'Badawi Agency', 'وكيل البسّام': 'El-Bassam Agency', 'وكيل الاتحاد': 'Etihad Agency' };
+const REV_EN: Record<string, string> = { truck: 'Truck Freight', veh: 'Vehicle Freight', pass: 'Passenger Fares', cargo: 'Cargo Freight (trucks · trailers · cars)' };
+const AGENT_EN: Record<string, string> = {
+  'وكيل بدوي': 'Badawi Agency', 'وكيل البسّام': 'El-Bassam Agency', 'وكيل الاتحاد': 'Etihad Agency',
+  'ذهاب جدّة ← سواكن': 'Outbound Jeddah → Suakin', 'عودة سواكن ← جدّة': 'Return Suakin → Jeddah',
+};
 const SEG_EN: Record<string, string> = {
   fuel: 'Bunkers Consumed', agent: 'Agency Commissions', port: 'Port & Handling', fixed: 'Fixed Operating Costs',
   purchases: 'Purchases & Services Expenses', other: 'Other',
@@ -230,7 +240,7 @@ const CSS = `
 
 export default function VesselFinReport({
   cfg, month, monthTo, monthLabel, data, purchases, exec, allocVoy, labelOf, revRows, onClose,
-  costCodes = {}, defaultBuckets = {}, onSetCostCode, costCodesWarn = false,
+  costCodes = {}, defaultBuckets = {}, onSetCostCode, costCodesWarn = false, profile = DEFAULT_PROFILE,
 }: Props) {
   const [showVoy, setShowVoy] = useState(true);
   const [showCodes, setShowCodes] = useState(false);
@@ -273,11 +283,20 @@ export default function VesselFinReport({
   const groups = useMemo(() => costBreakdown(exec, { purchasesByItem: purchases?.byItem }), [exec, purchases]);
   const groupsTotal = groups.reduce((s, g) => s + g.value, 0) || 1;
   const segName = (id: string) => {
+    const o = profile.bucketNames?.[id];
+    if (o) return en ? o.en : o.ar;
     const b = BUCKETS.find((x) => x.id === id);
     return en ? (SEG_EN[id] || b?.en || id) : (b?.ar || id);
   };
+  // سطر C: «مشتريات العبّارة» عند بوسيدون، واسم الملفّ حين لا فواتير (مونتي)
+  const purLine = profile.invoices
+    ? T('مشتريات العبّارة / مصاريف أخرى (قسط الشهر)', 'Purchases & Services Expenses (monthly charge)')
+    : T(profile.purchases.ar, profile.purchases.en);
+  const purShort = profile.invoices ? T('مشتريات العبّارة', 'Purchases & services') : segName('purchases');
   const detailLabel = (key: string, label: string, kind?: string) => {
-    if (key === 'fuel') return T('البنكر المستهلك (أول المدة + التموينات − آخر المدة)', 'Bunkers consumed (opening + supplied − closing)');
+    if (key === 'fuel') return profile.bunkerStock
+      ? T('البنكر المستهلك (أول المدة + التموينات − آخر المدة)', 'Bunkers consumed (opening + supplied − closing)')
+      : T('الوقود المستهلك (الرحلات بالمتوسّط المرجَّح + التموضع)', 'Fuel consumed (voyages at weighted average + positioning)');
     if (key === 'salaries') return T('مرتبات الطاقم', 'Crew wages');
     if (key.startsWith('item:')) return itemName(label);
     if (key === 'purchases') return kind === 'residual'
@@ -454,16 +473,16 @@ export default function VesselFinReport({
                 </tr>
               )}
               <tr className="sub">
-                <td className="lbl">{T('= صافي الربح قبل المشتريات', '= Operating Profit before Purchases')}</td>
+                <td className="lbl">{profile.invoices ? T('= صافي الربح قبل المشتريات', '= Operating Profit before Purchases') : T(`= صافي الربح قبل ${segName('purchases')}`, `= Operating Profit before ${segName('purchases')}`)}</td>
                 <td className="amt">{fmt(data.net)}</td>
                 <td className="shr">{pct(data.net, R)}</td>
                 <td className="ref"></td>
               </tr>
               <tr className="neg">
-                <td className="lbl">{T('− مشتريات العبّارة / مصاريف أخرى (قسط الشهر)', '− Purchases & Services Expenses (monthly charge)')}</td>
+                <td className="lbl">− {purLine}</td>
                 <td className="amt">({fmt(purchTotal)})</td>
                 <td className="shr">{pct(purchTotal, R)}</td>
-                <td className="ref">{T('مشتريات العبّارة', 'Purchases & services')}</td>
+                <td className="ref">{purShort}</td>
               </tr>
               <tr className="fin">
                 <td className="lbl">{T('= صافي الربح النهائي', '= Net Profit')}</td>
@@ -515,12 +534,14 @@ export default function VesselFinReport({
                     </tr>
                   );
                 })}
-                <tr>
-                  <td>{T('إذن الشحن', 'Shipping Order Fees')}</td><td>—</td><td>{fmt(data.E.discharge)}</td>
-                  <td>—</td><td>{fmt(data.I.discharge)}</td>
-                  <td>{fmt(data.E.discharge + data.I.discharge)}</td>
-                  <td>{pct(data.E.discharge + data.I.discharge, R)}</td>
-                </tr>
+                {profile.shippingOrder && (
+                  <tr>
+                    <td>{T('إذن الشحن', 'Shipping Order Fees')}</td><td>—</td><td>{fmt(data.E.discharge)}</td>
+                    <td>—</td><td>{fmt(data.I.discharge)}</td>
+                    <td>{fmt(data.E.discharge + data.I.discharge)}</td>
+                    <td>{pct(data.E.discharge + data.I.discharge, R)}</td>
+                  </tr>
+                )}
                 {(data.manualRev || []).filter((r) => r.amount > 0).map((r) => (
                   <tr key={r.key}>
                     <td>{r.label}</td><td>—</td><td>—</td><td>—</td><td>—</td>
@@ -568,6 +589,7 @@ export default function VesselFinReport({
 
             <h2 style={{ marginTop: 18 }}>{T('البنكر والمرتبات', 'Bunkers & Crew Wages')}</h2>
             <h3>{T('البنكر', 'Bunkers')}</h3>
+            {profile.bunkerStock ? (<>
             <table>
               <thead><tr>
                 <th scope="col">{T('رصيد أول المدة', 'Opening stock')}</th><th scope="col">{T('+ تموينات الشهر', '+ Supplied during the month')}</th>
@@ -583,6 +605,15 @@ export default function VesselFinReport({
                 ? <>The month is charged with bunkers <b>consumed</b>, not purchased. Closing stock is carried forward as the next month&apos;s opening stock.</>
                 : <>المُحمَّل على الشهر هو <b>المستهلك</b> لا المُشترى. ورصيد آخر المدة يُرحَّل رصيداً افتتاحياً للشهر التالي.</>}
             </div>
+            </>) : (<>
+              <table>
+                <tbody>
+                  {(profile.bunkerRows || []).map((r) => <tr key={r.ar}><td>{T(r.ar, r.en)}</td><td>{fmt(r.value)}</td></tr>)}
+                  <tr className="tot"><td>{T('= المستهلك', '= Consumed')}</td><td>{fmt(data.bunkerCost)}</td></tr>
+                </tbody>
+              </table>
+              {profile.bunkerNote && <div className="note">{T(profile.bunkerNote.ar, profile.bunkerNote.en)}</div>}
+            </>)}
 
             <h3>{T('مرتبات الشهر', 'Crew Wages')}</h3>
             <table><tbody><tr><td>{T('مرتبات الطاقم المحمّلة', 'Crew wages charged to the month')}</td><td>{fmt(data.salaries)}</td></tr></tbody></table>
@@ -591,7 +622,7 @@ export default function VesselFinReport({
 
           {/* ── ص٤ · مشتريات العبّارة ── */}
           <div className="vf-sec">
-            <h2>{T('مشتريات العبّارة / مصاريف أخرى', 'Purchases & Services Expenses')}</h2>
+            <h2>{profile.invoices ? T('مشتريات العبّارة / مصاريف أخرى', 'Purchases & Services Expenses') : segName('purchases')}</h2>
             <h3>{T('الإجمالي حسب البند', 'Total by item')}</h3>
             <table>
               <thead><tr><th scope="col">{T('البند', 'Item')}</th><th scope="col">{T('قسط الشهر (USD)', 'Monthly charge (USD)')}</th><th scope="col">{T('٪ من المشتريات', '% of purchases')}</th></tr></thead>
@@ -603,6 +634,7 @@ export default function VesselFinReport({
               </tbody>
             </table>
 
+            {profile.invoices && (<>
             <h3>{T('الفواتير مجمَّعة تحت بنودها — بالترتيب نفسه', 'Invoices grouped under their items — same order')}</h3>
             <div className="note">
               {en
@@ -636,6 +668,7 @@ export default function VesselFinReport({
                 </tbody>
               </table>
             )) : <p style={{ fontSize: '8.5pt', color: '#64748b' }}>{T('لا توجد فواتير على المركب في هذا الشهر.', 'No invoices charged to the vessel this month.')}</p>}
+            </>)}
           </div>
 
           {/*
@@ -657,7 +690,7 @@ export default function VesselFinReport({
               </tr></thead>
               <tbody>
                 {([
-                  { label: T('شاحنات', 'Trucks'), e: data.E.truckC, i: data.I.truckC },
+                  { label: profile.truckLabel ? T(profile.truckLabel.ar, profile.truckLabel.en) : T('شاحنات', 'Trucks'), e: data.E.truckC, i: data.I.truckC },
                   { label: T('سيارات', 'Vehicles'), e: data.E.vehC, i: data.I.vehC },
                   { label: T('ركاب', 'Passengers'), e: data.E.passC, i: data.I.passC },
                 ] as const).map((r) => (
@@ -677,6 +710,7 @@ export default function VesselFinReport({
               </tbody>
             </table>
 
+            {profile.liquidity && (<>
             <h3>{T('السيولة عند الوكلاء', 'Cash held by agents')}</h3>
             <table>
               <thead><tr>
@@ -691,6 +725,7 @@ export default function VesselFinReport({
             <div className="note">
               {T('السيولة رصيدٌ عند الوكيل لا مصروف — لا تدخل قائمة الدخل أعلاه.', 'Cash held by agents is a balance, not an expense — it does not enter the income statement above.')}
             </div>
+            </>)}
 
             <h3>{T('هيكل التكاليف', 'Cost Structure')}</h3>
             <div className="dn">
@@ -756,7 +791,9 @@ export default function VesselFinReport({
 
             {showVoy && allocVoy.length > 0 && (
               <>
-                <h3>{T('ربحية كل رحلة — بعد توزيع البنكر والمرتبات والمشتريات', 'Per-voyage profitability — after allocating bunkers, wages and purchases')}</h3>
+                <h3>{profile.invoices
+                  ? T('ربحية كل رحلة — بعد توزيع البنكر والمرتبات والمشتريات', 'Per-voyage profitability — after allocating bunkers, wages and purchases')
+                  : T(`ربحية كل رحلة — بعد توزيع الوقود والمرتبات و${segName('purchases')}`, `Per-voyage profitability — after allocating fuel, wages and ${segName('purchases').toLowerCase()}`)}</h3>
                 <table className="long">
                   <thead><tr>
                     <th scope="col">{T('الرحلة', 'Voyage')}</th><th scope="col">{T('الإيراد', 'Revenue')}</th>
@@ -787,8 +824,11 @@ export default function VesselFinReport({
                   </tbody>
                 </table>
                 <div className="note">
-                  {T('البنكر والمرتبات والمشتريات مصاريف شهرٍ لا رحلة، فتُوزَّع على الرحلات بنسبة إيراد كل رحلة. ومجموع الصافي هنا = صافي الربح النهائي في الصفحة الأولى.',
-                    'Bunkers, wages and purchases are monthly costs, not voyage costs; they are allocated to voyages pro rata to each voyage\'s revenue. The net total here equals the net profit on page one.')}
+                  {profile.bunkerStock
+                    ? T('البنكر والمرتبات والمشتريات مصاريف شهرٍ لا رحلة، فتُوزَّع على الرحلات بنسبة إيراد كل رحلة. ومجموع الصافي هنا = صافي الربح النهائي في الصفحة الأولى.',
+                      'Bunkers, wages and purchases are monthly costs, not voyage costs; they are allocated to voyages pro rata to each voyage\'s revenue. The net total here equals the net profit on page one.')
+                    : T(`وقود كلّ رحلة عليها، ووقود التموضع بنسبة وقودها. والمرتبات و${segName('purchases')} مصاريف شهرٍ تُوزَّع بنسبة إيراد كل رحلة. ومجموع الصافي هنا = صافي الربح النهائي في الصفحة الأولى.`,
+                      `Each voyage carries its own fuel, and positioning fuel pro rata to it. Wages and ${segName('purchases').toLowerCase()} are monthly costs allocated pro rata to revenue. The net total here equals the net profit on page one.`)}
                 </div>
               </>
             )}

@@ -39,6 +39,22 @@ describe('كارت مونتي', () => {
     expect(screen.queryByText(/^▸ 07$/)).toBeNull();
   });
 
+  it.skipIf(!real)('أزرار التقارير الثلاثة تفتح نوافذ بوسيدون بأرقام مونتي، والفترة تُختار', async () => {
+    get.mockResolvedValue({ data: { manual: { package: real }, updated_at: '2026-10-31T13:00:00Z' } });
+    const { container } = render(<LineProfitReport config={MONTE_JS} />);
+    await screen.findByText(/الصافي بعد التكاليف الثابتة/);
+    // الافتراضيّ آخر شهرٍ فيه رحلات
+    expect((screen.getByLabelText('من شهر') as HTMLSelectElement).value).toBe('2026-10');
+    fireEvent.click(screen.getByText(/تقرير مالي \(نسخة ٢\)/));
+    await waitFor(() => expect(container.textContent).toContain('945,508.93'));
+    // المدى من أبريل: الصافي = التراكميّ في الكارت
+    fireEvent.change(screen.getByLabelText('من شهر'), { target: { value: '2026-04' } });
+    fireEvent.change(screen.getByLabelText('إلى شهر'), { target: { value: '2026-10' } });
+    await waitFor(() => expect(container.textContent).toContain('-8,970.44'));
+    fireEvent.click(screen.getByText(/تقرير تنفيذي \(نسخة ٣\)/));
+    await waitFor(() => expect(container.textContent).toContain('MATCH'));
+  });
+
   it.skipIf(!real)('الرفع يحفظ الحزمة ويُبقي بقيّة المدخلات كما قُرئت', async () => {
     get.mockResolvedValue({ data: { manual: { settings: { note: 'keep' } } } });
     put.mockResolvedValue({ data: { updated_at: '2026-10-29T21:00:00Z' } });
