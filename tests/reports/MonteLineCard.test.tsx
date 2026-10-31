@@ -33,7 +33,7 @@ describe('كارت مونتي', () => {
     const { container } = render(<LineProfitReport config={MONTE_JS} />);
     await screen.findByText(/الصافي بعد التكاليف الثابتة/);
     const text = container.textContent || '';
-    for (const n of ['162,550.41', '151,211.19', '132,172.85', '165,353.91', '230,643.81', '243,782.25', '1,040,412', '1,085,714', '85,932.87']) {
+    for (const n of ['162,550.41', '151,211.19', '132,172.85', '165,353.91', '230,643.81', '243,782.25', '945,509', '1,085,714', '-8,970.44', 'تجهيز وصيانة — سمارت فليت']) {
       expect(text).toContain(n);
     }
     expect(screen.queryByText(/^▸ 07$/)).toBeNull();

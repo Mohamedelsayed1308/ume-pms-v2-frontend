@@ -5,7 +5,7 @@ import { getUser } from '@/lib/auth';
 import { useI18n } from '@/lib/i18n';
 import type { LineVesselConfig } from './LineProfitReport';
 import {
-  validateMontePackage, packageTotals, itemTotals, HIDDEN_VOYAGES,
+  validateMontePackage, packageTotals, itemTotals, fixedItemColumns, HIDDEN_VOYAGES,
   type MontePackage, type MonteCheck,
 } from '@/lib/reports/montePackage';
 
@@ -73,6 +73,7 @@ export default function MonteLineCard({ config: cfg }: { config: LineVesselConfi
   const check = useMemo(() => (manual.package ? validateMontePackage(manual.package) : null), [manual.package]);
   const pkg = check?.pkg || null;
   const tot = useMemo(() => (pkg ? packageTotals(pkg) : null), [pkg]);
+  const fixedCols = useMemo(() => (pkg ? fixedItemColumns(pkg) : []), [pkg]);
 
   const pickFile = async (f: File | undefined) => {
     if (!f) return;
@@ -335,7 +336,7 @@ export default function MonteLineCard({ config: cfg }: { config: LineVesselConfi
             <table className="w-full text-sm whitespace-nowrap">
               <thead>
                 <tr className="text-gray-500 text-xs border-b">
-                  {[T('الشهر', 'Month'), T('الحالة', 'Status'), T('رحلات', 'Trips'), T('الإيراد', 'Revenue'), T('تكاليف الرحلات', 'Voyage costs'), T('صافي الرحلات', 'Voyage net'), T('وقود الانتقال', 'Positioning fuel'), T('التأمين', 'Insurance'), T('مرتّبات $', 'Salaries $'), T('مرتّبات €→$', 'Salaries €→$'), T('مصاريف الطاقم', 'Crew misc.'), T('نقديّة القبطان', 'Cash to master'), T('الثابتة', 'Fixed'), T('الصافي', 'Net'), T('التراكميّ', 'Cumulative')].map((h) => <th key={h} className="py-1.5 px-2 text-start">{h}</th>)}
+                  {[T('الشهر', 'Month'), T('الحالة', 'Status'), T('رحلات', 'Trips'), T('الإيراد', 'Revenue'), T('تكاليف الرحلات', 'Voyage costs'), T('صافي الرحلات', 'Voyage net'), T('وقود الانتقال', 'Positioning fuel'), T('التأمين', 'Insurance'), T('مرتّبات $', 'Salaries $'), T('مرتّبات €→$', 'Salaries €→$'), T('مصاريف الطاقم', 'Crew misc.'), T('نقديّة القبطان', 'Cash to master'), ...fixedCols.map((c) => c.label), T('الثابتة', 'Fixed'), T('الصافي', 'Net'), T('التراكميّ', 'Cumulative')].map((h) => <th key={h} className="py-1.5 px-2 text-start">{h}</th>)}
                 </tr>
               </thead>
               <tbody>
@@ -344,7 +345,8 @@ export default function MonteLineCard({ config: cfg }: { config: LineVesselConfi
                     <td className="py-1.5 px-2 font-semibold">{m.month}</td>
                     <td className="py-1.5 px-2 text-xs">{m.line}{m.salaries_pending ? <span className="text-amber-600"> · {T('المرتّبات معلَّقة', 'salaries pending')}</span> : null}</td>
                     <td className="py-1.5 px-2 tabular-nums">{m.trips || ''}</td>
-                    {[m.rev, m.vcost, m.vnet, m.pos, m.ins, m.sal_usd, m.sal_eur, m.crew_misc, m.ctm, m.fixed].map((x, k) => (
+                    {[m.rev, m.vcost, m.vnet, m.pos, m.ins, m.sal_usd, m.sal_eur, m.crew_misc, m.ctm,
+                      ...fixedCols.map((c) => m.fixed_items?.find((i) => i.key === c.key)?.usd ?? null), m.fixed].map((x, k) => (
                       <td key={k} className={`py-1.5 px-2 tabular-nums ${x != null && x < 0 ? 'text-red-700' : ''}`}>{x ? fmt(x) : '—'}</td>
                     ))}
                     <td className={`py-1.5 px-2 tabular-nums font-semibold ${m.net >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>{fmt(m.net, 2)}</td>

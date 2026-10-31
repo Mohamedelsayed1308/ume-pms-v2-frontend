@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { existsSync, readFileSync } from 'node:fs';
-import { validateMontePackage, packageTotals, voyageTotals, itemTotals, type MontePackage, type MonteVoyage } from '@/lib/reports/montePackage';
+import { validateMontePackage, packageTotals, voyageTotals, itemTotals, fixedItemColumns, type MontePackage, type MonteVoyage } from '@/lib/reports/montePackage';
 
 // حزمةٌ صغيرة مصنوعة — شكل monte-pms/1 بأقلّ بنود
 const voyage = (id: string, dep: string, over: Partial<MonteVoyage> = {}): MonteVoyage => ({
@@ -77,6 +77,27 @@ describe('validateMontePackage', () => {
     expect(validateMontePackage(p).errors.join()).toContain('2026-09');
   });
 
+  it('بنود السفينة في fixed_items تدخل في الثابتة، وأعمدتها بترتيب أوّل ظهورها', () => {
+    const p = pkg();
+    p.monthly[1] = { ...p.monthly[1], fixed_items: [{ key: 'prov', label: 'مؤن', usd: -30 }, { key: 'outfit', label: 'تجهيز', usd: -70 }], fixed: -180, net: 3820 };
+    p.monthly[0] = { ...p.monthly[0], fixed_items: [{ key: 'outfit', label: 'تجهيز', usd: -5 }], fixed: -155, net: -255 };
+    const c = validateMontePackage(p);
+    expect(c.errors).toEqual([]);
+    expect(fixedItemColumns(c.pkg!)).toEqual([{ key: 'outfit', label: 'تجهيز' }, { key: 'prov', label: 'مؤن' }]);
+    expect(packageTotals(c.pkg!)).toMatchObject({ netAfterFixed: 3820, sinceStart: 3565 });
+
+    // بندٌ لم يدخل في مجموع الثابتة، أو مكرّر، أو بلا اسم ← رفض
+    const missed = pkg();
+    missed.monthly[1] = { ...missed.monthly[1], fixed_items: [{ key: 'prov', label: 'مؤن', usd: -30 }] };
+    expect(validateMontePackage(missed).errors.join()).toContain('الثابتة');
+    const dup = pkg();
+    dup.monthly[1] = { ...dup.monthly[1], fixed_items: [{ key: 'a', label: 'أ', usd: -10 }, { key: 'a', label: 'أ', usd: -10 }], fixed: -100, net: 3900 };
+    expect(validateMontePackage(dup).errors.join()).toContain('مكرّر');
+    const noLabel = pkg();
+    noLabel.monthly[1] = { ...noLabel.monthly[1], fixed_items: [{ key: 'a', label: '', usd: -10 }], fixed: -90, net: 3910 };
+    expect(validateMontePackage(noLabel).errors.join()).toContain('بلا مفتاحٍ أو اسم');
+  });
+
   it('مجاميع الكارت: بعد الثابتة لأشهر الخطّ ومن أوّل الكارت', () => {
     const t = packageTotals(validateMontePackage(pkg()).pkg!);
     expect(t).toMatchObject({ n: 2, net: 4000, netAfterFixed: 3920, sinceStart: 3670 });
@@ -86,7 +107,7 @@ describe('validateMontePackage', () => {
 
 // الحزمة الحقيقيّة من مجلّد مونتي — تُفحص حين تكون على الجهاز، ولا تدخل الريبو
 const REAL = 'F:/OneDrive/OneDrive - United Marine Egypt/Basel-Mohamed/مونتي جده-سواكن/_تقارير/_PMS/monte_pms.json';
-describe.skipIf(!existsSync(REAL))('حزمة مونتي الحقيقيّة (٢٩ أكتوبر ٢٠٢٦)', () => {
+describe.skipIf(!existsSync(REAL))('حزمة مونتي الحقيقيّة (٣١ أكتوبر ٢٠٢٦ — بفواتير سمارت فليت)', () => {
   it('تطابق أرقام التحقّق في طلب المالك', () => {
     const c = validateMontePackage(JSON.parse(readFileSync(REAL, 'utf8')));
     expect(c.errors).toEqual([]);
@@ -96,8 +117,11 @@ describe.skipIf(!existsSync(REAL))('حزمة مونتي الحقيقيّة (٢٩
     });
     expect(t.voyages.map((x) => itemTotals(x.v).net)).toEqual(t.voyages.map((x) => x.net));
     expect(t.net).toBe(1085714.42);
-    expect(t.netAfterFixed).toBe(1040412.24);
-    expect(t.sinceStart).toBe(85932.87);
+    expect(t.netAfterFixed).toBe(945508.93);
+    expect(t.sinceStart).toBe(-8970.44);
+    const oct = c.pkg!.monthly.find((m) => m.month === '2026-10')!;
+    expect(oct.fixed).toBe(-140205.49);
+    expect(oct.fixed_items!.map((i) => i.label)).toEqual(['مؤن وطعام ومياه — سمارت فليت', 'تجهيز وصيانة — سمارت فليت']);
     expect(c.pkg!.voyages.some((v) => v.voyage === '07')).toBe(false);
   });
 });
