@@ -65,6 +65,8 @@ export interface MonteCompare {
 }
 export interface MontePackage {
   schema: string; generated_at: string;
+  /** سبب التحديث كما كتبه سكربت التحديث الآليّ (update.ps1) — يظهر في رأس الكارت */
+  update_reason?: string;
   vessel: { name: string; name_ar: string; line: string; ownership: string; cap_pax: number; cap_trailer_units: number; cap_cars: number; card_start: string };
   rules: string[]; voyages: MonteVoyage[]; legs: MonteLeg[]; monthly: MonteMonth[]; fuel_stock: MonteFuelEvent[];
   agent_voyages: MonteAgentVoyage[]; agent_summary: { item: string; usd: number }[]; line_compare: MonteCompare[]; pending: string[];

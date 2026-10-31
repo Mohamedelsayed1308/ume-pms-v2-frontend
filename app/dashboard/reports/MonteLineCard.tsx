@@ -135,6 +135,7 @@ export default function MonteLineCard({ config: cfg }: { config: LineVesselConfi
   const occ = (n: number | null, c: number | undefined) => (n == null || !c ? '' : <span className={n > c ? 'text-red-600 font-semibold' : ''}>{pct(n / c)}</span>);
   // الشاحنة والمقطورة كلتاهما وحدة مقطورة على السطح — والحزمة لا تذكر غير ذلك
   const units = (l: { trucks: number | null; trailers: number | null }) => (l.trucks == null && l.trailers == null ? null : (l.trucks || 0) + (l.trailers || 0));
+  const savedAt = (typeof manual.packageSavedAt === 'string' && manual.packageSavedAt) || updatedAt;
   const overCars = (pkg?.legs || []).filter((l) => l.cars != null && cap?.cap_cars && l.cars > cap.cap_cars);
 
   return (
@@ -146,10 +147,17 @@ export default function MonteLineCard({ config: cfg }: { config: LineVesselConfi
           <p className="text-xs text-gray-500">
             {T('مركبٌ مملوك', 'Owned vessel')}{' · '}{T('من حزمة رحلات مونتي', 'From the Monte voyage package')}
             {pkg ? ` · ${T('وُلِّدت', 'generated')} ${pkg.generated_at.replace('T', ' ').slice(0, 16)}` : ''}
-            {updatedAt ? ` · ${T('حُفظت', 'saved')} ${new Date(updatedAt).toLocaleString(en ? 'en-GB' : 'ar-EG')}` : ''}
-            {/* الدفع الآليّ من جلسة مونتي يكتب monte-session (انظر monte-ingest في الباك)، والزرّ upload */}
-            {pkg && manual.packageSource === 'monte-session' ? ` · ${T('وصلت آليّاً من جلسة مونتي', 'pushed from the Monte session')}` : ''}
           </p>
+          {/* للفريق: متى تغيّرت الأرقام ولماذا. الدفع الآليّ يكتب monte-session (انظر monte-ingest في الباك)، والزرّ upload */}
+          {pkg && (savedAt || pkg.update_reason) && (
+            <p className="text-xs text-emerald-700 mt-0.5" data-testid="monte-last-update">
+              {T('آخر تحديث', 'Last update')}
+              {savedAt ? ` ${new Date(savedAt).toLocaleString(en ? 'en-GB' : 'ar-EG')}` : ''}
+              {manual.packageSource === 'monte-session' ? ` · ${T('آليّاً من جلسة مونتي', 'automatic, from the Monte session')}` : ''}
+              {manual.packageSource === 'upload' ? ` · ${T('رفعٌ يدويّ', 'manual upload')}` : ''}
+              {pkg.update_reason ? ` · ${T('السبب', 'Reason')}: ${pkg.update_reason}` : ''}
+            </p>
+          )}
         </div>
         <div className="flex items-center gap-2 ms-auto">
           {savedMsg && <span className="text-xs text-emerald-600 font-medium">{savedMsg}</span>}

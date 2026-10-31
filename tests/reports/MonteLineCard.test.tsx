@@ -55,6 +55,18 @@ describe('كارت مونتي', () => {
     await waitFor(() => expect(container.textContent).toContain('MATCH'));
   });
 
+  it.skipIf(!real)('رأس الكارت يقول للفريق متى تغيّرت الأرقام ولماذا', async () => {
+    const pkg = { ...real, update_reason: 'وصل تقرير ميناء رحلة 08' };
+    get.mockResolvedValue({ data: { manual: { package: pkg, packageSource: 'monte-session', packageSavedAt: '2026-10-31T15:40:00Z' }, updated_at: '2026-10-31T16:00:00Z' } });
+    render(<LineProfitReport config={MONTE_JS} />);
+    const line = await screen.findByTestId('monte-last-update');
+    expect(line.textContent).toContain('آخر تحديث');
+    expect(line.textContent).toContain('آليّاً من جلسة مونتي');
+    expect(line.textContent).toContain('السبب: وصل تقرير ميناء رحلة 08');
+    // وقت حفظ الحزمة لا وقت آخر تعديلٍ في الصفّ
+    expect(line.textContent).toContain(new Date('2026-10-31T15:40:00Z').toLocaleString('ar-EG'));
+  });
+
   it.skipIf(!real)('الرفع يحفظ الحزمة ويُبقي بقيّة المدخلات كما قُرئت', async () => {
     get.mockResolvedValue({ data: { manual: { settings: { note: 'keep' } } } });
     put.mockResolvedValue({ data: { updated_at: '2026-10-29T21:00:00Z' } });
