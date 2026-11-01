@@ -7,6 +7,8 @@ import type { LineVesselConfig } from './LineProfitReport';
 import VesselExecReport from './VesselExecReport';
 import VesselFinReport from './VesselFinReport';
 import VesselBoardReport from './VesselBoardReport';
+import MonteTeamInputs from './MonteTeamInputs';
+import type { MonteInput } from '@/lib/reports/monteInputs';
 import { allocateVoyageNets } from './VesselProfitReport';
 import { monteReportData, MONTE_REV_ROWS, MONTE_SIDES } from '@/lib/reports/monteReports';
 import { allocatablePurchases } from '@/lib/reports/reportProfile';
@@ -212,6 +214,9 @@ export default function MonteLineCard({ config: cfg }: { config: LineVesselConfi
               {check!.warnings.map((w, i) => <p key={i}>⚠️ {w}</p>)}
             </div>
           )}
+
+          {/* ── مدخلات الفريق (قرار المالك ١ نوفمبر) — مسارٌ يضيف ولا يستبدل manual ── */}
+          <MonteTeamInputs inputs={(manual.inputs as MonteInput[]) || []} pkg={pkg} en={en} onChanged={load} />
 
           {/* ── التقارير ── */}
           <div className="bg-white rounded-xl shadow p-3 flex items-center gap-2 flex-wrap text-sm print:hidden">
