@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { existsSync, readFileSync } from 'node:fs';
-import { validateMontePackage, packageTotals, voyageTotals, itemTotals, fixedItemColumns, type MontePackage, type MonteVoyage } from '@/lib/reports/montePackage';
+import { validateMontePackage, packageTotals, voyageTotals, itemTotals, fixedItemColumns, HIDDEN_VOYAGES, type MontePackage, type MonteVoyage } from '@/lib/reports/montePackage';
 
 // حزمةٌ صغيرة مصنوعة — شكل monte-pms/1 بأقلّ بنود
 const voyage = (id: string, dep: string, over: Partial<MonteVoyage> = {}): MonteVoyage => ({
@@ -59,16 +59,18 @@ describe('validateMontePackage', () => {
     expect(validateMontePackage(pkg({ voyages: [v, voyage('02', '2026-10-09')] })).ok).toBe(false);
   });
 
-  it('يحجب رحلة 07، ويرفض الحزمة إن دخل صافيها في شهرها', () => {
+  it('رحلة 07 لم تعد محجوبة (رُفع الحجب ٢ نوفمبر): تُعرض، وشهرها يجب أن يحسبها', () => {
+    expect(HIDDEN_VOYAGES).toEqual([]);
     const with07 = pkg({ voyages: [voyage('01', '2026-10-06'), voyage('02', '2026-10-09'), voyage('07', '2026-10-27')] });
     const c = validateMontePackage(with07);
-    expect(c.hidden).toEqual(['07']);
-    expect(c.ok).toBe(true); // الشهر لا يحسبها فيبقى متّسقاً
-    expect(c.pkg!.voyages.map((v) => v.voyage)).toEqual(['01', '02']);
+    expect(c.hidden).toEqual([]);
+    expect(c.ok).toBe(false); // الشهر لا يحسبها فلا يطابق رحلاته المعروضة
 
-    const leaked = pkg({ voyages: with07.voyages });
-    leaked.monthly[1] = { ...leaked.monthly[1], vnet: 6000, net: 5920, trips: 3 };
-    expect(validateMontePackage(leaked).ok).toBe(false);
+    const counted = pkg({ voyages: with07.voyages });
+    counted.monthly[1] = { ...counted.monthly[1], vnet: 6000, net: 5920, trips: 3 };
+    const k = validateMontePackage(counted);
+    expect(k.ok).toBe(true);
+    expect(k.pkg!.voyages.map((v) => v.voyage)).toEqual(['01', '02', '07']);
   });
 
   it('يرفض شهراً لا يساوي صافيه مكوّناته', () => {

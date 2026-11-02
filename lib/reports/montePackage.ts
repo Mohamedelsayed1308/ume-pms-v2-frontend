@@ -19,12 +19,14 @@
  * `{ key, label, usd }` بالسالب. تدخل في مجموع الثابتة وتُعرض أعمدةً في الكارت بأسمائها،
  * فبندٌ جديد في مدخلات مجلّد مونتي لا يحتاج تعديلاً هنا.
  *
- * ── رحلة 07 لا تُعرض (قرار المالك) ──
+ * ── الرحلات المحجوبة (HIDDEN_VOYAGES) ──
  * تُنزع من الرحلات والإشغال وكشف الوكيل قبل أيّ حساب. فإن كان صافيها داخلاً في
  * شهرها رفض التحقّق الحزمة، لأنّ الشهر لن يطابق رحلاته المعروضة.
+ * رحلة 07 حُجبت ٢٩ أكتوبر ٢٠٢٦ ورُفع حجبها ٢ نوفمبر بقرار المالك بعد بنائها من كشف الوكيل.
+ * القائمة نفسها في الباك (monte-package.ts) — تُعدَّلان معاً.
  */
 export const MONTE_SCHEMA = 'monte-pms/1';
-export const HIDDEN_VOYAGES = ['07'];
+export const HIDDEN_VOYAGES: string[] = [];
 
 export const REV_FIELDS = ['rev_pax_out', 'rev_pax_ret', 'rev_cargo_out', 'rev_cargo_ret', 'rev_do', 'rev_other'] as const;
 export const COST_FIELDS = [

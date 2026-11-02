@@ -386,7 +386,7 @@ export default function MonteLineCard({ config: cfg }: { config: LineVesselConfi
               </tbody>
             </table>
             {check!.hidden.length > 0 && <p className="text-xs text-gray-400 mt-2">{T(`رحلة ${check!.hidden.join('، ')} محجوبة بقرار المالك.`, `Voyage ${check!.hidden.join(', ')} hidden by owner decision.`)}</p>}
-            {!check!.hidden.length && <p className="text-xs text-gray-400 mt-2">{T(`رحلة ${HIDDEN_VOYAGES.join('، ')} لا تُعرض بقرار المالك.`, `Voyage ${HIDDEN_VOYAGES.join(', ')} is not shown by owner decision.`)}</p>}
+            {!check!.hidden.length && HIDDEN_VOYAGES.length > 0 && <p className="text-xs text-gray-400 mt-2">{T(`رحلة ${HIDDEN_VOYAGES.join('، ')} لا تُعرض بقرار المالك.`, `Voyage ${HIDDEN_VOYAGES.join(', ')} is not shown by owner decision.`)}</p>}
           </div>
 
           {/* ── شهراً بشهر ── */}
