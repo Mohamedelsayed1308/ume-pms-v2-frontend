@@ -429,103 +429,125 @@ export default function GubalProfitReport() {
 
       {/* print doc */}
       {agg && (
-        <div id="gubal-doc" dir={en ? 'ltr' : 'rtl'} className={`hidden print:block${en ? ' en' : ''}`}>
-          <div className="gh">
-            <div className="brand">UME <span>Holding</span></div>
-            <div className="meta">{T('المركب', 'Vessel')}: Gubal Trader<br />{T('الفترة', 'Period')}: {periodLabel}<br />{T('العملة', 'Currency')}: USD</div>
-          </div>
-          <div className="gt">{T('تقرير أرباح المركب — Gubal Trader', 'Vessel Profit & Loss Statement — Gubal Trader')}</div>
-          <div className="gk">
-            <div className="kpi main"><span className="l">{T('صافي الربح', 'Net Profit')}</span><span className="v">{fmt(agg.net)}</span></div>
-            <div className="kpi"><span className="l">{T('إجمالي الإيراد', 'Total Revenue')}</span><span className="v">{fmt(agg.incomeTotal)}</span></div>
-            <div className="kpi"><span className="l">{T('إجمالي التكاليف', 'Total Operating Costs')}</span><span className="v">{fmt(agg.costTotal)}</span></div>
-            <div className="kpi"><span className="l">{T('هامش الربح', 'Net Profit Margin')}</span><span className="v">{margin.toFixed(1)}%</span></div>
-          </div>
-          <div className="cols">
-            <div>
-              <h3>{T('الإيرادات', 'Revenue')}</h3>
-              <table><tbody>
-                {agg.incomeLines.slice().sort((a, b) => b.value - a.value).map((l, i) => (<tr key={`${l.label}-${i}`}><td>{incomeLabel(l.label, en)}</td><td>{fmt(l.value)}</td></tr>))}
-                <tr className="tot"><td>{T('إجمالي الإيراد', 'Total Revenue')}</td><td>{fmt(agg.incomeTotal)}</td></tr>
-              </tbody></table>
-            </div>
-            <div>
-              <h3>{T('التكاليف بالمجموعات', 'Operating Costs by Group')}</h3>
-              <table><tbody>
-                {sortedGroups.map((g) => (
-                  <tr key={g.id}>
-                    <td>{gName(g.id)}</td>
-                    <td>{fmt(g.total)}</td>
-                    <td className="pc">{agg.costTotal ? Math.round((g.total / agg.costTotal) * 100) : 0}%</td>
-                  </tr>
-                ))}
-                <tr className="tot"><td>{T('إجمالي التكاليف', 'Total Operating Costs')}</td><td>{fmt(agg.costTotal)}</td><td className="pc">100%</td></tr>
-              </tbody></table>
-            </div>
-          </div>
-          {/*
-            التفصيل البندي في الورق أيضاً.
-            المجموعات وحدها تقول «قطع الغيار 55,333» ولا تقول لمن دُفعت — والورقة
-            التي تُراجَع أو تُرسَل لا تُفتح فيها صفوفٌ بالنقر كما على الشاشة.
-          */}
-          <div className="detail">
-            <h3>{T('التكاليف بالتفصيل', 'Cost Breakdown by Line Item')}</h3>
-            {sortedGroups.filter((g) => g.lines.length > 0).map((g) => (
-              <table key={g.id} className="dt"><colgroup><col /><col className="c-amt" /><col className="c-pc" /></colgroup><tbody>
-                <tr className="gh2">
-                  <td>{gName(g.id)} {!en && <span className="en">{grpMeta(g.id).en}</span>}</td>
-                  <td>{fmt(g.total)}</td>
-                  <td className="pc">{agg.costTotal ? Math.round((g.total / agg.costTotal) * 100) : 0}%</td>
-                </tr>
-                {g.lines.slice().sort((a, b) => b.value - a.value).map((l, i) => (
-                  <tr key={`${l.label}-${i}`} className="ln">
-                    <td>{l.label}</td><td>{fmt(l.value)}</td><td />
-                  </tr>
-                ))}
-              </tbody></table>
-            ))}
-            <table className="dt"><colgroup><col /><col className="c-amt" /><col className="c-pc" /></colgroup><tbody>
-              <tr className="tot"><td>{T('إجمالي التكاليف', 'Total Operating Costs')}</td><td>{fmt(agg.costTotal)}</td><td className="pc">100%</td></tr>
-            </tbody></table>
-          </div>
+        <GubalPrintDoc agg={agg} groups={sortedGroups} margin={margin} periodLabel={periodLabel} en={en}
+          trend={selected.length > 1 ? selected.map((m) => ({ label: mLabel(m.key).split(' ')[0], value: m.net })) : []} />
+      )}
+    </div>
+  );
+}
 
+/*
+ * ── مستند الطباعة ──
+ *
+ * مكوّنٌ مستقلّ ليُطبَع في الاختبار بأرقامٍ ثابتة ويُقاس عدد صفحاته.
+ *
+ * ترتيبه بطلب المالك ٣ نوفمبر ٢٠٢٦ («تقليل الفراغات»): نسخة يناير–أكتوبر كانت أربع
+ * ورقات نصفها أبيض، لأنّ كلّ مجموعةٍ كانت لا تُشطر، فقطع الغيار (٢٣ بنداً) تُدفع كاملةً
+ * إلى الورقة التالية، والرسم الشهريّ وحده في ورقةٍ رابعة. الآن:
+ *   - الحلقة تحت جدول الإيراد القصير، في الفراغ الذي كان بجوار جدول المجموعات،
+ *     ولونُ كلّ مجموعةٍ في الجدول نفسه بدل مفتاحٍ يكرّر أرقامه.
+ *   - الصافي الشهريّ بعرض الورقة وارتفاعٍ أقلّ.
+ *   - التفصيل في عمودين، والمجموعة الطويلة تنشطر ورأسها يتكرّر في كلّ جزءٍ منها
+ *     (`thead`)، والقصيرة لا تنشطر.
+ */
+const SHORT_GROUP = 6;
+export function GubalPrintDoc({ agg, groups, margin, periodLabel, trend, en }: {
+  agg: GubalMonth; groups: GubalMonth['groups']; margin: number; periodLabel: string;
+  trend: { label: string; value: number }[]; en: boolean;
+}) {
+  const T = (ar: string, eng: string) => (en ? eng : ar);
+  const gName = (id: string) => (en ? grpMeta(id).en : grpMeta(id).ar);
+  const pct = (v: number) => `${agg.costTotal ? Math.round((v / agg.costTotal) * 100) : 0}%`;
+  const positive = groups.filter((g) => g.total > 0);
+  return (
+    <div id="gubal-doc" dir={en ? 'ltr' : 'rtl'} className={`hidden print:block${en ? ' en' : ''}`}>
+      <div className="gh">
+        <div className="brand">UME <span>Holding</span></div>
+        <div className="meta">{T('المركب', 'Vessel')}: Gubal Trader · {T('الفترة', 'Period')}: {periodLabel} · {T('العملة', 'Currency')}: USD</div>
+      </div>
+      <div className="gt">{T('تقرير أرباح المركب — Gubal Trader', 'Vessel Profit & Loss Statement — Gubal Trader')}</div>
+      <div className="gk">
+        <div className="kpi main"><span className="l">{T('صافي الربح', 'Net Profit')}</span><span className="v">{fmt(agg.net)}</span></div>
+        <div className="kpi"><span className="l">{T('إجمالي الإيراد', 'Total Revenue')}</span><span className="v">{fmt(agg.incomeTotal)}</span></div>
+        <div className="kpi"><span className="l">{T('إجمالي التكاليف', 'Total Operating Costs')}</span><span className="v">{fmt(agg.costTotal)}</span></div>
+        <div className="kpi"><span className="l">{T('هامش الربح', 'Net Profit Margin')}</span><span className="v">{margin.toFixed(1)}%</span></div>
+      </div>
+      <div className="cols">
+        <div>
+          <h3>{T('الإيرادات', 'Revenue')}</h3>
+          <table><tbody>
+            {agg.incomeLines.slice().sort((a, b) => b.value - a.value).map((l, i) => (<tr key={`${l.label}-${i}`}><td>{incomeLabel(l.label, en)}</td><td>{fmt(l.value)}</td></tr>))}
+            <tr className="tot"><td>{T('إجمالي الإيراد', 'Total Revenue')}</td><td>{fmt(agg.incomeTotal)}</td></tr>
+          </tbody></table>
           {/*
             الرسوم في مستند الطباعة أيضاً.
             المحتوى المعروض كلّه `print:hidden` ومستندُ الطباعة نسخةٌ مستقلّة —
             فما لا يُكرَّر هنا لا يصل الورق. وهي `SVG` فتُطبع متّجهةً حادّة عند
             أي تكبير، ولا تحتاج تحويلاً إلى صورة.
           */}
-          <div className="charts">
-            <div className="cbox">
-              <h3>{T('هيكل التكاليف', 'Cost Structure')}</h3>
-              <div className="donut">
-                <Donut
-                  segs={sortedGroups.filter((g) => g.total > 0).map((g) => ({ value: g.total, color: grpMeta(g.id).color }))}
-                  total={agg.costTotal}
-                />
-                <table className="lg"><tbody>
-                  {sortedGroups.filter((g) => g.total > 0).map((g) => (
-                    <tr key={g.id}>
-                      <td><span className="sw" style={{ background: grpMeta(g.id).color }} />{gName(g.id)}</td>
-                      <td>{fmtAbbr(g.total)}</td>
-                      <td className="pc">{agg.costTotal ? Math.round((g.total / agg.costTotal) * 100) : 0}%</td>
-                    </tr>
-                  ))}
-                </tbody></table>
-              </div>
+          {positive.length > 0 && (
+            <div className="donut">
+              <Donut segs={positive.map((g) => ({ value: g.total, color: grpMeta(g.id).color }))} total={agg.costTotal} />
+              <div className="cap">{T('هيكل التكاليف', 'Cost Structure')}<b>{fmtAbbr(agg.costTotal)}</b></div>
             </div>
+          )}
+        </div>
+        <div>
+          <h3>{T('التكاليف بالمجموعات', 'Operating Costs by Group')}</h3>
+          <table><tbody>
+            {groups.map((g) => (
+              <tr key={g.id}>
+                <td>{g.total > 0 && <span className="sw" style={{ background: grpMeta(g.id).color }} />}{gName(g.id)}</td>
+                <td>{fmt(g.total)}</td>
+                <td className="pc">{pct(g.total)}</td>
+              </tr>
+            ))}
+            <tr className="tot"><td>{T('إجمالي التكاليف', 'Total Operating Costs')}</td><td>{fmt(agg.costTotal)}</td><td className="pc">100%</td></tr>
+          </tbody></table>
+        </div>
+      </div>
 
-            {selected.length > 1 && (
-              <div className="cbox">
-                <h3>{T('الصافي الشهري', 'Monthly Net Result')}</h3>
-                <TrendBars data={selected.map((m) => ({ label: mLabel(m.key).split(' ')[0], value: m.net }))} />
-              </div>
-            )}
-          </div>
-
-          <div className="foot">{T(`UME Holding — نظام PMS · Gubal Trader · ${periodLabel} · جميع القيم بالدولار`, `UME Holding — PMS · Gubal Trader · ${periodLabel} · Management accounts, unaudited · All amounts in USD`)}</div>
+      {trend.length > 0 && (
+        <div className="cbox">
+          <h3>{T('الصافي الشهري', 'Monthly Net Result')}</h3>
+          <TrendBars data={trend} h={190} />
         </div>
       )}
+
+      {/*
+        التفصيل البندي في الورق أيضاً.
+        المجموعات وحدها تقول «قطع الغيار 55,333» ولا تقول لمن دُفعت — والورقة
+        التي تُراجَع أو تُرسَل لا تُفتح فيها صفوفٌ بالنقر كما على الشاشة.
+      */}
+      <div className="detail">
+        <h3>{T('التكاليف بالتفصيل', 'Cost Breakdown by Line Item')}</h3>
+        <div className="dcols">
+          {groups.filter((g) => g.lines.length > 0).map((g) => (
+            <table key={g.id} className={`dt${g.lines.length <= SHORT_GROUP ? ' short' : ''}`}>
+              <colgroup><col /><col className="c-amt" /><col className="c-pc" /></colgroup>
+              <thead>
+                <tr className="gh2">
+                  <td>{gName(g.id)} {!en && <span className="en">{grpMeta(g.id).en}</span>}</td>
+                  <td>{fmt(g.total)}</td>
+                  <td className="pc">{pct(g.total)}</td>
+                </tr>
+              </thead>
+              <tbody>
+                {g.lines.slice().sort((a, b) => b.value - a.value).map((l, i) => (
+                  <tr key={`${l.label}-${i}`} className="ln">
+                    <td>{l.label}</td><td>{fmt(l.value)}</td><td />
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ))}
+        </div>
+        <table className="dt gtot"><colgroup><col /><col className="c-amt" /><col className="c-pc" /></colgroup><tbody>
+          <tr className="tot"><td>{T('إجمالي التكاليف', 'Total Operating Costs')}</td><td>{fmt(agg.costTotal)}</td><td className="pc">100%</td></tr>
+        </tbody></table>
+      </div>
+
+      <div className="foot">{T(`UME Holding — نظام PMS · Gubal Trader · ${periodLabel} · جميع القيم بالدولار`, `UME Holding — PMS · Gubal Trader · ${periodLabel} · Management accounts, unaudited · All amounts in USD`)}</div>
     </div>
   );
 }
@@ -546,8 +568,8 @@ function Donut({ segs, total }: { segs: { value: number; color: string }[]; tota
   );
 }
 
-function TrendBars({ data }: { data: { label: string; value: number }[] }) {
-  const W = 900, H = 280, m = { l: 55, r: 10, t: 26, b: 30 };
+function TrendBars({ data, h = 280 }: { data: { label: string; value: number }[]; h?: number }) {
+  const W = 900, H = h, m = { l: 55, r: 10, t: 26, b: 30 };
   const pw = W - m.l - m.r, ph = H - m.t - m.b;
   const maxV = Math.max(0, ...data.map((d) => d.value));
   const minV = Math.min(0, ...data.map((d) => d.value));
@@ -572,52 +594,58 @@ function TrendBars({ data }: { data: { label: string; value: number }[] }) {
   );
 }
 
-const PRINT_CSS = `@media print {
+export const PRINT_CSS = `@media print {
   @page { size: A4 portrait; margin: 12mm; }
   body * { visibility: hidden !important; }
   #gubal-doc, #gubal-doc * { visibility: visible !important; }
   #gubal-doc { position: absolute; left: 0; top: 0; width: 100%; color:#0f172a; font-family:'Segoe UI',Tahoma,Arial,sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  #gubal-doc .gh { display:flex; justify-content:space-between; align-items:center; border-bottom:2.5pt solid #1d4ed8; padding-bottom:6px; margin-bottom:10px; }
-  #gubal-doc .gh .brand { font-size:14pt; font-weight:800; } #gubal-doc .gh .brand span { color:#1d4ed8; }
-  #gubal-doc .gh .meta { text-align:left; font-size:9pt; color:#475569; line-height:1.5; }
-  #gubal-doc .gt { text-align:center; font-size:13pt; font-weight:800; color:#fff; background:#0f2c5c; padding:7px; border-radius:4px; margin-bottom:12px; }
-  #gubal-doc .gk { display:flex; gap:8px; margin-bottom:14px; }
-  #gubal-doc .kpi { flex:1; border:1pt solid #e2e8f0; background:#f8fafc; border-radius:6px; padding:8px; text-align:center; }
-  #gubal-doc .kpi .l { font-size:8pt; color:#64748b; display:block; margin-bottom:3px; font-weight:600; }
-  #gubal-doc .kpi .v { font-size:13pt; font-weight:800; color:#0f172a; }
+  #gubal-doc .gh { display:flex; justify-content:space-between; align-items:baseline; border-bottom:2pt solid #1d4ed8; padding-bottom:4px; margin-bottom:6px; }
+  #gubal-doc .gh .brand { font-size:13pt; font-weight:800; } #gubal-doc .gh .brand span { color:#1d4ed8; }
+  #gubal-doc .gh .meta { text-align:left; font-size:8.5pt; color:#475569; }
+  #gubal-doc .gt { text-align:center; font-size:12pt; font-weight:800; color:#fff; background:#0f2c5c; padding:5px; border-radius:4px; margin-bottom:8px; }
+  #gubal-doc .gk { display:flex; gap:6px; margin-bottom:8px; }
+  #gubal-doc .kpi { flex:1; border:1pt solid #e2e8f0; background:#f8fafc; border-radius:5px; padding:5px 6px; text-align:center; }
+  #gubal-doc .kpi .l { font-size:7.5pt; color:#64748b; display:block; margin-bottom:1px; font-weight:600; }
+  #gubal-doc .kpi .v { font-size:12pt; font-weight:800; color:#0f172a; }
   #gubal-doc .kpi.main { background:#047857; border-color:#065f46; } #gubal-doc .kpi.main .l { color:#d1fae5; } #gubal-doc .kpi.main .v { color:#fff; }
-  #gubal-doc h3 { font-size:10pt; font-weight:700; color:#0f2c5c; background:#eef2ff; margin:10px 0 5px; padding:5px 10px; border-radius:3px; border-right:4pt solid #1d4ed8; }
-  #gubal-doc.en h3 { border-right:0; border-left:4pt solid #1d4ed8; }
-  #gubal-doc.en td:last-child, #gubal-doc.en .pc, #gubal-doc.en .lg .pc, #gubal-doc.en .gh .meta { text-align:right; }
-  #gubal-doc.en .dt tr.ln td:first-child { padding-right:8px; padding-left:18px; }
-  #gubal-doc.en .sw { margin-left:0; margin-right:6px; }
-  #gubal-doc .cols { display:flex; gap:16px; align-items:flex-start; } #gubal-doc .cols > div { flex:1; }
-  #gubal-doc table { width:100%; border-collapse:collapse; font-size:9pt; }
-  #gubal-doc td { padding:4px 8px; border-bottom:.5pt solid #e5e9f0; }
+  #gubal-doc h3 { font-size:9.5pt; font-weight:700; color:#0f2c5c; background:#eef2ff; margin:8px 0 3px; padding:3px 8px; border-radius:3px; border-right:3.5pt solid #1d4ed8; break-after:avoid; page-break-after:avoid; }
+  #gubal-doc.en h3 { border-right:0; border-left:3.5pt solid #1d4ed8; }
+  #gubal-doc.en td:last-child, #gubal-doc.en .pc, #gubal-doc.en .gh .meta { text-align:right; }
+  #gubal-doc.en .dt tr.ln td:first-child { padding-right:6px; padding-left:14px; }
+  #gubal-doc.en .sw { margin-left:0; margin-right:5px; }
+  #gubal-doc .cols { display:flex; gap:14px; align-items:flex-start; } #gubal-doc .cols > div { flex:1; min-width:0; }
+  #gubal-doc .cols h3 { margin-top:0; }
+  #gubal-doc table { width:100%; border-collapse:collapse; font-size:8.5pt; }
+  #gubal-doc td { padding:2.5px 7px; border-bottom:.5pt solid #e5e9f0; }
   #gubal-doc td:last-child { text-align:left; white-space:nowrap; }
   #gubal-doc tr.tot td { background:#dbe4ff; color:#0f2c5c; font-weight:800; border-top:1pt solid #94a3b8; }
   #gubal-doc .pc { width:34px; text-align:left; color:#64748b; }
-  #gubal-doc .detail { margin-top:14px; }
-  /* المجموعة لا تُشطر بين صفحتين — عنوانٌ في آخر ورقة وبنودُه في التالية لا يُقرأ */
-  /* عمود المبالغ بعرضٍ واحدٍ في كلّ الجداول — كلّ مجموعةٍ جدولٌ مستقلّ، وبغير تثبيت العرض ينزاح العمود من مجموعةٍ لأخرى */
-  #gubal-doc .dt { break-inside: avoid; page-break-inside: avoid; margin-bottom:6px; table-layout:fixed; }
-  #gubal-doc .dt col.c-amt { width:110px; } #gubal-doc .dt col.c-pc { width:44px; }
+  #gubal-doc .sw { display:inline-block; width:7px; height:7px; border-radius:50%; margin-left:5px; vertical-align:middle; }
+  /* الحلقة في الفراغ تحت جدول الإيراد القصير — ألوانها هي نقاط جدول المجموعات المجاور */
+  #gubal-doc .donut { display:flex; align-items:center; justify-content:center; gap:12px; margin-top:8px; }
+  #gubal-doc .donut svg { width:112px; height:112px; flex-shrink:0; }
+  #gubal-doc .donut .cap { font-size:8pt; color:#64748b; font-weight:600; }
+  #gubal-doc .donut .cap b { display:block; font-size:12pt; color:#0f2c5c; font-weight:800; margin-top:1px; }
+  /* الرسم لا يُشطر بين صفحتين — نصفُ مخطّطٍ على ورقةٍ لا يُقرأ */
+  #gubal-doc .cbox { break-inside: avoid; page-break-inside: avoid; }
+  #gubal-doc .cbox svg { width:100%; height:auto; display:block; }
+  /*
+   * التفصيل في عمودين. المجموعة القصيرة لا تُشطر، والطويلة تُشطر ورأسها في \`thead\`
+   * فيتكرّر أعلى كلّ جزء — فلا تُدفع مجموعةٌ كاملة إلى الورقة التالية وتترك نصف ورقةٍ أبيض.
+   * وعمود المبالغ بعرضٍ واحدٍ في كلّ الجداول — كلّ مجموعةٍ جدولٌ مستقلّ، وبغير تثبيت العرض ينزاح العمود من مجموعةٍ لأخرى.
+   */
+  #gubal-doc .dcols { column-count:2; column-gap:14px; }
+  #gubal-doc .dt { margin-bottom:5px; table-layout:fixed; }
+  #gubal-doc .dt.short { break-inside: avoid; page-break-inside: avoid; }
+  #gubal-doc .dt thead { display:table-header-group; }
+  #gubal-doc .dt tr { break-inside: avoid; page-break-inside: avoid; }
+  #gubal-doc .dt col.c-amt { width:80px; } #gubal-doc .dt col.c-pc { width:40px; }
   #gubal-doc .dt td:nth-child(2) { white-space:nowrap; font-variant-numeric:tabular-nums; }
   #gubal-doc.en .dt td:nth-child(2) { text-align:right; }
-  #gubal-doc .dt tr.gh2 td { background:#eef2ff; font-weight:800; color:#0f2c5c; border-top:1pt solid #c7d2fe; padding:4px 8px; }
-  #gubal-doc .dt tr.gh2 .en { font-weight:400; color:#64748b; font-size:7.5pt; }
-  #gubal-doc .dt tr.ln td { font-size:8pt; color:#475569; padding:2px 8px 2px 18px; }
-  #gubal-doc .dt tr.ln td:first-child { padding-right:18px; }
-  #gubal-doc .charts { margin-top:14px; }
-  /* الرسم لا يُشطر بين صفحتين — نصفُ مخطّطٍ على ورقةٍ لا يُقرأ */
-  #gubal-doc .cbox { break-inside: avoid; page-break-inside: avoid; margin-bottom:12px; }
-  #gubal-doc .donut { display:flex; align-items:center; gap:14px; }
-  #gubal-doc .donut svg { width:150px; height:150px; flex-shrink:0; }
-  #gubal-doc .lg { flex:1; font-size:8.5pt; }
-  #gubal-doc .lg td { padding:2px 6px; border-bottom:.5pt solid #eef2f7; }
-  #gubal-doc .lg td:last-child { width:38px; }
-  #gubal-doc .lg .pc { color:#64748b; text-align:left; }
-  #gubal-doc .sw { display:inline-block; width:8px; height:8px; border-radius:50%; margin-left:6px; vertical-align:middle; }
-  #gubal-doc .cbox svg { max-width:100%; }
-  #gubal-doc .foot { margin-top:14px; border-top:.75pt solid #cbd5e1; padding-top:6px; font-size:7.5pt; color:#94a3b8; text-align:center; }
+  #gubal-doc .dt tr.gh2 td { background:#eef2ff; font-weight:800; color:#0f2c5c; border-top:1pt solid #c7d2fe; padding:2.5px 6px; font-size:8pt; }
+  #gubal-doc .dt tr.gh2 .en { font-weight:400; color:#64748b; font-size:6.5pt; }
+  #gubal-doc .dt tr.ln td { font-size:7.5pt; color:#475569; padding:1.5px 6px 1.5px 14px; }
+  #gubal-doc .dt tr.ln td:first-child { padding-right:14px; overflow-wrap:anywhere; }
+  #gubal-doc .dt.gtot { margin-top:2px; margin-bottom:0; break-inside: avoid; }
+  #gubal-doc .foot { margin-top:8px; border-top:.75pt solid #cbd5e1; padding-top:4px; font-size:7pt; color:#94a3b8; text-align:center; }
 }`;
