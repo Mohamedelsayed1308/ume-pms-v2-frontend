@@ -1070,49 +1070,6 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
     () => costSegs.reduce((s, x) => s + x.value, 0),
     [costSegs]);
 
-  const PRINT_CSS = `@media print {
-    @page { size: A4 landscape; margin: 11mm 10mm; }
-    body * { visibility: hidden !important; }
-    #vp-doc, #vp-doc * { visibility: visible !important; }
-    #vp-doc { position: absolute; left: 0; top: 0; width: 100%; color: #0f172a;
-      font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 9pt; line-height: 1.35;
-      -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    #vp-doc .dh { display:flex; align-items:center; justify-content:space-between; border-bottom: 2.5pt solid #0f2c5c; padding-bottom: 8px; margin-bottom: 10px; }
-    #vp-doc .dh .brand { font-size: 17pt; font-weight: 800; color:#0f2c5c; letter-spacing:.3pt; }
-    #vp-doc .dh .brand span { color:#c8102e; }
-    #vp-doc .dh .brand small { display:block; font-size:7.5pt; font-weight:600; color:#64748b; letter-spacing:1.5pt; margin-top:1px; }
-    #vp-doc .dh .meta { text-align:left; font-size: 8.5pt; color:#475569; line-height:1.7; }
-    #vp-doc .dh .meta b { color:#0f172a; font-weight:700; }
-    #vp-doc .dt { text-align:center; font-size: 13pt; font-weight: 800; color:#fff; background:#0f2c5c;
-      padding:7px 0; margin: 0 0 12px; border-radius:4px; letter-spacing:.5pt; }
-    #vp-doc .kpis { display:flex; gap:9px; margin-bottom:14px; }
-    #vp-doc .kpi { flex:1; border:1pt solid #e2e8f0; border-radius:6px; padding:8px 6px; text-align:center; background:#f8fafc; }
-    #vp-doc .kpi .l { font-size:7.5pt; color:#64748b; display:block; margin-bottom:3px; font-weight:600; }
-    #vp-doc .kpi .v { font-size:13.5pt; font-weight:800; color:#0f172a; }
-    #vp-doc .kpi.main { background:#047857; border-color:#065f46; }
-    #vp-doc .kpi.main .l { color:#d1fae5; } #vp-doc .kpi.main .v { color:#fff; }
-    #vp-doc .kpi.danger .v { color:#b91c1c; }
-    #vp-doc h3 { font-size:10pt; font-weight:700; color:#0f2c5c; background:#eef2ff;
-      margin: 13px 0 6px; padding:5px 10px; border-radius:3px; border-right:4pt solid #1d4ed8; }
-    #vp-doc table { width:100%; border-collapse:collapse; font-size:8.6pt; margin-bottom:6px; }
-    #vp-doc th { background:#0f2c5c; color:#fff; font-weight:700; padding:5px 8px; text-align:right; white-space:nowrap; }
-    #vp-doc td { padding:4px 8px; text-align:right; white-space:nowrap; border-bottom:.5pt solid #e5e9f0; }
-    #vp-doc tbody tr:nth-child(even) td { background:#f8fafc; }
-    #vp-doc tr.tot td { background:#dbe4ff; color:#0f2c5c; font-weight:800; border-top:1pt solid #94a3b8; border-bottom:none; }
-    #vp-doc .cols { display:flex; gap:16px; align-items:flex-start; } #vp-doc .cols > div { flex:1; }
-    #vp-doc .cstr { margin-top:12px; break-inside: avoid; page-break-inside: avoid; }
-    #vp-doc .cstr .dn { display:flex; align-items:center; gap:14px; }
-    #vp-doc .cstr .dn svg { width:150px; height:150px; flex-shrink:0; }
-    #vp-doc .cstr .lg { flex:1; width:100%; border-collapse:collapse; font-size:8.5pt; }
-    #vp-doc .cstr .lg td { padding:2px 6px; border-bottom:.5pt solid #eef2f7; }
-    #vp-doc .cstr .lg td:nth-child(2) { text-align:left; white-space:nowrap; }
-    #vp-doc .cstr .lg .pc { width:38px; text-align:left; color:#64748b; }
-    #vp-doc .cstr .lg tr.tot td { background:#dbe4ff; color:#0f2c5c; font-weight:800; border-top:1pt solid #94a3b8; }
-    #vp-doc .cstr .sw { display:inline-block; width:8px; height:8px; border-radius:50%; margin-left:6px; vertical-align:middle; }
-    #vp-doc .foot { margin-top:12px; border-top:.75pt solid #cbd5e1; padding-top:6px; font-size:7.5pt; color:#94a3b8;
-      display:flex; justify-content:space-between; }
-    #vp-doc table, #vp-doc .cols { page-break-inside: avoid; }
-  }`;
 
   function exportExcel() {
     if (!data) return;
@@ -1348,7 +1305,7 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
 
       {data && (
         <>
-          <style>{PRINT_CSS}</style>
+          <style>{VP_PRINT_CSS}</style>
           <div className="space-y-4 print:hidden">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <div className="bg-emerald-600 text-white rounded-xl p-4">
@@ -1616,154 +1573,8 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
           </div>
 
           {/* ── print-only document (hidden while the executive report is open) ── */}
-          <div id="vp-doc" dir="rtl" className={showExec ? 'hidden' : 'hidden print:block'}>
-            <div className="dh">
-              <div className="brand">UME <span>Holding</span><small>MARITIME · PMS</small></div>
-              <div className="meta">
-                المركب: <b>{cfg.vessel}</b><br />
-                الفترة: <b>{periodLabel}</b><br />
-                عدد الرحلات: <b>{sel.length}</b> · العملة: <b>USD</b>
-              </div>
-            </div>
-            <div className="dt">تقرير صافي ربح المركب</div>
-            <div className="kpis">
-              {purchases ? (
-                <>
-                  <div className="kpi main"><span className="l">صافي نهائي بعد المشتريات</span><span className="v">{fmt(data.net - purchases.total)}</span></div>
-                  <div className="kpi"><span className="l">صافي قبل المشتريات</span><span className="v">{fmt(data.net)}</span></div>
-                  <div className="kpi danger"><span className="l">بند المشتريات</span><span className="v">{fmt(purchases.total)}</span></div>
-                  <div className="kpi"><span className="l">إجمالي الإيراد</span><span className="v">{fmt(data.revenue)}</span></div>
-                  <div className="kpi danger"><span className="l">إجمالي المصروفات</span><span className="v">{fmt(data.expenses)}</span></div>
-                </>
-              ) : (
-                <>
-                  <div className="kpi main"><span className="l">صافي ربح الشهر</span><span className="v">{fmt(data.net)}</span></div>
-                  <div className="kpi"><span className="l">إجمالي الإيراد</span><span className="v">{fmt(data.revenue)}</span></div>
-                  <div className="kpi danger"><span className="l">إجمالي المصروفات</span><span className="v">{fmt(data.expenses)}</span></div>
-                  <div className="kpi"><span className="l">متوسط ربح الرحلة</span><span className="v">{fmt(data.net / data.count)}</span></div>
-                </>
-              )}
-            </div>
-            <h3>الإيرادات</h3>
-            <table>
-              <thead><tr><th scope="col">البند</th><th scope="col">صادر — عدد</th><th scope="col">صادر — مبلغ</th><th scope="col">وارد — عدد</th><th scope="col">وارد — مبلغ</th><th scope="col">الإجمالي</th></tr></thead>
-              <tbody>
-                {REV_ROWS.map((r) => {
-                  const eC = (data.E as any)[r.cKey], eA = (data.E as any)[r.key], iC = (data.I as any)[r.cKey], iA = (data.I as any)[r.key];
-                  return (<tr key={r.key}><td>{r.label}</td><td>{eC || '—'}</td><td>{fmt(eA)}</td><td>{iC || '—'}</td><td>{fmt(iA)}</td><td>{fmt(eA + iA)}</td></tr>);
-                })}
-                <tr><td>إذن الشحن</td><td>—</td><td>{fmt(data.E.discharge)}</td><td>—</td><td>{fmt(data.I.discharge)}</td><td>{fmt(data.E.discharge + data.I.discharge)}</td></tr>
-                {data.manualRev.filter((r) => r.amount > 0).map((r) => (
-                  <tr key={r.key}><td>{r.label}</td><td>—</td><td>—</td><td>—</td><td>—</td><td>{fmt(r.amount)}</td></tr>
-                ))}
-                <tr className="tot"><td>إجمالي الإيراد</td><td></td><td>{fmt(data.revE)}</td><td></td><td>{fmt(data.revI)}</td><td>{fmt(data.revenue)}</td></tr>
-              </tbody>
-            </table>
-            <h3>أعداد المنقولات خلال الشهر ومتوسطها لكل رحلة</h3>
-            <table>
-              <thead><tr>
-                <th scope="col">البند</th>
-                <th scope="col">صادر — إجمالي</th><th scope="col">وارد — إجمالي</th><th scope="col">الإجمالي</th>
-                <th scope="col">متوسط صادر / رحلة</th><th scope="col">متوسط وارد / رحلة</th>
-              </tr></thead>
-              <tbody>
-                {([
-                  { label: 'شاحنات', e: data.E.truckC, i: data.I.truckC },
-                  { label: 'سيارات', e: data.E.vehC, i: data.I.vehC },
-                  { label: 'ركاب', e: data.E.passC, i: data.I.passC },
-                ] as const).map((r) => (
-                  <tr key={r.label}>
-                    <td>{r.label}</td>
-                    <td>{r.e.toLocaleString()}</td>
-                    <td>{r.i.toLocaleString()}</td>
-                    <td>{(r.e + r.i).toLocaleString()}</td>
-                    <td>{fmt(r.e / data.count)}</td>
-                    <td>{fmt(r.i / data.count)}</td>
-                  </tr>
-                ))}
-                <tr className="tot">
-                  <td>الإجمالي</td>
-                  <td>{(data.E.truckC + data.E.vehC + data.E.passC).toLocaleString()}</td>
-                  <td>{(data.I.truckC + data.I.vehC + data.I.passC).toLocaleString()}</td>
-                  <td>{(data.E.truckC + data.E.vehC + data.E.passC + data.I.truckC + data.I.vehC + data.I.passC).toLocaleString()}</td>
-                  <td>{fmt((data.E.truckC + data.E.vehC + data.E.passC) / data.count)}</td>
-                  <td>{fmt((data.I.truckC + data.I.vehC + data.I.passC) / data.count)}</td>
-                </tr>
-              </tbody>
-            </table>
-            <div className="cols">
-              <div><h3>مصروفات الصادر ({cfg.agentExport})</h3><table><thead><tr><th scope="col">المصروف</th><th scope="col">المبلغ</th></tr></thead><tbody>{Object.entries(data.E.exp).filter(([, v]) => Math.abs(v) >= 0.005).map(([k, v]) => (<tr key={k}><td>{labelOf[k] || k}</td><td>{fmt(v)}</td></tr>))}<tr className="tot"><td>إجمالي المصروفات</td><td>{fmt(data.expE)}</td></tr></tbody></table></div>
-              <div><h3>مصروفات الوارد ({cfg.agentImport})</h3><table><thead><tr><th scope="col">المصروف</th><th scope="col">المبلغ</th></tr></thead><tbody>{Object.entries(data.I.exp).filter(([, v]) => Math.abs(v) >= 0.005).map(([k, v]) => (<tr key={k}><td>{labelOf[k] || k}</td><td>{fmt(v)}</td></tr>))}<tr className="tot"><td>إجمالي المصروفات</td><td>{fmt(data.expI)}</td></tr></tbody></table></div>
-            </div>
-            <div className="cols">
-              <div>
-                <h3>البنكر (مخزون)</h3>
-                <table><thead><tr><th scope="col">رصيد أول المدة</th><th scope="col">+ تموينات الشهر</th><th scope="col">− مخزون آخر المدة</th><th scope="col">= المستهلك</th></tr></thead><tbody><tr><td>{fmt(data.opening)}</td><td>{fmt(data.supplies)}</td><td>{fmt(data.closing)}</td><td>{fmt(data.bunkerCost)}</td></tr></tbody></table>
-                <h3>مصروفات أخرى</h3><table><tbody><tr><td>مرتبات الشهر</td><td>{fmt(data.salaries)}</td></tr></tbody></table>
-              </div>
-              <div>
-                {!cfg.hideAgentLiquidity && <>
-                  <h3>السيولة عند الوكلاء</h3>
-                  <table><thead><tr><th scope="col">{cfg.agentExport} (P−O)</th><th scope="col">{cfg.agentImport} (O)</th><th scope="col">إجمالي التحصيل (P)</th></tr></thead><tbody><tr><td>{fmt(data.liqIttihad)}</td><td>{fmt(data.liqBassam)}</td><td>{fmt(data.P)}</td></tr></tbody></table>
-                </>}
-              </div>
-            </div>
-            {purchases && (
-              <>
-                <h3>المشتريات (فواتير المركب) — بالدولار</h3>
-                {purchases.byItem.length > 0 && (
-                  <table>
-                    <thead><tr><th scope="col">البند</th><th scope="col">إجمالي القسط (USD)</th></tr></thead>
-                    <tbody>
-                      {purchases.byItem.map((b) => (<tr key={b.name}><td>{b.name}</td><td>{fmt(b.value)}</td></tr>))}
-                      <tr className="tot"><td>الإجمالي</td><td>{fmt(purchases.total)}</td></tr>
-                    </tbody>
-                  </table>
-                )}
-                <table>
-                  <thead><tr><th scope="col">رقم الفاتورة</th><th scope="col">التاريخ</th><th scope="col">المورد</th><th scope="col">البند</th><th scope="col">المبلغ الأصلي</th><th scope="col">شهور الإهلاك</th><th scope="col">القسط الشهري (USD)</th></tr></thead>
-                  <tbody>
-                    {purchases.items.length ? purchases.items.map((i) => (
-                      <tr key={i.id}><td>{i.number}{i.amount < 0 ? ' (إشعار دائن)' : ''}</td><td>{i.date || '—'}</td><td>{i.supplier}</td><td>{i.item}</td><td>{fmt(i.amount)} {i.currency}</td><td>{i.nMonths > 1 ? `${i.seq}/${i.nMonths}` : 'كامل'}</td><td>{i.missing ? 'سعر ناقص' : `${fmt(i.installment)}${i.usedDefault ? ' *' : ''}`}</td></tr>
-                    )) : (<tr><td colSpan={7}>لا توجد فواتير على المركب في هذا الشهر</td></tr>)}
-                    <tr className="tot"><td colSpan={6}>إجمالي المشتريات</td><td>{fmt(purchases.total)}</td></tr>
-                  </tbody>
-                </table>
-                <table>
-                  <thead><tr><th scope="col">صافي قبل المشتريات</th><th scope="col">إجمالي المشتريات</th><th scope="col">صافي نهائي بعد المشتريات</th></tr></thead>
-                  <tbody><tr className="tot"><td>{fmt(data.net)}</td><td>{fmt(purchases.total)}</td><td>{fmt(data.net - purchases.total)}</td></tr></tbody>
-                </table>
-              </>
-            )}
-            {/*
-              الحلقة في الورق أيضاً — والمحتوى المعروض كلّه `print:hidden`، فما
-              لا يُكرَّر هنا لا يصل الورقة. ووسيلة الإيضاح جدولٌ لا ألوانٌ وحدها:
-              التقرير يُطبع أحياناً بالأبيض والأسود فتتشابه الألوان.
-            */}
-            {costSegs.length > 0 && (
-              <div className="cstr">
-                <h3>هيكل التكاليف</h3>
-                <div className="dn">
-                  <CostDonut segs={costSegs} size={150} />
-                  <table className="lg"><tbody>
-                    {costSegs.map((sg) => (
-                      <tr key={sg.id}>
-                        <td><span className="sw" style={{ background: sg.color }} />{sg.ar}</td>
-                        <td>{fmt(sg.value)}</td>
-                        <td className="pc">{Math.round(sg.share * 100)}%</td>
-                      </tr>
-                    ))}
-                    <tr className="tot"><td>الإجمالي</td><td>{fmt(costSegsTotal)}</td><td className="pc">100%</td></tr>
-                  </tbody></table>
-                </div>
-              </div>
-            )}
-
-            <div className="foot">
-              <span>UME Holding — نظام PMS · تقرير {cfg.vessel} · {periodLabel}</span>
-              <span>مستند داخلي — سري · جميع القيم بالدولار الأمريكي</span>
-            </div>
-          </div>
+          <VesselPrintDoc hidden={showExec} cfg={cfg} periodLabel={periodLabel} count={sel.length} data={data} purchases={purchases}
+            costSegs={costSegs} costSegsTotal={costSegsTotal} labelOf={labelOf} />
         </>
       )}
 
@@ -1807,6 +1618,255 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
     </div>
   );
 }
+
+/*
+ * ── مستند الطباعة ──
+ * مكوّنٌ مستقلّ ليُطبَع في الاختبار بأرقامٍ ثابتة ويُقاس عدد صفحاته.
+ */
+export interface VesselPrintData {
+  E: Side; I: Side; revE: number; revI: number; expE: number; expI: number; revenue: number; expenses: number; net: number; count: number;
+  manualRev: { key: string; label: string; amount: number }[];
+  opening: number; supplies: number; closing: number; bunkerCost: number; salaries: number; liqIttihad: number; liqBassam: number; P: number;
+}
+export function VesselPrintDoc({ hidden, cfg, periodLabel, count, data, purchases, costSegs, costSegsTotal, labelOf }: {
+  hidden?: boolean; cfg: VesselConfig; periodLabel: string; count: number; data: VesselPrintData;
+  purchases: { items: any[]; total: number; byItem: { name: string; value: number }[] } | null;
+  costSegs: ReturnType<typeof costSegments>; costSegsTotal: number; labelOf: Record<string, string>;
+}) {
+  const sel = { length: count };
+  return (
+    <div id="vp-doc" dir="rtl" className={hidden ? 'hidden' : 'hidden print:block'}>
+      <div className="dh">
+        <div className="brand">UME <span>Holding</span><small>MARITIME · PMS</small></div>
+        <div className="meta">
+          المركب: <b>{cfg.vessel}</b><br />
+          الفترة: <b>{periodLabel}</b><br />
+          عدد الرحلات: <b>{sel.length}</b> · العملة: <b>USD</b>
+        </div>
+      </div>
+      <div className="dt">تقرير صافي ربح المركب</div>
+      <div className="kpis">
+        {purchases ? (
+          <>
+            <div className="kpi main"><span className="l">صافي نهائي بعد المشتريات</span><span className="v">{fmt(data.net - purchases.total)}</span></div>
+            <div className="kpi"><span className="l">صافي قبل المشتريات</span><span className="v">{fmt(data.net)}</span></div>
+            <div className="kpi danger"><span className="l">بند المشتريات</span><span className="v">{fmt(purchases.total)}</span></div>
+            <div className="kpi"><span className="l">إجمالي الإيراد</span><span className="v">{fmt(data.revenue)}</span></div>
+            <div className="kpi danger"><span className="l">إجمالي المصروفات</span><span className="v">{fmt(data.expenses)}</span></div>
+          </>
+        ) : (
+          <>
+            <div className="kpi main"><span className="l">صافي ربح الشهر</span><span className="v">{fmt(data.net)}</span></div>
+            <div className="kpi"><span className="l">إجمالي الإيراد</span><span className="v">{fmt(data.revenue)}</span></div>
+            <div className="kpi danger"><span className="l">إجمالي المصروفات</span><span className="v">{fmt(data.expenses)}</span></div>
+            <div className="kpi"><span className="l">متوسط ربح الرحلة</span><span className="v">{fmt(data.net / data.count)}</span></div>
+          </>
+        )}
+      </div>
+      {/*
+        الترتيب بطلب المالك ٣ نوفمبر ٢٠٢٦ («تقليل الفراغات»): كلّ جدولٍ كان صفّاً بعرض الورقة ولا
+        يُشطر، فشهرٌ واحد لبوسيدون يُطبع خمس ورقاتٍ أغلبها أبيض. الآن صفوفٌ من عمودين وثلاثة،
+        والجداول الصغيرة رأسيّة، وجدول الفواتير وحده بعرض الورقة ويُشطر ورأسه يتكرّر.
+      */}
+      <div className="g2">
+        <div>
+          <h3>الإيرادات</h3>
+          <table>
+            <thead><tr><th scope="col">البند</th><th scope="col">صادر — عدد</th><th scope="col">صادر — مبلغ</th><th scope="col">وارد — عدد</th><th scope="col">وارد — مبلغ</th><th scope="col">الإجمالي</th></tr></thead>
+            <tbody>
+              {REV_ROWS.map((r) => {
+                const eC = (data.E as any)[r.cKey], eA = (data.E as any)[r.key], iC = (data.I as any)[r.cKey], iA = (data.I as any)[r.key];
+                return (<tr key={r.key}><td>{r.label}</td><td>{eC || '—'}</td><td>{fmt(eA)}</td><td>{iC || '—'}</td><td>{fmt(iA)}</td><td>{fmt(eA + iA)}</td></tr>);
+              })}
+              <tr><td>إذن الشحن</td><td>—</td><td>{fmt(data.E.discharge)}</td><td>—</td><td>{fmt(data.I.discharge)}</td><td>{fmt(data.E.discharge + data.I.discharge)}</td></tr>
+              {data.manualRev.filter((r) => r.amount > 0).map((r) => (
+                <tr key={r.key}><td>{r.label}</td><td>—</td><td>—</td><td>—</td><td>—</td><td>{fmt(r.amount)}</td></tr>
+              ))}
+              <tr className="tot"><td>إجمالي الإيراد</td><td></td><td>{fmt(data.revE)}</td><td></td><td>{fmt(data.revI)}</td><td>{fmt(data.revenue)}</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div>
+          <h3>أعداد المنقولات خلال الشهر ومتوسطها لكل رحلة</h3>
+          <table>
+            <thead><tr>
+              <th scope="col">البند</th>
+              <th scope="col">صادر — إجمالي</th><th scope="col">وارد — إجمالي</th><th scope="col">الإجمالي</th>
+              <th scope="col">متوسط صادر / رحلة</th><th scope="col">متوسط وارد / رحلة</th>
+            </tr></thead>
+            <tbody>
+              {([
+                { label: 'شاحنات', e: data.E.truckC, i: data.I.truckC },
+                { label: 'سيارات', e: data.E.vehC, i: data.I.vehC },
+                { label: 'ركاب', e: data.E.passC, i: data.I.passC },
+              ] as const).map((r) => (
+                <tr key={r.label}>
+                  <td>{r.label}</td>
+                  <td>{r.e.toLocaleString()}</td>
+                  <td>{r.i.toLocaleString()}</td>
+                  <td>{(r.e + r.i).toLocaleString()}</td>
+                  <td>{fmt(r.e / data.count)}</td>
+                  <td>{fmt(r.i / data.count)}</td>
+                </tr>
+              ))}
+              <tr className="tot">
+                <td>الإجمالي</td>
+                <td>{(data.E.truckC + data.E.vehC + data.E.passC).toLocaleString()}</td>
+                <td>{(data.I.truckC + data.I.vehC + data.I.passC).toLocaleString()}</td>
+                <td>{(data.E.truckC + data.E.vehC + data.E.passC + data.I.truckC + data.I.vehC + data.I.passC).toLocaleString()}</td>
+                <td>{fmt((data.E.truckC + data.E.vehC + data.E.passC) / data.count)}</td>
+                <td>{fmt((data.I.truckC + data.I.vehC + data.I.passC) / data.count)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div className="g3">
+        <div><h3>مصروفات الصادر ({cfg.agentExport})</h3><table><thead><tr><th scope="col">المصروف</th><th scope="col">المبلغ</th></tr></thead><tbody>{Object.entries(data.E.exp).filter(([, v]) => Math.abs(v) >= 0.005).map(([k, v]) => (<tr key={k}><td>{labelOf[k] || k}</td><td>{fmt(v)}</td></tr>))}<tr className="tot"><td>إجمالي المصروفات</td><td>{fmt(data.expE)}</td></tr></tbody></table></div>
+        <div><h3>مصروفات الوارد ({cfg.agentImport})</h3><table><thead><tr><th scope="col">المصروف</th><th scope="col">المبلغ</th></tr></thead><tbody>{Object.entries(data.I.exp).filter(([, v]) => Math.abs(v) >= 0.005).map(([k, v]) => (<tr key={k}><td>{labelOf[k] || k}</td><td>{fmt(v)}</td></tr>))}<tr className="tot"><td>إجمالي المصروفات</td><td>{fmt(data.expI)}</td></tr></tbody></table></div>
+        <div>
+          <h3>البنكر (مخزون)</h3>
+          <table className="kv"><tbody>
+            <tr><td>رصيد أول المدة</td><td>{fmt(data.opening)}</td></tr>
+            <tr><td>+ تموينات الشهر</td><td>{fmt(data.supplies)}</td></tr>
+            <tr><td>− مخزون آخر المدة</td><td>{fmt(data.closing)}</td></tr>
+            <tr className="tot"><td>= المستهلك</td><td>{fmt(data.bunkerCost)}</td></tr>
+          </tbody></table>
+          <h3>مصروفات أخرى</h3><table className="kv"><tbody><tr><td>مرتبات الشهر</td><td>{fmt(data.salaries)}</td></tr></tbody></table>
+          {!cfg.hideAgentLiquidity && <>
+            <h3>السيولة عند الوكلاء</h3>
+            <table className="kv"><tbody>
+              <tr><td>{cfg.agentExport} (P−O)</td><td>{fmt(data.liqIttihad)}</td></tr>
+              <tr><td>{cfg.agentImport} (O)</td><td>{fmt(data.liqBassam)}</td></tr>
+              <tr className="tot"><td>إجمالي التحصيل (P)</td><td>{fmt(data.P)}</td></tr>
+            </tbody></table>
+          </>}
+        </div>
+      </div>
+      {(purchases || costSegs.length > 0) && (
+        <div className="g3">
+          {purchases && (
+            <div>
+              <h3>المشتريات (فواتير المركب) — بالدولار</h3>
+              <table className="kv">
+                <thead><tr><th scope="col">البند</th><th scope="col">إجمالي القسط (USD)</th></tr></thead>
+                <tbody>
+                  {purchases.byItem.map((b) => (<tr key={b.name}><td>{b.name}</td><td>{fmt(b.value)}</td></tr>))}
+                  <tr className="tot"><td>الإجمالي</td><td>{fmt(purchases.total)}</td></tr>
+                </tbody>
+              </table>
+            </div>
+          )}
+          {purchases && (
+            <div>
+              <h3>الصافي بعد المشتريات</h3>
+              <table className="kv"><tbody>
+                <tr><td>صافي قبل المشتريات</td><td>{fmt(data.net)}</td></tr>
+                <tr><td>إجمالي المشتريات</td><td>{fmt(purchases.total)}</td></tr>
+                <tr className="tot"><td>صافي نهائي بعد المشتريات</td><td>{fmt(data.net - purchases.total)}</td></tr>
+              </tbody></table>
+            </div>
+          )}
+          {/*
+            الحلقة في الورق أيضاً — والمحتوى المعروض كلّه `print:hidden`، فما
+            لا يُكرَّر هنا لا يصل الورقة. ووسيلة الإيضاح جدولٌ لا ألوانٌ وحدها:
+            التقرير يُطبع أحياناً بالأبيض والأسود فتتشابه الألوان.
+          */}
+          {costSegs.length > 0 && (
+            <div className="cstr">
+              <h3>هيكل التكاليف</h3>
+              <div className="dn">
+                <CostDonut segs={costSegs} size={150} />
+                <table className="lg"><tbody>
+                  {costSegs.map((sg) => (
+                    <tr key={sg.id}>
+                      <td><span className="sw" style={{ background: sg.color }} />{sg.ar}</td>
+                      <td>{fmt(sg.value)}</td>
+                      <td className="pc">{Math.round(sg.share * 100)}%</td>
+                    </tr>
+                  ))}
+                  <tr className="tot"><td>الإجمالي</td><td>{fmt(costSegsTotal)}</td><td className="pc">100%</td></tr>
+                </tbody></table>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+      {purchases && (
+        <div className="inv">
+          <h3>فواتير المشتريات</h3>
+          <table>
+            <thead><tr><th scope="col">رقم الفاتورة</th><th scope="col">التاريخ</th><th scope="col">المورد</th><th scope="col">البند</th><th scope="col">المبلغ الأصلي</th><th scope="col">شهور الإهلاك</th><th scope="col">القسط الشهري (USD)</th></tr></thead>
+            <tbody>
+              {purchases.items.length ? purchases.items.map((i) => (
+                <tr key={i.id}><td>{i.number}{i.amount < 0 ? ' (إشعار دائن)' : ''}</td><td>{i.date || '—'}</td><td>{i.supplier}</td><td>{i.item}</td><td>{fmt(i.amount)} {i.currency}</td><td>{i.nMonths > 1 ? `${i.seq}/${i.nMonths}` : 'كامل'}</td><td>{i.missing ? 'سعر ناقص' : `${fmt(i.installment)}${i.usedDefault ? ' *' : ''}`}</td></tr>
+              )) : (<tr><td colSpan={7}>لا توجد فواتير على المركب في هذا الشهر</td></tr>)}
+              <tr className="tot"><td colSpan={6}>إجمالي المشتريات</td><td>{fmt(purchases.total)}</td></tr>
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <div className="foot">
+        <span>UME Holding — نظام PMS · تقرير {cfg.vessel} · {periodLabel}</span>
+        <span>مستند داخلي — سري · جميع القيم بالدولار الأمريكي</span>
+      </div>
+    </div>
+  );
+}
+
+export const VP_PRINT_CSS = `@media print {
+  @page { size: A4 landscape; margin: 9mm 9mm; }
+  body * { visibility: hidden !important; }
+  #vp-doc, #vp-doc * { visibility: visible !important; }
+  #vp-doc { position: absolute; left: 0; top: 0; width: 100%; color: #0f172a;
+    font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 8.5pt; line-height: 1.3;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  #vp-doc .dh { display:flex; align-items:center; justify-content:space-between; border-bottom: 2pt solid #0f2c5c; padding-bottom: 4px; margin-bottom: 6px; }
+  #vp-doc .dh .brand { font-size: 14pt; font-weight: 800; color:#0f2c5c; letter-spacing:.3pt; }
+  #vp-doc .dh .brand span { color:#c8102e; }
+  #vp-doc .dh .brand small { display:block; font-size:6.5pt; font-weight:600; color:#64748b; letter-spacing:1.5pt; }
+  #vp-doc .dh .meta { text-align:left; font-size: 8pt; color:#475569; line-height:1.45; }
+  #vp-doc .dh .meta b { color:#0f172a; font-weight:700; }
+  #vp-doc .dt { text-align:center; font-size: 11.5pt; font-weight: 800; color:#fff; background:#0f2c5c;
+    padding:4px 0; margin: 0 0 7px; border-radius:4px; letter-spacing:.5pt; }
+  #vp-doc .kpis { display:flex; gap:6px; margin-bottom:4px; }
+  #vp-doc .kpi { flex:1; border:1pt solid #e2e8f0; border-radius:5px; padding:4px 6px; text-align:center; background:#f8fafc; }
+  #vp-doc .kpi .l { font-size:7pt; color:#64748b; display:block; margin-bottom:1px; font-weight:600; }
+  #vp-doc .kpi .v { font-size:12pt; font-weight:800; color:#0f172a; }
+  #vp-doc .kpi.main { background:#047857; border-color:#065f46; }
+  #vp-doc .kpi.main .l { color:#d1fae5; } #vp-doc .kpi.main .v { color:#fff; }
+  #vp-doc .kpi.danger .v { color:#b91c1c; }
+  #vp-doc h3 { font-size:9pt; font-weight:700; color:#0f2c5c; background:#eef2ff;
+    margin: 7px 0 3px; padding:3px 8px; border-radius:3px; border-right:3.5pt solid #1d4ed8; break-after:avoid; page-break-after:avoid; }
+  #vp-doc table { width:100%; border-collapse:collapse; font-size:7.8pt; margin-bottom:3px; }
+  #vp-doc th { background:#0f2c5c; color:#fff; font-weight:700; padding:2.5px 6px; text-align:right; }
+  #vp-doc td { padding:2px 6px; text-align:right; white-space:nowrap; border-bottom:.5pt solid #e5e9f0; }
+  #vp-doc tbody tr:nth-child(even) td { background:#f8fafc; }
+  #vp-doc tr.tot td { background:#dbe4ff; color:#0f2c5c; font-weight:800; border-top:1pt solid #94a3b8; border-bottom:none; }
+  /* صفوفٌ من عمودين وثلاثة — والصفّ كلّه لا يُشطر، فهو قصير، ونصفُ جدولٍ في ورقة لا يُقرأ */
+  #vp-doc .g2, #vp-doc .g3 { display:grid; gap:10px; align-items:start; break-inside:avoid; page-break-inside:avoid; }
+  #vp-doc .g2 { grid-template-columns: 1fr 1fr; } #vp-doc .g3 { grid-template-columns: 1fr 1fr 1fr; }
+  #vp-doc .g2 > div, #vp-doc .g3 > div { min-width:0; }
+  /* الجداول الرأسيّة الصغيرة: البند يمين والمبلغ يسار */
+  #vp-doc table.kv td:last-child, #vp-doc table.kv th:last-child { text-align:left; }
+  #vp-doc .g3 table:not(.lg) td:first-child { white-space:normal; }
+  #vp-doc .cstr .dn { display:flex; align-items:center; gap:8px; }
+  #vp-doc .cstr .dn svg { width:92px; height:92px; flex-shrink:0; }
+  #vp-doc .cstr .lg { flex:1; width:100%; border-collapse:collapse; font-size:7.5pt; }
+  #vp-doc .cstr .lg td { padding:1.5px 5px; border-bottom:.5pt solid #eef2f7; }
+  #vp-doc .cstr .lg td:first-child { white-space:normal; }
+  #vp-doc .cstr .lg td:nth-child(2) { text-align:left; white-space:nowrap; }
+  #vp-doc .cstr .lg .pc { width:30px; text-align:left; color:#64748b; }
+  #vp-doc .cstr .lg tr.tot td { background:#dbe4ff; color:#0f2c5c; font-weight:800; border-top:1pt solid #94a3b8; }
+  #vp-doc .cstr .sw { display:inline-block; width:7px; height:7px; border-radius:50%; margin-left:5px; vertical-align:middle; }
+  /* جدول الفواتير وحده يُشطر بين الورقات، ورأسه يتكرّر، والسطر لا ينقسم */
+  #vp-doc .inv thead { display:table-header-group; }
+  #vp-doc .inv tr { break-inside:avoid; page-break-inside:avoid; }
+  #vp-doc .inv td { padding:1.5px 6px; }
+  #vp-doc .foot { margin-top:6px; border-top:.75pt solid #cbd5e1; padding-top:4px; font-size:7pt; color:#94a3b8;
+    display:flex; justify-content:space-between; }
+}`;
 
 /**
  * حلقة هيكل التكاليف.
