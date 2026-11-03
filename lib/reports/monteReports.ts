@@ -66,6 +66,8 @@ export interface MonteReportData {
 }
 
 export function monteReportData(p: MontePackage, from: string, to: string = from): MonteReportData {
+  // عمّان (مستأجرة، ٣ نوفمبر ٢٠٢٦) بالشكل نفسه: سطر C عندها تكلفة السفينة بإيجارها، والأذون من ملفّ وكيل سواكن
+  const chartered = p.vessel?.ownership === 'مستأجرة';
   const [a, b] = from <= to ? [from, to] : [to, from];
   const inRange = (m: string) => m >= a && m <= b;
   const months = p.monthly.map((m) => m.month).filter(inRange);
@@ -108,7 +110,7 @@ export function monteReportData(p: MontePackage, from: string, to: string = from
   const expI = r2(Object.values(I.exp).reduce((s, x) => s + x, 0));
   const revE = r2(E.cargo + E.pass), revI = r2(I.cargo + I.pass);
   const manualRev = [
-    { key: 'rev_do', label: 'أذون التسليم (تقديريّة)', amount: sum((v) => v.rev_do) },
+    { key: 'rev_do', label: chartered ? 'أذون التسليم (ملفّ وكيل سواكن)' : 'أذون التسليم (تقديريّة)', amount: sum((v) => v.rev_do) },
     { key: 'rev_other', label: 'إيرادات أخرى', amount: sum((v) => v.rev_other) },
   ];
   const revenue = r2(revE + revI + manualRev.reduce((s, r) => s + r.amount, 0));
@@ -119,9 +121,9 @@ export function monteReportData(p: MontePackage, from: string, to: string = from
   const bunkerCost = r2(voyageFuel + positioning);
   const byItemMap = new Map<string, number>();
   const add = (name: string, v: number) => { if (Math.abs(v) >= 0.005) byItemMap.set(name, r2((byItemMap.get(name) || 0) + v)); };
-  add('التأمين (من الوثائق)', -sumM((m) => m.ins));
+  add(chartered ? 'تأمين P&I' : 'التأمين (من الوثائق)', -sumM((m) => m.ins));
   add('مصاريف البحّارة', -sumM((m) => m.crew_misc));
-  add('نقديّة القبطان', -sumM((m) => m.ctm));
+  add(chartered ? 'نقديّة القبطان (مرتّبات الطاقم)' : 'نقديّة القبطان', -sumM((m) => m.ctm));
   for (const m of opMonths) for (const i of m.fixed_items || []) add(i.label, -n0(i.usd));
   const byItem = [...byItemMap].map(([name, value]) => ({ name, value })).sort((x, y) => y.value - x.value);
   /*
@@ -143,14 +145,19 @@ export function monteReportData(p: MontePackage, from: string, to: string = from
   const net = r2(revenue - expE - expI - bunkerCost - salaries);
   const count = voyages.length;
 
-  const labelOf = { ...MONTE_LABELS };
+  const labelOf: Record<string, string> = chartered
+    ? { ...MONTE_LABELS, cost_comm_suk30: 'كنزي 30% من الأذون', cost_catering: 'إقفال الكاترينج (كشف الوكيل)' }
+    : { ...MONTE_LABELS };
+  const cLabel = chartered
+    ? { ar: 'تكلفة السفينة (إيجار · تأمين · طاقم)', en: 'Vessel cost (hire · insurance · crew)' }
+    : { ar: 'تكاليف السفينة الثابتة (تأمين · بحّارة · قبطان · مصاريف السفينة)', en: 'Fixed Vessel Costs (insurance · crew · master · vessel costs)' };
   const costLines: ExecData['costLines'] = [{ key: 'fuel', label: 'الوقود (بنكر)', value: bunkerCost }];
   for (const k of [...MONTE_EXP_E, ...MONTE_EXP_I]) {
     const v = n0(E.exp[k]) + n0(I.exp[k]);
     if (Math.abs(v) >= 0.5) costLines.push({ key: k, label: labelOf[k], value: r2(v) });
   }
   if (salaries > 0) costLines.push({ key: 'salaries', label: 'مرتبات', value: salaries });
-  if (purchasesTotal > 0) costLines.push({ key: 'purchases', label: 'تكاليف السفينة الثابتة', value: purchasesTotal });
+  if (purchasesTotal > 0) costLines.push({ key: 'purchases', label: chartered ? 'تكلفة السفينة' : 'تكاليف السفينة الثابتة', value: purchasesTotal });
 
   const exec: ExecData = {
     perVoyage: voyages.map((v) => {
@@ -166,9 +173,9 @@ export function monteReportData(p: MontePackage, from: string, to: string = from
     O: 0, P: 0, liqBassam: 0, liqIttihad: 0, count,
   };
   const profile: ReportProfile = {
-    purchases: { ar: 'تكاليف السفينة الثابتة (تأمين · بحّارة · قبطان · مصاريف السفينة)', en: 'Fixed Vessel Costs (insurance · crew · master · vessel costs)' },
+    purchases: cLabel,
     bucketNames: {
-      purchases: { ar: 'تكاليف السفينة الثابتة', en: 'Fixed vessel costs' },
+      purchases: chartered ? { ar: 'تكلفة السفينة', en: 'Vessel cost' } : { ar: 'تكاليف السفينة الثابتة', en: 'Fixed vessel costs' },
       fixed: { ar: 'مرتّبات الطاقم', en: 'Crew wages' },
     },
     bunkerStock: false,
@@ -176,7 +183,10 @@ export function monteReportData(p: MontePackage, from: string, to: string = from
       { ar: 'وقود الرحلات بالمتوسّط المرجَّح', en: 'Voyage fuel at weighted average cost', value: voyageFuel },
       { ar: 'وقود التموضع ليماسول ← جدّة', en: 'Positioning fuel Limassol → Jeddah', value: positioning },
     ].filter((r) => Math.abs(r.value) >= 0.005),
-    bunkerNote: {
+    bunkerNote: chartered ? {
+      ar: 'وقود كلّ رحلة = استهلاكها من تقارير القبطان × متوسّط المخزون المرجَّح، لا مشتريات كشف الوكيل.',
+      en: 'Each voyage is charged its consumption (master reports) × the weighted-average stock cost, not the agent SOA purchases.',
+    } : {
       ar: 'وقود كلّ رحلة بمتوسّطٍ مرجَّحٍ متحرّك للمخزون عند خروجها، والكمّيّة من ملفّ الربح — قرار المالك ٢٩ أكتوبر.',
       en: 'Each voyage is charged fuel at the moving weighted-average cost of stock on departure; quantities from the voyage profit file.',
     },

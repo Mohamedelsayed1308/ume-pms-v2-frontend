@@ -37,7 +37,11 @@ export interface LineVesselConfig {
   ownership: 'chartered' | 'owned';
   hireInLedger: boolean;             // عمّان: نعم · دليلة: لا (يُدخَل يدويّاً)
   peers: { key: string; nameAr: string; nameEn: string; hireInLedger: boolean; ownership: 'chartered' | 'owned' }[];
-  source?: 'sheet' | 'package';      // الافتراضي الشيت · مونتي: حزمة `monte_pms.json`
+  source?: 'sheet' | 'package';      // الافتراضي الشيت · مونتي وعمّان: حزمة بشكل `monte-pms/1`
+  // كارت الحزمة وحده (MonteLineCard):
+  packageFile?: string;              // اسم الملفّ في زرّ الرفع ورسالة الفراغ
+  teamInputs?: boolean;              // مدخلات الفريق — مونتي وحدها الآن
+  rowLabels?: Record<string, [string, string]>; // أسماء بنود قائمة الدخل التي تخصّ المركب [عربي، إنجليزي]
 }
 
 export const DALEELA_JS: LineVesselConfig = {
@@ -48,7 +52,20 @@ export const DALEELA_JS: LineVesselConfig = {
 // مونتي — المقارنة بدليلة وعمّان تأتي في الحزمة نفسها (`line_compare`)
 export const MONTE_JS: LineVesselConfig = {
   key: 'MonteJS', nameAr: 'مونتي', nameEn: 'Monte Express', ownership: 'owned', hireInLedger: false,
-  peers: [], source: 'package',
+  peers: [], source: 'package', packageFile: 'monte_pms.json', teamInputs: true,
+};
+
+// عمّان — بأمر المالك ٣ نوفمبر ٢٠٢٦ من حزمة `amman_pms.json` (F:/Dev/amman-pipeline) بشكل حزمة مونتي.
+// الإيجار 11,000$ لليوم بندٌ في `fixed_items` من الحزمة، لا من الدفتر ولا يدويّاً.
+export const AMMAN_JS: LineVesselConfig = {
+  key: 'AmmanJS', nameAr: 'عمّان', nameEn: 'Amman', ownership: 'chartered', hireInLedger: false,
+  peers: [], source: 'package', packageFile: 'amman_pms.json',
+  rowLabels: {
+    rev_do: ['أذون التسليم — ملفّ وكيل سواكن', 'Delivery orders — Suakin agent file'],
+    cost_comm_suk30: ['كنزي 30% من الأذون', 'Kenzy 30% of delivery orders'],
+    cost_comm_suk: ['عمولات سواكن الأخرى', 'Other Suakin commissions'],
+    cost_catering: ['إقفال الكاترينج — كشف الوكيل', 'Catering close-out — agent statement'],
+  },
 };
 
 // ── مسمّيات البنود — مفاتيحها أسماء الحمولة في الشيت الموحّد ──

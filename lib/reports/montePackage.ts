@@ -24,6 +24,11 @@
  * شهرها رفض التحقّق الحزمة، لأنّ الشهر لن يطابق رحلاته المعروضة.
  * رحلة 07 حُجبت ٢٩ أكتوبر ٢٠٢٦ ورُفع حجبها ٢ نوفمبر بقرار المالك بعد بنائها من كشف الوكيل.
  * القائمة نفسها في الباك (monte-package.ts) — تُعدَّلان معاً.
+ *
+ * ── عمّان بالشكل نفسه (المرحلة ب، ٣ نوفمبر ٢٠٢٦) ──
+ * حزمة عمّان `amman_pms.json` تُصدَّر من F:/Dev/amman-pipeline بهذا الشكل نفسه، وتُحفظ
+ * في صفّ `AmmanJS`. الفروق في المحتوى لا في الشكل: مستأجرة (`vessel.ownership`)،
+ * والإيجار بالاستحقاق بندٌ في `fixed_items`، والطبالي في `legs[].pallets`.
  */
 export const MONTE_SCHEMA = 'monte-pms/1';
 export const HIDDEN_VOYAGES: string[] = [];
@@ -47,6 +52,8 @@ export interface MonteLeg {
   leg: string; voyage: string; direction: string; route: string; date: string;
   pax_paying: number | null; pax_total: number | null; trucks: number | null; trailers: number | null;
   cars: number | null; equipment: number | null; source: string;
+  /** الطبالي — عمّان وحدها (من تحليل وكيلها)؛ مونتي لا تحملها */
+  pallets?: number | null;
 }
 export interface MonteFixedItem { key: string; label: string; usd: number }
 export interface MonteMonth {
@@ -72,7 +79,13 @@ export interface MontePackage {
   /** مدخلات الفريق التي سُحبت لهذه الحزمة، وما لم يُطبَّق منها بسببه (انظر monteInputs.ts) */
   inputs_applied?: string[];
   inputs_rejected?: { id: string; reason: string }[];
-  vessel: { name: string; name_ar: string; line: string; ownership: string; cap_pax: number; cap_trailer_units: number; cap_cars: number; card_start: string };
+  vessel: {
+    name: string; name_ar: string; line: string; ownership: string; cap_pax: number; cap_trailer_units: number;
+    /** null = السعة غير معروفة (عمّان) فلا يُحسب إشغال السيّارات */
+    cap_cars: number | null; card_start: string;
+    /** إيجار اليوم للمستأجرة (عمّان 11,000$) — للعرض، والإيجار نفسه في fixed_items */
+    hire_per_day?: number;
+  };
   rules: string[]; voyages: MonteVoyage[]; legs: MonteLeg[]; monthly: MonteMonth[]; fuel_stock: MonteFuelEvent[];
   agent_voyages: MonteAgentVoyage[]; agent_summary: { item: string; usd: number }[]; line_compare: MonteCompare[]; pending: string[];
 }
@@ -144,6 +157,10 @@ export function validateMontePackage(raw: unknown): MonteCheck {
   if (!p0.vessel || typeof p0.vessel !== 'object') return fail('القسم vessel مفقود');
   const { pkg: p, hidden } = visiblePackage(p0);
   if (!p.voyages.length) return fail('لا رحلات في الحزمة');
+  // المملوكة (مونتي) مؤنها في الشهريّ؛ والمستأجرة (عمّان) يحمّل كشف وكيلها إقفال الكاترينج على الرحلة
+  const cateringNote = p.vessel?.ownership === 'مستأجرة'
+    ? 'إقفالٌ من كشف الوكيل محمَّلٌ على الرحلة'
+    : 'مؤن السفينة في الشهريّ لا على الرحلة';
 
   const seen = new Set<string>();
   for (const v of p.voyages) {
@@ -160,7 +177,7 @@ export function validateMontePackage(raw: unknown): MonteCheck {
     const badEx = v.items.filter((i) => i.excluded && i.kind !== 'cost');
     if (badEx.length) errors.push(`الرحلة ${id}: بند إيرادٍ مستبعَد (${badEx[0].label}) — المستبعَد الإيجار وحده`);
     if (Math.abs(it.excluded + n0(v.hire_in_file)) > TOL) warnings.push(`الرحلة ${id}: المستبعَد ${-it.excluded} لا يساوي إيجار الملفّ ${v.hire_in_file}`);
-    if (n0(v.cost_catering) !== 0) warnings.push(`الرحلة ${id}: كاترينج ${v.cost_catering} — مؤن السفينة في الشهريّ لا على الرحلة`);
+    if (n0(v.cost_catering) !== 0) warnings.push(`الرحلة ${id}: كاترينج ${v.cost_catering} — ${cateringNote}`);
   }
 
   for (const m of p.monthly) {

@@ -18,12 +18,14 @@ import {
 } from '@/lib/reports/montePackage';
 
 /*
- * كارت مونتي — خطّ جدّة/سواكن، من حزمة رحلاتها لا من الشيت (انظر `lib/reports/montePackage.ts`).
+ * كارت الحزمة — خطّ جدّة/سواكن، من حزمة رحلات المركب لا من الشيت (انظر `lib/reports/montePackage.ts`).
+ * مونتي (مملوكة) منذ ٢٩ أكتوبر ٢٠٢٦، وعمّان (مستأجرة) بالشكل نفسه منذ ٣ نوفمبر.
+ * ما يختلف بينهما من نصوصٍ يأتي من الملكيّة ومن `LineVesselConfig`، لا من اسم المركب.
  *
- * الحزمة تُحفظ في `vessel_profit_data.manual.package` للمفتاح `MonteJS`، والحفظ يستبدل
+ * الحزمة تُحفظ في `vessel_profit_data.manual.package` لمفتاح المركب، والحفظ يستبدل
  * `manual` كاملاً — فيُرفع ما سواها كما قُرئ، ولا حفظ قبل أن يُقرأ.
  * والرفع للأدمن وحده: الحزمة تولّدها جلسة مونتي، والملفّ لا يُعدَّل يدويّاً.
- * ومنذ ٣٠ أكتوبر ٢٠٢٦ تدفعها الجلسة آليّاً (`push_pms.py` ← `api/vessel-profit-ingest/monte`)،
+ * ومنذ ٣٠ أكتوبر ٢٠٢٦ تدفعها الجلسة آليّاً (`push_pms.py` ← `api/vessel-profit-ingest/monte` · `/amman`)،
  * والزرّ باقٍ بديلاً — وللرجوع المقصود إلى حزمةٍ أقدم، فالدفع الآليّ يرفض الأقدم.
  */
 
@@ -32,18 +34,24 @@ const pct = (n: number) => `${(n * 100).toFixed(1)}%`;
 const apiMessage = (e: unknown): string | undefined =>
   (e as { response?: { data?: { message?: string } } })?.response?.data?.message;
 
-const REV_ROWS: [keyof MontePackage['voyages'][number], string, string][] = [
+type Row = [keyof MontePackage['voyages'][number], string, string];
+const REV_ROWS: Row[] = [
   ['rev_pax_out', 'ركّاب — ذهاب', 'Passengers — out'], ['rev_pax_ret', 'ركّاب — عودة', 'Passengers — return'],
   ['rev_cargo_out', 'بضائع — ذهاب', 'Cargo — out'], ['rev_cargo_ret', 'بضائع — عودة', 'Cargo — return'],
   ['rev_do', 'أذون التسليم (تقديريّة)', 'Delivery orders (est.)'], ['rev_other', 'إيراد آخر', 'Other revenue'],
 ];
-const COST_ROWS: [keyof MontePackage['voyages'][number], string, string][] = [
+const COST_ROWS: Row[] = [
   ['cost_fuel', 'الوقود — متوسّط مرجَّح', 'Fuel — weighted average'], ['cost_water', 'مياه', 'Water'],
   ['cost_port_jed', 'ميناء جدّة ومصاريفها', 'Jeddah port & charges'], ['cost_comm_jed', 'عمولات وكيل جدّة', 'Jeddah agent commissions'],
   ['cost_port_suk', 'ميناء سواكن', 'Suakin port'], ['cost_comm_suk30', 'عمولة وكيل سواكن 30%', 'Suakin agent 30%'],
   ['cost_comm_suk', 'عمولات سواكن الأخرى', 'Other Suakin commissions'], ['cost_agent_adj', 'تسوية جدّة على كشف الوكيل', 'Jeddah settlement vs agent SOA'],
   ['cost_gifts', 'هدايا الركّاب', 'Passenger gifts'], ['cost_catering', 'الكاترينج (صفرٌ حتّى الفواتير)', 'Catering (zero until invoiced)'],
 ];
+// المصدر الآليّ كما يكتبه مسار الدفع في الباك (INGEST_LINES)
+const AUTO_SOURCE: Record<string, [string, string]> = {
+  'monte-session': ['آليّاً من جلسة مونتي', 'automatic, from the Monte session'],
+  'amman-pipeline': ['آليّاً من تحديث عمّان', 'automatic, from the Amman update'],
+};
 
 export default function MonteLineCard({ config: cfg }: { config: LineVesselConfig }) {
   const { locale } = useI18n();
@@ -51,6 +59,11 @@ export default function MonteLineCard({ config: cfg }: { config: LineVesselConfi
   const T = (ar: string, eng: string) => (en ? eng : ar);
   const name = en ? cfg.nameEn : cfg.nameAr;
   const isAdmin = typeof window !== 'undefined' && getUser()?.role === 'admin';
+  const chartered = cfg.ownership === 'chartered';
+  const file = cfg.packageFile || 'package.json';
+  const relabel = (rows: Row[]) => rows.map(([k, ar, e]): Row => (cfg.rowLabels?.[k] ? [k, ...cfg.rowLabels[k]] : [k, ar, e]));
+  // تكاليف المستأجرة الثابتة هي تكلفة السفينة (إيجار · تأمين · طاقم)، والمملوكة تكاليفها الثابتة
+  const fixedName = chartered ? T('تكلفة السفينة', 'vessel cost') : T('الثابتة', 'fixed');
 
   const [manual, setManual] = useState<Record<string, unknown>>({});
   const [manualLoaded, setManualLoaded] = useState(false);
@@ -71,7 +84,7 @@ export default function MonteLineCard({ config: cfg }: { config: LineVesselConfi
       setUpdatedAt(r.data?.updated_at || '');
       setManualLoaded(true);
     } catch (e) {
-      setError(apiMessage(e) || T('تعذّر تحميل حزمة مونتي', 'Could not load the Monte package'));
+      setError(apiMessage(e) || T(`تعذّر تحميل حزمة ${cfg.nameAr}`, `Could not load the ${cfg.nameEn} package`));
     } finally { setLoading(false); }
   };
   // eslint-disable-next-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps -- تحميلٌ عند تغيّر المركب، كبقيّة الكروت
@@ -100,7 +113,7 @@ export default function MonteLineCard({ config: cfg }: { config: LineVesselConfi
   const repAlloc = useMemo(() => (rep ? allocateVoyageNets(rep.exec.perVoyage,
     { bunkerCost: rep.exec.bunkerCost, salaries: rep.exec.salaries, purchasesTotal: allocatablePurchases(rep.exec.purchasesTotal, rep.profile) }, 'mixed') : []), [rep]);
   const repLabel = rFrom === rTo ? rFrom : `${rFrom} → ${rTo}`;
-  const repCfg = { vessel: 'Monte Express', ...MONTE_SIDES };
+  const repCfg = { vessel: pkg?.vessel.name || cfg.nameEn, ...MONTE_SIDES };
 
   const pickFile = async (f: File | undefined) => {
     if (!f) return;
@@ -130,7 +143,7 @@ export default function MonteLineCard({ config: cfg }: { config: LineVesselConfi
     } finally { setSaving(false); }
   };
 
-  if (loading) return <div className="bg-white rounded-xl shadow p-8 text-center text-gray-400">{T('جارٍ تحميل حزمة مونتي…', 'Loading the Monte package…')}</div>;
+  if (loading) return <div className="bg-white rounded-xl shadow p-8 text-center text-gray-400">{T(`جارٍ تحميل حزمة ${cfg.nameAr}…`, `Loading the ${cfg.nameEn} package…`)}</div>;
 
   const cap = pkg?.vessel;
   // فوق السعة يُعلَّم أحمر: إمّا السعة في الحزمة أقلّ من الحقيقة، وإمّا العدّ يخلط أنواعاً
@@ -139,6 +152,22 @@ export default function MonteLineCard({ config: cfg }: { config: LineVesselConfi
   const units = (l: { trucks: number | null; trailers: number | null }) => (l.trucks == null && l.trailers == null ? null : (l.trucks || 0) + (l.trailers || 0));
   const savedAt = (typeof manual.packageSavedAt === 'string' && manual.packageSavedAt) || updatedAt;
   const overCars = (pkg?.legs || []).filter((l) => l.cars != null && cap?.cap_cars && l.cars > cap.cap_cars);
+  const hasPallets = (pkg?.legs || []).some((l) => l.pallets != null);
+  const hireInFile = (pkg?.voyages || []).reduce((s, v) => s + (v.hire_in_file || 0), 0);
+  const preLine = (pkg?.monthly || []).some((m) => !m.trips);
+  /*
+   * أعمدة السفينة في الجدول الشهريّ — يُخفى ما لا رقم له في أيّ شهر (عمّان بلا مرتّباتٍ
+   * ولا وقود انتقال). والتسمية بحسب الملكيّة: نقديّة القبطان في عمّان هي مرتّبات الطاقم.
+   */
+  type MonthCol = { key: 'pos' | 'ins' | 'sal_usd' | 'sal_eur' | 'crew_misc' | 'ctm'; ar: string; en: string };
+  const baseCols = ([
+    { key: 'pos', ar: 'وقود الانتقال', en: 'Positioning fuel' },
+    { key: 'ins', ar: chartered ? 'تأمين P&I' : 'التأمين', en: chartered ? 'P&I insurance' : 'Insurance' },
+    { key: 'sal_usd', ar: 'مرتّبات $', en: 'Salaries $' },
+    { key: 'sal_eur', ar: 'مرتّبات €→$', en: 'Salaries €→$' },
+    { key: 'crew_misc', ar: 'مصاريف الطاقم', en: 'Crew misc.' },
+    { key: 'ctm', ar: chartered ? 'نقديّة القبطان (مرتّبات)' : 'نقديّة القبطان', en: chartered ? 'Cash to master (salaries)' : 'Cash to master' },
+  ] as MonthCol[]).filter((c) => (pkg?.monthly || []).some((m) => m[c.key]));
 
   return (
     <div className="space-y-4" dir={en ? 'ltr' : 'rtl'}>
@@ -147,15 +176,17 @@ export default function MonteLineCard({ config: cfg }: { config: LineVesselConfi
         <div>
           <p className="text-lg font-bold text-gray-800">{T(`ربحيّة ${name} — خطّ جدّة/سواكن`, `${name} profitability — Jeddah/Suakin line`)}</p>
           <p className="text-xs text-gray-500">
-            {T('مركبٌ مملوك', 'Owned vessel')}{' · '}{T('من حزمة رحلات مونتي', 'From the Monte voyage package')}
+            {chartered ? T('مركبٌ مستأجر', 'Chartered vessel') : T('مركبٌ مملوك', 'Owned vessel')}
+            {chartered && pkg?.vessel.hire_per_day ? ` · ${T('الإيجار', 'hire')} ${fmt(pkg.vessel.hire_per_day)}$ ${T('لليوم', '/day')}` : ''}
+            {' · '}{T(`من حزمة رحلات ${cfg.nameAr}`, `From the ${cfg.nameEn} voyage package`)}
             {pkg ? ` · ${T('وُلِّدت', 'generated')} ${pkg.generated_at.replace('T', ' ').slice(0, 16)}` : ''}
           </p>
-          {/* للفريق: متى تغيّرت الأرقام ولماذا. الدفع الآليّ يكتب monte-session (انظر monte-ingest في الباك)، والزرّ upload */}
+          {/* للفريق: متى تغيّرت الأرقام ولماذا. الدفع الآليّ يكتب مصدره (INGEST_LINES في الباك)، والزرّ upload */}
           {pkg && (savedAt || pkg.update_reason) && (
             <p className="text-xs text-emerald-700 mt-0.5" data-testid="monte-last-update">
               {T('آخر تحديث', 'Last update')}
               {savedAt ? ` ${new Date(savedAt).toLocaleString(en ? 'en-GB' : 'ar-EG')}` : ''}
-              {manual.packageSource === 'monte-session' ? ` · ${T('آليّاً من جلسة مونتي', 'automatic, from the Monte session')}` : ''}
+              {typeof manual.packageSource === 'string' && AUTO_SOURCE[manual.packageSource] ? ` · ${T(...AUTO_SOURCE[manual.packageSource])}` : ''}
               {manual.packageSource === 'upload' ? ` · ${T('رفعٌ يدويّ', 'manual upload')}` : ''}
               {pkg.update_reason ? ` · ${T('السبب', 'Reason')}: ${pkg.update_reason}` : ''}
             </p>
@@ -166,7 +197,7 @@ export default function MonteLineCard({ config: cfg }: { config: LineVesselConfi
           {isAdmin && (
             <>
               <input ref={fileRef} type="file" accept=".json,application/json" className="hidden" onChange={(e) => pickFile(e.target.files?.[0])} />
-              <button onClick={() => fileRef.current?.click()} className="bg-amber-600 text-white text-sm px-4 py-2 rounded-lg hover:bg-amber-700">{T('📥 رفع monte_pms.json', '📥 Upload monte_pms.json')}</button>
+              <button onClick={() => fileRef.current?.click()} className="bg-amber-600 text-white text-sm px-4 py-2 rounded-lg hover:bg-amber-700">{T(`📥 رفع ${file}`, `📥 Upload ${file}`)}</button>
             </>
           )}
           <button onClick={load} className="bg-blue-600 text-white text-sm px-4 py-2 rounded-lg hover:bg-blue-700">{T('🔄 تحديث', '🔄 Refresh')}</button>
@@ -196,7 +227,7 @@ export default function MonteLineCard({ config: cfg }: { config: LineVesselConfi
 
       {!manual.package && !error && (
         <div className="bg-white rounded-xl shadow p-8 text-center text-gray-500">
-          {T('لم تُرفع حزمة مونتي بعد. يرفعها الأدمن من زرّ «رفع monte_pms.json».', 'No Monte package yet. An admin uploads it with “Upload monte_pms.json”.')}
+          {T(`لم تُرفع حزمة ${cfg.nameAr} بعد. يرفعها الأدمن من زرّ «رفع ${file}».`, `No ${cfg.nameEn} package yet. An admin uploads it with “Upload ${file}”.`)}
         </div>
       )}
       {check && !check.ok && (
@@ -216,7 +247,7 @@ export default function MonteLineCard({ config: cfg }: { config: LineVesselConfi
           )}
 
           {/* ── مدخلات الفريق (قرار المالك ١ نوفمبر) — مسارٌ يضيف ولا يستبدل manual ── */}
-          <MonteTeamInputs inputs={(manual.inputs as MonteInput[]) || []} pkg={pkg} en={en} onChanged={load} />
+          {cfg.teamInputs && <MonteTeamInputs inputs={(manual.inputs as MonteInput[]) || []} pkg={pkg} en={en} onChanged={load} />}
 
           {/* ── التقارير ── */}
           <div className="bg-white rounded-xl shadow p-3 flex items-center gap-2 flex-wrap text-sm print:hidden">
@@ -242,14 +273,14 @@ export default function MonteLineCard({ config: cfg }: { config: LineVesselConfi
           {/* ── المؤشّرات ── */}
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
             <div className={`${tot.netAfterFixed >= 0 ? 'bg-emerald-600' : 'bg-red-600'} text-white rounded-xl p-4`}>
-              <p className="text-xs opacity-80">{T('الصافي بعد التكاليف الثابتة', 'Net after fixed costs')}</p>
+              <p className="text-xs opacity-80">{chartered ? T('الصافي بعد تكلفة السفينة', 'Net after vessel cost') : T('الصافي بعد التكاليف الثابتة', 'Net after fixed costs')}</p>
               <p className="text-2xl font-bold mt-1 tabular-nums">{fmt(tot.netAfterFixed)}</p>
               <p className="text-xs opacity-80 mt-1">{T('أشهر الخطّ', 'Line months')} · {T('هامش', 'margin')} {tot.rev ? pct(tot.netAfterFixed / tot.rev) : '—'}</p>
             </div>
-            <div className="bg-white rounded-xl shadow p-4"><p className="text-xs text-gray-500">{T('صافي الرحلات', 'Voyage net')}</p><p className="text-xl font-bold tabular-nums">{fmt(tot.net)}</p><p className="text-xs text-gray-400">{tot.n} {T('رحلة · قبل الثابتة', 'voyages · before fixed')}</p></div>
-            <div className="bg-white rounded-xl shadow p-4"><p className="text-xs text-gray-500">{T('الإيراد', 'Revenue')}</p><p className="text-xl font-bold tabular-nums">{fmt(tot.rev)}</p><p className="text-xs text-gray-400">{T('الإيجار خارج التكاليف', 'Hire excluded from costs')}</p></div>
-            <div className="bg-white rounded-xl shadow p-4"><p className="text-xs text-gray-500">{T('الصافي للرحلة', 'Net / voyage')}</p><p className="text-xl font-bold tabular-nums">{fmt(tot.perVoyage.net)}</p><p className="text-xs text-gray-400">{T('قبل الثابتة', 'Before fixed')}</p></div>
-            <div className={`rounded-xl shadow p-4 ${tot.sinceStart >= 0 ? 'bg-white' : 'bg-red-50'}`}><p className="text-xs text-gray-500">{T(`من أوّل ${pkg.monthly[0]?.month || ''}`, `Since ${pkg.monthly[0]?.month || ''}`)}</p><p className="text-xl font-bold tabular-nums">{fmt(tot.sinceStart, 2)}</p><p className="text-xs text-gray-400">{T('شاملاً أشهر ما قبل الخطّ', 'Incl. pre-line months')}</p></div>
+            <div className="bg-white rounded-xl shadow p-4"><p className="text-xs text-gray-500">{T('صافي الرحلات', 'Voyage net')}</p><p className="text-xl font-bold tabular-nums">{fmt(tot.net)}</p><p className="text-xs text-gray-400">{tot.n} {T('رحلة · قبل', 'voyages · before')} {fixedName}</p></div>
+            <div className="bg-white rounded-xl shadow p-4"><p className="text-xs text-gray-500">{T('الإيراد', 'Revenue')}</p><p className="text-xl font-bold tabular-nums">{fmt(tot.rev)}</p><p className="text-xs text-gray-400">{chartered ? T('الإيجار في تكلفة السفينة', 'Hire is in vessel cost') : T('الإيجار خارج التكاليف', 'Hire excluded from costs')}</p></div>
+            <div className="bg-white rounded-xl shadow p-4"><p className="text-xs text-gray-500">{T('الصافي للرحلة', 'Net / voyage')}</p><p className="text-xl font-bold tabular-nums">{fmt(tot.perVoyage.net)}</p><p className="text-xs text-gray-400">{T('قبل', 'Before')} {fixedName}</p></div>
+            <div className={`rounded-xl shadow p-4 ${tot.sinceStart >= 0 ? 'bg-white' : 'bg-red-50'}`}><p className="text-xs text-gray-500">{T(`من أوّل ${pkg.monthly[0]?.month || ''}`, `Since ${pkg.monthly[0]?.month || ''}`)}</p><p className="text-xl font-bold tabular-nums">{fmt(tot.sinceStart, 2)}</p><p className="text-xs text-gray-400">{preLine ? T('شاملاً أشهر ما قبل الخطّ', 'Incl. pre-line months') : T('كلّ أشهر الكارت', 'All card months')}</p></div>
           </div>
 
           {/* ── قائمة الدخل ── */}
@@ -259,21 +290,21 @@ export default function MonteLineCard({ config: cfg }: { config: LineVesselConfi
               <table className="w-full text-sm">
                 <tbody>
                   <tr className="bg-gray-50 font-semibold"><td className="py-1.5 px-3" colSpan={3}>{T('الإيراد', 'Revenue')}</td></tr>
-                  {REV_ROWS.map(([k, ar, e]) => {
+                  {relabel(REV_ROWS).map(([k, ar, e]) => {
                     const v = pkg.voyages.reduce((s, x) => s + (x[k] as number), 0);
                     return v ? <tr key={k}><td className="py-1 px-3 ps-6">{T(ar, e)}</td><td className="py-1 px-3 text-left tabular-nums">{fmt(v)}</td><td className="py-1 px-3 text-left text-xs text-gray-400">{pct(v / tot.rev)}</td></tr> : null;
                   })}
                   <tr className="font-bold border-t"><td className="py-1.5 px-3">{T('إجمالي الإيراد', 'Total revenue')}</td><td className="py-1.5 px-3 text-left tabular-nums">{fmt(tot.rev)}</td><td /></tr>
                   <tr className="bg-gray-50 font-semibold"><td className="py-1.5 px-3" colSpan={3}>{T('تكاليف الرحلات', 'Voyage costs')}</td></tr>
-                  {COST_ROWS.map(([k, ar, e]) => {
+                  {relabel(COST_ROWS).map(([k, ar, e]) => {
                     const v = pkg.voyages.reduce((s, x) => s + (x[k] as number), 0);
                     return <tr key={k}><td className="py-1 px-3 ps-6">{T(ar, e)}</td><td className={`py-1 px-3 text-left tabular-nums ${v < 0 ? 'text-emerald-700' : 'text-red-700'}`}>{!v ? '—' : v > 0 ? `(${fmt(v)})` : `+${fmt(-v)}`}</td><td className="py-1 px-3 text-left text-xs text-gray-400">{v ? pct(v / tot.rev) : ''}</td></tr>;
                   })}
                   <tr className="font-bold border-t"><td className="py-1.5 px-3">{T('إجمالي التكاليف', 'Total costs')}</td><td className="py-1.5 px-3 text-left tabular-nums text-red-700">({fmt(tot.cost)})</td><td /></tr>
                   <tr className="font-bold"><td className="py-1.5 px-3">{T('صافي الرحلات', 'Voyage net')}</td><td className="py-1.5 px-3 text-left tabular-nums">{fmt(tot.net)}</td><td className="py-1.5 px-3 text-left text-xs text-gray-400">{pct(tot.net / tot.rev)}</td></tr>
-                  <tr><td className="py-1 px-3 ps-6">{T('التكاليف الثابتة لأشهر الخطّ', 'Fixed costs, line months')}</td><td className="py-1 px-3 text-left tabular-nums text-red-700">({fmt(-tot.fixedOnLine)})</td><td /></tr>
-                  <tr className="font-bold border-t"><td className="py-1.5 px-3">{T('الصافي بعد الثابتة', 'Net after fixed')}</td><td className="py-1.5 px-3 text-left tabular-nums">{fmt(tot.netAfterFixed)}</td><td /></tr>
-                  <tr className="text-gray-400"><td className="py-1 px-3 ps-6">{T('للعلم: الإيجار اليوميّ في ملفّات الربح — خارج الحساب', 'For info: daily hire in the profit files — excluded')}</td><td className="py-1 px-3 text-left tabular-nums">{fmt(pkg.voyages.reduce((s, v) => s + (v.hire_in_file || 0), 0))}</td><td /></tr>
+                  <tr><td className="py-1 px-3 ps-6">{chartered ? T('تكلفة السفينة (إيجار · تأمين · طاقم)', 'Vessel cost (hire · insurance · crew)') : T('التكاليف الثابتة لأشهر الخطّ', 'Fixed costs, line months')}</td><td className="py-1 px-3 text-left tabular-nums text-red-700">({fmt(-tot.fixedOnLine)})</td><td /></tr>
+                  <tr className="font-bold border-t"><td className="py-1.5 px-3">{T('الصافي بعد', 'Net after')} {fixedName}</td><td className="py-1.5 px-3 text-left tabular-nums">{fmt(tot.netAfterFixed)}</td><td /></tr>
+                  {hireInFile !== 0 && <tr className="text-gray-400"><td className="py-1 px-3 ps-6">{T('للعلم: الإيجار اليوميّ في ملفّات الربح — خارج الحساب', 'For info: daily hire in the profit files — excluded')}</td><td className="py-1 px-3 text-left tabular-nums">{fmt(hireInFile)}</td><td /></tr>}
                 </tbody>
               </table>
             </div>
@@ -312,7 +343,7 @@ export default function MonteLineCard({ config: cfg }: { config: LineVesselConfi
                   </table>
                 );
               })()}
-              <p className="text-xs text-gray-400 mt-2">{T('صافي الرحلة قبل التكاليف الثابتة في المراكب الثلاثة. عمّان بلا أرقامٍ ماليّة في الحزمة بعد.', 'Voyage net before fixed costs for all three. Amman has no financials in the package yet.')}</p>
+              <p className="text-xs text-gray-400 mt-2">{T('صافي الرحلة قبل التكاليف الثابتة وتكلفة السفينة. «—» = لا أرقام لهذا المركب في الحزمة.', 'Voyage net before fixed and vessel costs. “—” = no figures for that vessel in the package.')}</p>
             </div>
           </div>
 
@@ -364,7 +395,7 @@ export default function MonteLineCard({ config: cfg }: { config: LineVesselConfi
                               ))}
                             </div>
                             <p className="text-xs text-gray-500 mt-2">
-                              {T('صافي البنود', 'Items net')} <b className="tabular-nums">{fmt(itemTotals(v).net, 2)}</b> · {T('وقود ملفّ الربح', 'Fuel in profit file')} {fmt(v.fuel_in_file, 2)} {T('مقابل المرجَّح', 'vs weighted')} {fmt(v.cost_fuel, 2)} · {v.file}
+                              {T('صافي البنود', 'Items net')} <b className="tabular-nums">{fmt(itemTotals(v).net, 2)}</b> · {chartered ? T('مشتريات الوقود في الكشف', 'Fuel purchases in the SOA') : T('وقود ملفّ الربح', 'Fuel in profit file')} {fmt(v.fuel_in_file, 2)} {T('مقابل المرجَّح', 'vs weighted')} {fmt(v.cost_fuel, 2)} · {v.file}
                             </p>
                           </td>
                         </tr>
@@ -395,7 +426,7 @@ export default function MonteLineCard({ config: cfg }: { config: LineVesselConfi
             <table className="w-full text-sm whitespace-nowrap">
               <thead>
                 <tr className="text-gray-500 text-xs border-b">
-                  {[T('الشهر', 'Month'), T('الحالة', 'Status'), T('رحلات', 'Trips'), T('الإيراد', 'Revenue'), T('تكاليف الرحلات', 'Voyage costs'), T('صافي الرحلات', 'Voyage net'), T('وقود الانتقال', 'Positioning fuel'), T('التأمين', 'Insurance'), T('مرتّبات $', 'Salaries $'), T('مرتّبات €→$', 'Salaries €→$'), T('مصاريف الطاقم', 'Crew misc.'), T('نقديّة القبطان', 'Cash to master'), ...fixedCols.map((c) => c.label), T('الثابتة', 'Fixed'), T('الصافي', 'Net'), T('التراكميّ', 'Cumulative')].map((h) => <th key={h} className="py-1.5 px-2 text-start">{h}</th>)}
+                  {[T('الشهر', 'Month'), T('الحالة', 'Status'), T('رحلات', 'Trips'), T('الإيراد', 'Revenue'), T('تكاليف الرحلات', 'Voyage costs'), T('صافي الرحلات', 'Voyage net'), ...baseCols.map((c) => T(c.ar, c.en)), ...fixedCols.map((c) => c.label), chartered ? T('تكلفة السفينة', 'Vessel cost') : T('الثابتة', 'Fixed'), T('الصافي', 'Net'), T('التراكميّ', 'Cumulative')].map((h) => <th key={h} className="py-1.5 px-2 text-start">{h}</th>)}
                 </tr>
               </thead>
               <tbody>
@@ -404,7 +435,7 @@ export default function MonteLineCard({ config: cfg }: { config: LineVesselConfi
                     <td className="py-1.5 px-2 font-semibold">{m.month}</td>
                     <td className="py-1.5 px-2 text-xs">{m.line}{m.salaries_pending ? <span className="text-amber-600"> · {T('المرتّبات معلَّقة', 'salaries pending')}</span> : null}</td>
                     <td className="py-1.5 px-2 tabular-nums">{m.trips || ''}</td>
-                    {[m.rev, m.vcost, m.vnet, m.pos, m.ins, m.sal_usd, m.sal_eur, m.crew_misc, m.ctm,
+                    {[m.rev, m.vcost, m.vnet, ...baseCols.map((c) => m[c.key]),
                       ...fixedCols.map((c) => m.fixed_items?.find((i) => i.key === c.key)?.usd ?? null), m.fixed].map((x, k) => (
                       <td key={k} className={`py-1.5 px-2 tabular-nums ${x != null && x < 0 ? 'text-red-700' : ''}`}>{x ? fmt(x) : '—'}</td>
                     ))}
@@ -414,7 +445,9 @@ export default function MonteLineCard({ config: cfg }: { config: LineVesselConfi
                 ))}
               </tbody>
             </table>
-            <p className="text-xs text-gray-400 mt-2">{T('قبل الخطّ مرتّباتٌ وتأمينٌ بلا إيراد، ووقود الانتقال ليماسول→جدّة في سبتمبر.', 'Before the line: salaries and insurance with no revenue; Limassol→Jeddah positioning fuel in September.')}</p>
+            <p className="text-xs text-gray-400 mt-2">{chartered
+              ? T('تكلفة السفينة تُوزَّع على الأشهر بنصيب أيّام رحلاتها، والإيجار بالاستحقاق.', 'Vessel cost is spread over months by voyage days; hire is accrued.')
+              : T('قبل الخطّ مرتّباتٌ وتأمينٌ بلا إيراد، ووقود الانتقال ليماسول→جدّة في سبتمبر.', 'Before the line: salaries and insurance with no revenue; Limassol→Jeddah positioning fuel in September.')}</p>
           </div>
 
           {/* ── الإشغال ── */}
@@ -423,7 +456,7 @@ export default function MonteLineCard({ config: cfg }: { config: LineVesselConfi
             <table className="w-full text-sm whitespace-nowrap">
               <thead>
                 <tr className="text-gray-500 text-xs border-b">
-                  {[T('الرِّجل', 'Leg'), T('المسار', 'Route'), T('التاريخ', 'Date'), T('ركّاب يدفعون', 'Paying pax'), T('كلّ الركّاب', 'All pax'), T('إشغال الركّاب', 'Pax load'), T('شاحنات', 'Trucks'), T('مقطورات', 'Trailers'), T('إشغال السطح (شاحنات + مقطورات)', 'Deck load (trucks + trailers)'), T('سيارات', 'Cars'), T('إشغال السيارات', 'Car load'), T('معدّات', 'Equipment')].map((h) => <th key={h} className="py-1.5 px-2 text-start">{h}</th>)}
+                  {[T('الرِّجل', 'Leg'), T('المسار', 'Route'), T('التاريخ', 'Date'), T('ركّاب يدفعون', 'Paying pax'), T('كلّ الركّاب', 'All pax'), T('إشغال الركّاب', 'Pax load'), T('شاحنات', 'Trucks'), T('مقطورات', 'Trailers'), T('إشغال السطح (شاحنات + مقطورات)', 'Deck load (trucks + trailers)'), T('سيارات', 'Cars'), T('إشغال السيارات', 'Car load'), T('معدّات', 'Equipment'), ...(hasPallets ? [T('طبالي', 'Pallets')] : [])].map((h) => <th key={h} className="py-1.5 px-2 text-start">{h}</th>)}
                 </tr>
               </thead>
               <tbody>
@@ -439,8 +472,9 @@ export default function MonteLineCard({ config: cfg }: { config: LineVesselConfi
                     <td className="py-1.5 px-2 tabular-nums">{fmt(l.trailers)}</td>
                     <td className="py-1.5 px-2 tabular-nums text-gray-500">{occ(units(l), cap?.cap_trailer_units)}</td>
                     <td className="py-1.5 px-2 tabular-nums">{fmt(l.cars)}</td>
-                    <td className="py-1.5 px-2 tabular-nums text-gray-500">{occ(l.cars, cap?.cap_cars)}</td>
+                    <td className="py-1.5 px-2 tabular-nums text-gray-500">{occ(l.cars, cap?.cap_cars ?? undefined)}</td>
                     <td className="py-1.5 px-2 tabular-nums">{fmt(l.equipment)}</td>
+                    {hasPallets && <td className="py-1.5 px-2 tabular-nums">{fmt(l.pallets)}</td>}
                   </tr>
                 ))}
               </tbody>
