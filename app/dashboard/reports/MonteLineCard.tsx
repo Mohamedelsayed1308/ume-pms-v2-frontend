@@ -44,7 +44,7 @@ const COST_ROWS: Row[] = [
   ['cost_fuel', 'الوقود — متوسّط مرجَّح', 'Fuel — weighted average'], ['cost_water', 'مياه', 'Water'],
   ['cost_port_jed', 'ميناء جدّة ومصاريفها', 'Jeddah port & charges'], ['cost_comm_jed', 'عمولات وكيل جدّة', 'Jeddah agent commissions'],
   ['cost_port_suk', 'ميناء سواكن', 'Suakin port'], ['cost_comm_suk30', 'عمولة وكيل سواكن 30%', 'Suakin agent 30%'],
-  ['cost_comm_suk', 'عمولات سواكن الأخرى', 'Other Suakin commissions'], ['cost_agent_adj', 'تسوية جدّة على كشف الوكيل', 'Jeddah settlement vs agent SOA'],
+  ['cost_comm_suk', 'عمولات سواكن الأخرى', 'Other Suakin commissions'], ['cost_agent_adj', 'فرق كشف وكيل جدّة عن ملفّ الربح', 'Jeddah agent SOA vs profit file'],
   ['cost_gifts', 'هدايا الركّاب', 'Passenger gifts'], ['cost_catering', 'الكاترينج (صفرٌ حتّى الفواتير)', 'Catering (zero until invoiced)'],
 ];
 // المصدر الآليّ كما يكتبه مسار الدفع في الباك (INGEST_LINES)

@@ -101,7 +101,7 @@ const EXP_EN: Record<string, string> = {
   toursPks12: 'Tours — PKS 12%', cargo: 'Cargo', corona: 'Corona Test',
   // مونتي — مفاتيح حقول حزمتها
   cost_port_jed: 'Jeddah Port, Shipping & Discharge Charges', cost_comm_jed: 'Jeddah Agency Commission', cost_water: 'Fresh Water',
-  cost_agent_adj: 'Jeddah Agent Statement Adjustment', cost_gifts: 'Passenger Gifts', cost_catering: 'Voyage Catering',
+  cost_agent_adj: 'Jeddah Agent SOA vs Profit File', cost_gifts: 'Passenger Gifts', cost_catering: 'Voyage Catering',
   cost_port_suk: 'Suakin Port Entry & Exit', cost_comm_suk30: 'Suakin Agency Commission 30%', cost_comm_suk: 'Suakin Agency Commission (cargo & passengers)',
 };
 const REV_EN: Record<string, string> = { truck: 'Truck Freight', veh: 'Vehicle Freight', pass: 'Passenger Fares', cargo: 'Cargo Freight (trucks · trailers · cars)' };

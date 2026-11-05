@@ -35,7 +35,7 @@ export const MONTE_LABELS: Record<string, string> = {
   cost_port_jed: 'ميناء جدّة ومصاريف الشحن والتفريغ',
   cost_comm_jed: 'عمولة وكيل جدّة',
   cost_water: 'مياه',
-  cost_agent_adj: 'تسوية مصاريف جدّة على كشف الوكيل',
+  cost_agent_adj: 'فرق كشف وكيل جدّة عن ملفّ الربح',
   cost_gifts: 'هدايا الركّاب',
   cost_catering: 'كاترينج على الرحلة',
   cost_port_suk: 'دخول وخروج ميناء سواكن',
