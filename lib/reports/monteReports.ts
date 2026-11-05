@@ -100,9 +100,11 @@ export function monteReportData(p: MontePackage, from: string, to: string = from
     const pass = sum((v) => (out ? v.rev_pax_out : v.rev_pax_ret));
     const truckC = legSum(dir, (l) => n0(l.trucks) + n0(l.trailers));
     const vehC = legSum(dir, (l) => l.cars);
+    // الطبالي عدٌّ مستقلّ في «المنقولات»، ولا تدخل عدد نولون البضاعة (مركبات)
+    const palletC = legSum(dir, (l) => l.pallets ?? null);
     return {
       exp, cargo, pass, discharge: 0,
-      passC: sum((v) => (out ? v.pax_out : v.pax_ret)), truckC, vehC, cargoC: truckC + vehC,
+      passC: sum((v) => (out ? v.pax_out : v.pax_ret)), truckC, vehC, palletC, cargoC: truckC + vehC,
     };
   };
   const E = side('ذهاب', MONTE_EXP_E), I = side('عودة', MONTE_EXP_I);

@@ -702,6 +702,9 @@ export default function VesselFinReport({
                   { label: profile.truckLabel ? T(profile.truckLabel.ar, profile.truckLabel.en) : T('شاحنات', 'Trucks'), e: data.E.truckC, i: data.I.truckC },
                   { label: T('سيارات', 'Vehicles'), e: data.E.vehC, i: data.I.vehC },
                   { label: T('ركاب', 'Passengers'), e: data.E.passC, i: data.I.passC },
+                  // الطبالي حيث يحملها المصدر (مونتي من تقرير مغادرة جدّة · عمّان من تحليل وكيلها)
+                  ...((data.E.palletC || data.I.palletC)
+                    ? [{ label: T('طبالي', 'Pallets'), e: data.E.palletC || 0, i: data.I.palletC || 0 }] : []),
                 ] as const).map((r) => (
                   <tr key={r.label}>
                     <td>{r.label}</td>
@@ -736,6 +739,62 @@ export default function VesselFinReport({
             </div>
             </>)}
 
+            {showVoy && allocVoy.length > 0 && (
+              <>
+                <h3>{profile.invoices
+                  ? T('ربحية كل رحلة — بعد توزيع البنكر والمرتبات والمشتريات', 'Per-voyage profitability — after allocating bunkers, wages and purchases')
+                  : T(`ربحية كل رحلة — بعد توزيع الوقود والمرتبات و${segName('purchases')}`, `Per-voyage profitability — after allocating fuel, wages and ${segName('purchases').toLowerCase()}`)}</h3>
+                <table className="long">
+                  <thead><tr>
+                    <th scope="col">{T('الرحلة', 'Voyage')}</th><th scope="col">{T('الإيراد', 'Revenue')}</th>
+                    <th scope="col">{T('الصافي بعد التوزيع', 'Net after allocation')}</th><th scope="col">{T('هامش', 'Margin')}</th>
+                    <th scope="col" style={{ width: '38%' }}>{T('الصافي', 'Net')}</th>
+                  </tr></thead>
+                  <tbody>
+                    {allocVoy.map((v) => (
+                      <tr key={v.ref}>
+                        <td>{v.ref}</td>
+                        <td>{fmt(v.revenue)}</td>
+                        <td>{fmt(v.net)}</td>
+                        <td style={{ color: '#64748b' }}>{pct(v.net, v.revenue || 1)}</td>
+                        <td>
+                          <span className="bar" style={{
+                            width: `${(Math.abs(v.net) / maxNet) * 100}%`,
+                            background: v.net >= 0 ? '#0f2c5c' : '#b91c1c',
+                          }} />
+                        </td>
+                      </tr>
+                    ))}
+                    {pre && (
+                      <tr>
+                        <td>{T(pre.ar, pre.en)}</td>
+                        <td>—</td>
+                        <td>{fmt(-preV)}</td>
+                        <td colSpan={2} style={{ color: '#64748b' }}>{T('لا توزَّع على الرحلات', 'Not allocated to voyages')}</td>
+                      </tr>
+                    )}
+                    <tr className="tot">
+                      <td>{T('الإجمالي', 'Total')}</td>
+                      <td>{fmt(allocVoy.reduce((s, v) => s + v.revenue, 0))}</td>
+                      <td>{fmt(allocVoy.reduce((s, v) => s + v.net, 0) - preV)}</td>
+                      <td colSpan={2}></td>
+                    </tr>
+                  </tbody>
+                </table>
+                <div className="note">
+                  {profile.bunkerStock
+                    ? T('البنكر والمرتبات والمشتريات مصاريف شهرٍ لا رحلة، فتُوزَّع على الرحلات بنسبة إيراد كل رحلة. ومجموع الصافي هنا = صافي الربح النهائي في الصفحة الأولى.',
+                      'Bunkers, wages and purchases are monthly costs, not voyage costs; they are allocated to voyages pro rata to each voyage\'s revenue. The net total here equals the net profit on page one.')
+                    : T(`وقود كلّ رحلة عليها، ووقود التموضع بنسبة وقودها. والمرتبات و${segName('purchases')} مصاريف شهرٍ تُوزَّع بنسبة إيراد كل رحلة. ومجموع الصافي هنا = صافي الربح النهائي في الصفحة الأولى.`,
+                      `Each voyage carries its own fuel, and positioning fuel pro rata to it. Wages and ${segName('purchases').toLowerCase()} are monthly costs allocated pro rata to revenue. The net total here equals the net profit on page one.`)}
+                </div>
+              </>
+            )}
+
+            {/*
+              * هيكل التكاليف وتفصيله في ختام التقرير — بأمر المالك ٥ نوفمبر ٢٠٢٦:
+              * بعد ربحية الرحلات لا قبلها، فيكون آخر ما يُقرأ على الورق.
+              */}
             <h3>{T('هيكل التكاليف', 'Cost Structure')}</h3>
             <div className="dn">
               <svg viewBox="0 0 42 42" role="img" aria-label={T('توزيع التكاليف', 'Cost distribution')}>
@@ -797,58 +856,6 @@ export default function VesselFinReport({
               {T('سطر المجموعة نسبته من إجمالي المصروفات، وسطر البند نسبته من مجموعته. ومجموع بنود كلّ رمزٍ = سطره في الحلقة أعلاه.',
                 'A group line shows its share of total costs; an item line shows its share of its group. The items under each code add up to that code\'s line above.')}
             </div>
-
-            {showVoy && allocVoy.length > 0 && (
-              <>
-                <h3>{profile.invoices
-                  ? T('ربحية كل رحلة — بعد توزيع البنكر والمرتبات والمشتريات', 'Per-voyage profitability — after allocating bunkers, wages and purchases')
-                  : T(`ربحية كل رحلة — بعد توزيع الوقود والمرتبات و${segName('purchases')}`, `Per-voyage profitability — after allocating fuel, wages and ${segName('purchases').toLowerCase()}`)}</h3>
-                <table className="long">
-                  <thead><tr>
-                    <th scope="col">{T('الرحلة', 'Voyage')}</th><th scope="col">{T('الإيراد', 'Revenue')}</th>
-                    <th scope="col">{T('الصافي بعد التوزيع', 'Net after allocation')}</th><th scope="col">{T('هامش', 'Margin')}</th>
-                    <th scope="col" style={{ width: '38%' }}>{T('الصافي', 'Net')}</th>
-                  </tr></thead>
-                  <tbody>
-                    {allocVoy.map((v) => (
-                      <tr key={v.ref}>
-                        <td>{v.ref}</td>
-                        <td>{fmt(v.revenue)}</td>
-                        <td>{fmt(v.net)}</td>
-                        <td style={{ color: '#64748b' }}>{pct(v.net, v.revenue || 1)}</td>
-                        <td>
-                          <span className="bar" style={{
-                            width: `${(Math.abs(v.net) / maxNet) * 100}%`,
-                            background: v.net >= 0 ? '#0f2c5c' : '#b91c1c',
-                          }} />
-                        </td>
-                      </tr>
-                    ))}
-                    {pre && (
-                      <tr>
-                        <td>{T(pre.ar, pre.en)}</td>
-                        <td>—</td>
-                        <td>{fmt(-preV)}</td>
-                        <td colSpan={2} style={{ color: '#64748b' }}>{T('لا توزَّع على الرحلات', 'Not allocated to voyages')}</td>
-                      </tr>
-                    )}
-                    <tr className="tot">
-                      <td>{T('الإجمالي', 'Total')}</td>
-                      <td>{fmt(allocVoy.reduce((s, v) => s + v.revenue, 0))}</td>
-                      <td>{fmt(allocVoy.reduce((s, v) => s + v.net, 0) - preV)}</td>
-                      <td colSpan={2}></td>
-                    </tr>
-                  </tbody>
-                </table>
-                <div className="note">
-                  {profile.bunkerStock
-                    ? T('البنكر والمرتبات والمشتريات مصاريف شهرٍ لا رحلة، فتُوزَّع على الرحلات بنسبة إيراد كل رحلة. ومجموع الصافي هنا = صافي الربح النهائي في الصفحة الأولى.',
-                      'Bunkers, wages and purchases are monthly costs, not voyage costs; they are allocated to voyages pro rata to each voyage\'s revenue. The net total here equals the net profit on page one.')
-                    : T(`وقود كلّ رحلة عليها، ووقود التموضع بنسبة وقودها. والمرتبات و${segName('purchases')} مصاريف شهرٍ تُوزَّع بنسبة إيراد كل رحلة. ومجموع الصافي هنا = صافي الربح النهائي في الصفحة الأولى.`,
-                      `Each voyage carries its own fuel, and positioning fuel pro rata to it. Wages and ${segName('purchases').toLowerCase()} are monthly costs allocated pro rata to revenue. The net total here equals the net profit on page one.`)}
-                </div>
-              </>
-            )}
           </div>
 
           <div className="foot">

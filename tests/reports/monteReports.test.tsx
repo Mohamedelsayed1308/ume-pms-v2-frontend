@@ -82,6 +82,25 @@ describe('محوِّل مونتي إلى نوافذ التقارير', () => {
     expect(r.exec.count).toBe(0);
     expect(r.exec.opNet - r.exec.purchasesTotal).toBeCloseTo(-850, 2);
   });
+
+  it('الطبالي (سؤال المالك ٥ نوفمبر): عدٌّ مستقلّ لا يدخل عدد البضاعة، ولا سطر لها حين يغيب', () => {
+    expect(monteReportData(pkg, '2026-10').fin.E.palletC).toBe(0);
+    const withP = { ...pkg, legs: pkg.legs.map((l) => (l.direction === 'ذهاب' ? { ...l, pallets: 153 } : { ...l, pallets: null })) };
+    const r = monteReportData(withP, '2026-10');
+    expect(r.fin.E).toMatchObject({ palletC: 153, cargoC: 80 });
+    expect(r.fin.I.palletC).toBe(0);
+    const alloc = allocateVoyageNets(r.exec.perVoyage, r.exec, 'mixed');
+    const t = render(
+      <VesselFinReport cfg={{ vessel: 'Monte Express', ...MONTE_SIDES }} month="2026-10" monthLabel="2026-10"
+        data={r.fin} purchases={r.purchases} exec={r.exec} allocVoy={alloc} labelOf={r.labelOf}
+        revRows={MONTE_REV_ROWS} defaultBuckets={r.exec.defaultBuckets} profile={r.profile} onClose={() => {}} />,
+    ).container.textContent || '';
+    expect(t).toContain('طبالي153');
+    // هيكل التكاليف وتفصيله في ختام التقرير، بعد ربحية الرحلات (أمر المالك ٥ نوفمبر)
+    expect(t.indexOf('ربحية كل رحلة')).toBeGreaterThan(0);
+    expect(t.indexOf('هيكل التكاليف')).toBeGreaterThan(t.indexOf('ربحية كل رحلة'));
+    expect(t.indexOf('تفصيل هيكل التكاليف')).toBeGreaterThan(t.indexOf('ربحية كل رحلة'));
+  });
 });
 
 const REAL = 'F:/OneDrive/OneDrive - United Marine Egypt/Basel-Mohamed/مونتي جده-سواكن/_تقارير/_PMS/monte_pms.json';
