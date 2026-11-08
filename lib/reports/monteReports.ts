@@ -22,7 +22,7 @@
 import type { ExecData } from '@/app/dashboard/reports/VesselExecReport';
 import type { FinData, RevRow } from '@/app/dashboard/reports/VesselFinReport';
 import type { ReportProfile } from './reportProfile';
-import { voyageTotals, type MontePackage } from './montePackage';
+import { voyageTotals, type MontePackage, fromStatement } from './montePackage';
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
 const n0 = (x: number | null | undefined) => (typeof x === 'number' && isFinite(x) ? x : 0);
@@ -68,6 +68,8 @@ export interface MonteReportData {
 export function monteReportData(p: MontePackage, from: string, to: string = from): MonteReportData {
   // عمّان (مستأجرة، ٣ نوفمبر ٢٠٢٦) بالشكل نفسه: سطر C عندها تكلفة السفينة بإيجارها، والأذون من ملفّ وكيل سواكن
   const chartered = p.vessel?.ownership === 'مستأجرة';
+  // دليلة (مملوكة، ٨ نوفمبر ٢٠٢٦) من كشف الوكيل كعمّان: الأذون بوزنها في الكتلة الشهريّة، والوقود على مدّة الرحلة
+  const ownedStmt = !chartered && fromStatement(p);
   const [a, b] = from <= to ? [from, to] : [to, from];
   const inRange = (m: string) => m >= a && m <= b;
   const months = p.monthly.map((m) => m.month).filter(inRange);
@@ -112,7 +114,7 @@ export function monteReportData(p: MontePackage, from: string, to: string = from
   const expI = r2(Object.values(I.exp).reduce((s, x) => s + x, 0));
   const revE = r2(E.cargo + E.pass), revI = r2(I.cargo + I.pass);
   const manualRev = [
-    { key: 'rev_do', label: chartered ? 'أذون التسليم (ملفّ وكيل سواكن)' : 'أذون التسليم (تقديريّة)', amount: sum((v) => v.rev_do) },
+    { key: 'rev_do', label: chartered ? 'أذون التسليم (ملفّ وكيل سواكن)' : ownedStmt ? 'أذون التسليم (كتلة الشهر بوزن الأذون)' : 'أذون التسليم (تقديريّة)', amount: sum((v) => v.rev_do) },
     { key: 'rev_other', label: 'إيرادات أخرى', amount: sum((v) => v.rev_other) },
   ];
   const revenue = r2(revE + revI + manualRev.reduce((s, r) => s + r.amount, 0));
@@ -147,12 +149,14 @@ export function monteReportData(p: MontePackage, from: string, to: string = from
   const net = r2(revenue - expE - expI - bunkerCost - salaries);
   const count = voyages.length;
 
-  const labelOf: Record<string, string> = chartered
+  const labelOf: Record<string, string> = chartered || ownedStmt
     ? { ...MONTE_LABELS, cost_comm_suk30: 'كنزي 30% من الأذون', cost_catering: 'إقفال الكاترينج (كشف الوكيل)' }
     : { ...MONTE_LABELS };
   const cLabel = chartered
     ? { ar: 'تكلفة السفينة (إيجار · تأمين · طاقم)', en: 'Vessel cost (hire · insurance · crew)' }
-    : { ar: 'تكاليف السفينة الثابتة (تأمين · بحّارة · قبطان · مصاريف السفينة)', en: 'Fixed Vessel Costs (insurance · crew · master · vessel costs)' };
+    : ownedStmt
+      ? { ar: 'تكاليف السفينة (نقديّة القبطان · التكلفة الثابتة · وقود التوقّف)', en: 'Vessel costs (cash to master · fixed cost · idle fuel)' }
+      : { ar: 'تكاليف السفينة الثابتة (تأمين · بحّارة · قبطان · مصاريف السفينة)', en: 'Fixed Vessel Costs (insurance · crew · master · vessel costs)' };
   const costLines: ExecData['costLines'] = [{ key: 'fuel', label: 'الوقود (بنكر)', value: bunkerCost }];
   for (const k of [...MONTE_EXP_E, ...MONTE_EXP_I]) {
     const v = n0(E.exp[k]) + n0(I.exp[k]);
@@ -182,10 +186,15 @@ export function monteReportData(p: MontePackage, from: string, to: string = from
     },
     bunkerStock: false,
     bunkerRows: [
-      { ar: 'وقود الرحلات بالمتوسّط المرجَّح', en: 'Voyage fuel at weighted average cost', value: voyageFuel },
+      ownedStmt
+        ? { ar: 'وقود الرحلات — فواتير الكشف على مدّة الرحلة', en: 'Voyage fuel — SOA invoices over voyage days', value: voyageFuel }
+        : { ar: 'وقود الرحلات بالمتوسّط المرجَّح', en: 'Voyage fuel at weighted average cost', value: voyageFuel },
       { ar: 'وقود التموضع ليماسول ← جدّة', en: 'Positioning fuel Limassol → Jeddah', value: positioning },
     ].filter((r) => Math.abs(r.value) >= 0.005),
-    bunkerNote: chartered ? {
+    bunkerNote: ownedStmt ? {
+      ar: 'وقود كلّ رحلة = فواتير كشف الوكيل موزّعةً يوميّاً حتّى الدفعة التالية، والرحلة تأخذ أيّامها — قرار المالك ٨ نوفمبر. وقود أيّام التوقّف بندٌ مستقلّ في تكاليف السفينة.',
+      en: 'Each voyage is charged the agent SOA fuel invoices spread daily to the next purchase, by its days (owner, 8 Nov). Idle-day fuel is a separate vessel-cost line.',
+    } : chartered ? {
       ar: 'وقود كلّ رحلة = استهلاكها من تقارير القبطان × متوسّط المخزون المرجَّح، لا مشتريات كشف الوكيل.',
       en: 'Each voyage is charged its consumption (master reports) × the weighted-average stock cost, not the agent SOA purchases.',
     } : {

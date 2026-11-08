@@ -51,6 +51,7 @@ const COST_ROWS: Row[] = [
 const AUTO_SOURCE: Record<string, [string, string]> = {
   'monte-session': ['آليّاً من جلسة مونتي', 'automatic, from the Monte session'],
   'amman-pipeline': ['آليّاً من تحديث عمّان', 'automatic, from the Amman update'],
+  'daleela-pipeline': ['آليّاً من تحديث دليلة', 'automatic, from the Daleela update'],
 };
 
 export default function MonteLineCard({ config: cfg }: { config: LineVesselConfig }) {
@@ -60,6 +61,8 @@ export default function MonteLineCard({ config: cfg }: { config: LineVesselConfi
   const name = en ? cfg.nameEn : cfg.nameAr;
   const isAdmin = typeof window !== 'undefined' && getUser()?.role === 'admin';
   const chartered = cfg.ownership === 'chartered';
+  // مملوكةٌ تُبنى من كشف الوكيل (دليلة): لا إيجار، ووقودها فواتير الكشف على مدّة الرحلة
+  const ownedStmt = !chartered && !!cfg.fromStatement;
   const file = cfg.packageFile || 'package.json';
   const relabel = (rows: Row[]) => rows.map(([k, ar, e]): Row => (cfg.rowLabels?.[k] ? [k, ...cfg.rowLabels[k]] : [k, ar, e]));
   // تكاليف المستأجرة الثابتة هي تكلفة السفينة (إيجار · تأمين · طاقم)، والمملوكة تكاليفها الثابتة
@@ -278,7 +281,7 @@ export default function MonteLineCard({ config: cfg }: { config: LineVesselConfi
               <p className="text-xs opacity-80 mt-1">{T('أشهر الخطّ', 'Line months')} · {T('هامش', 'margin')} {tot.rev ? pct(tot.netAfterFixed / tot.rev) : '—'}</p>
             </div>
             <div className="bg-white rounded-xl shadow p-4"><p className="text-xs text-gray-500">{T('صافي الرحلات', 'Voyage net')}</p><p className="text-xl font-bold tabular-nums">{fmt(tot.net)}</p><p className="text-xs text-gray-400">{tot.n} {T('رحلة · قبل', 'voyages · before')} {fixedName}</p></div>
-            <div className="bg-white rounded-xl shadow p-4"><p className="text-xs text-gray-500">{T('الإيراد', 'Revenue')}</p><p className="text-xl font-bold tabular-nums">{fmt(tot.rev)}</p><p className="text-xs text-gray-400">{chartered ? T('الإيجار في تكلفة السفينة', 'Hire is in vessel cost') : T('الإيجار خارج التكاليف', 'Hire excluded from costs')}</p></div>
+            <div className="bg-white rounded-xl shadow p-4"><p className="text-xs text-gray-500">{T('الإيراد', 'Revenue')}</p><p className="text-xl font-bold tabular-nums">{fmt(tot.rev)}</p><p className="text-xs text-gray-400">{chartered ? T('الإيجار في تكلفة السفينة', 'Hire is in vessel cost') : (ownedStmt ? T('مملوكة: لا إيجار', 'Owned: no hire') : T('الإيجار خارج التكاليف', 'Hire excluded from costs'))}</p></div>
             <div className="bg-white rounded-xl shadow p-4"><p className="text-xs text-gray-500">{T('الصافي للرحلة', 'Net / voyage')}</p><p className="text-xl font-bold tabular-nums">{fmt(tot.perVoyage.net)}</p><p className="text-xs text-gray-400">{T('قبل', 'Before')} {fixedName}</p></div>
             <div className={`rounded-xl shadow p-4 ${tot.sinceStart >= 0 ? 'bg-white' : 'bg-red-50'}`}><p className="text-xs text-gray-500">{T(`من أوّل ${pkg.monthly[0]?.month || ''}`, `Since ${pkg.monthly[0]?.month || ''}`)}</p><p className="text-xl font-bold tabular-nums">{fmt(tot.sinceStart, 2)}</p><p className="text-xs text-gray-400">{preLine ? T('شاملاً أشهر ما قبل الخطّ', 'Incl. pre-line months') : T('كلّ أشهر الكارت', 'All card months')}</p></div>
           </div>
@@ -395,7 +398,7 @@ export default function MonteLineCard({ config: cfg }: { config: LineVesselConfi
                               ))}
                             </div>
                             <p className="text-xs text-gray-500 mt-2">
-                              {T('صافي البنود', 'Items net')} <b className="tabular-nums">{fmt(itemTotals(v).net, 2)}</b> · {chartered ? T('مشتريات الوقود في الكشف', 'Fuel purchases in the SOA') : T('وقود ملفّ الربح', 'Fuel in profit file')} {fmt(v.fuel_in_file, 2)} {T('مقابل المرجَّح', 'vs weighted')} {fmt(v.cost_fuel, 2)} · {v.file}
+                              {T('صافي البنود', 'Items net')} <b className="tabular-nums">{fmt(itemTotals(v).net, 2)}</b> · {chartered || ownedStmt ? T('مشتريات الوقود في الكشف', 'Fuel purchases in the SOA') : T('وقود ملفّ الربح', 'Fuel in profit file')} {fmt(v.fuel_in_file, 2)} {ownedStmt ? T('مقابل المحمَّل على مدّة الرحلة', 'vs charged over voyage days') : T('مقابل المرجَّح', 'vs weighted')} {fmt(v.cost_fuel, 2)} · {v.file}
                             </p>
                           </td>
                         </tr>
@@ -447,7 +450,9 @@ export default function MonteLineCard({ config: cfg }: { config: LineVesselConfi
             </table>
             <p className="text-xs text-gray-400 mt-2">{chartered
               ? T('تكلفة السفينة تُوزَّع على الأشهر بنصيب أيّام رحلاتها، والإيجار بالاستحقاق.', 'Vessel cost is spread over months by voyage days; hire is accrued.')
-              : T('قبل الخطّ مرتّباتٌ وتأمينٌ بلا إيراد، ووقود الانتقال ليماسول→جدّة في سبتمبر.', 'Before the line: salaries and insurance with no revenue; Limassol→Jeddah positioning fuel in September.')}</p>
+              : ownedStmt
+                ? T('نقديّة القبطان بشهر رحلتها كما دُفعت · تكلفة السفينة الثابتة رقمٌ ثابت يعطيه المالك · وقود أيّام التوقّف بندٌ مستقلّ في شهره.', 'Cash to master in its voyage month as paid · fixed vessel cost is a fixed figure from the owner · idle-day fuel is a separate line in its month.')
+                : T('قبل الخطّ مرتّباتٌ وتأمينٌ بلا إيراد، ووقود الانتقال ليماسول→جدّة في سبتمبر.', 'Before the line: salaries and insurance with no revenue; Limassol→Jeddah positioning fuel in September.')}</p>
           </div>
 
           {/* ── الإشغال ── */}

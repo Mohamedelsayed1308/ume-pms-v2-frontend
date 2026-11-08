@@ -85,6 +85,10 @@ export interface MontePackage {
     cap_cars: number | null; card_start: string;
     /** إيجار اليوم للمستأجرة (عمّان 11,000$) — للعرض، والإيجار نفسه في fixed_items */
     hire_per_day?: number;
+    /** «agent_statement»: الرحلات من كشف وكيل جدّة لا من ملفّ ربح — دليلة (مملوكة، ٨ نوفمبر ٢٠٢٦). المستأجرة (عمّان) كذلك ضمناً */
+    basis?: string;
+    /** تكلفة السفينة الثابتة الشهريّة التي يعطيها المالك (دليلة) — null حتّى تصل */
+    fixed_cost_monthly?: number | null;
   };
   rules: string[]; voyages: MonteVoyage[]; legs: MonteLeg[]; monthly: MonteMonth[]; fuel_stock: MonteFuelEvent[];
   agent_voyages: MonteAgentVoyage[]; agent_summary: { item: string; usd: number }[]; line_compare: MonteCompare[]; pending: string[];
@@ -93,6 +97,11 @@ export interface MontePackage {
 const r2 = (n: number) => Math.round(n * 100) / 100;
 const n0 = (x: number | null | undefined) => (typeof x === 'number' && isFinite(x) ? x : 0);
 const TOL = 0.05; // تقريب السنتات عبر عشرات البنود
+
+/** الحزمة مبنيّةٌ من كشف وكيل جدّة: المستأجرة (عمّان) أو ما صرّح بـ basis (دليلة). */
+export function fromStatement(p: { vessel?: { ownership?: string; basis?: string } }) {
+  return p.vessel?.ownership === 'مستأجرة' || p.vessel?.basis === 'agent_statement';
+}
 
 /** إيراد الرحلة وتكاليفها وصافيها — من حقولها، والإيجار خارجها. */
 export function voyageTotals(v: MonteVoyage) {
@@ -157,8 +166,8 @@ export function validateMontePackage(raw: unknown): MonteCheck {
   if (!p0.vessel || typeof p0.vessel !== 'object') return fail('القسم vessel مفقود');
   const { pkg: p, hidden } = visiblePackage(p0);
   if (!p.voyages.length) return fail('لا رحلات في الحزمة');
-  // المملوكة (مونتي) مؤنها في الشهريّ؛ والمستأجرة (عمّان) يحمّل كشف وكيلها إقفال الكاترينج على الرحلة
-  const cateringNote = p.vessel?.ownership === 'مستأجرة'
+  // المملوكة (مونتي) مؤنها في الشهريّ؛ وما يُبنى من كشف الوكيل (عمّان ودليلة) يحمّل إقفال الكاترينج على الرحلة
+  const cateringNote = fromStatement(p)
     ? 'إقفالٌ من كشف الوكيل محمَّلٌ على الرحلة'
     : 'مؤن السفينة في الشهريّ لا على الرحلة';
 

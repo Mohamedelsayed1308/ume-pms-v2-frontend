@@ -41,12 +41,21 @@ export interface LineVesselConfig {
   // كارت الحزمة وحده (MonteLineCard):
   packageFile?: string;              // اسم الملفّ في زرّ الرفع ورسالة الفراغ
   teamInputs?: boolean;              // مدخلات الفريق — مونتي وحدها الآن
+  fromStatement?: boolean;           // مملوكةٌ رحلاتها من كشف وكيل جدّة لا من ملفّ ربح — دليلة
   rowLabels?: Record<string, [string, string]>; // أسماء بنود قائمة الدخل التي تخصّ المركب [عربي، إنجليزي]
 }
 
+// دليلة — بأمر المالك ٨ نوفمبر ٢٠٢٦ (الخيار أ) من حزمة `daleela_pms.json` (F:/Dev/daleela-pipeline) بشكل حزمة مونتي،
+// بدلاً من دفتر درايف عبر الشيت. مملوكة (تصحيح ١٤ أكتوبر): لا إيجار، وتكلفتها الثابتة رقمٌ يعطيه المالك في fixed_items.
 export const DALEELA_JS: LineVesselConfig = {
-  key: 'DaleelaJS', nameAr: 'دليلة', nameEn: 'Daleela', ownership: 'chartered', hireInLedger: false,
-  peers: [{ key: 'AmmanJS', nameAr: 'عمّان', nameEn: 'Amman', hireInLedger: true, ownership: 'chartered' }],
+  key: 'DaleelaJS', nameAr: 'دليلة', nameEn: 'Daleela', ownership: 'owned', hireInLedger: false,
+  peers: [], source: 'package', packageFile: 'daleela_pms.json', fromStatement: true,
+  rowLabels: {
+    rev_do: ['أذون التسليم — كتلة الشهر بوزن الأذون', 'Delivery orders — monthly block by DO weight'],
+    cost_comm_suk30: ['كنزي 30% من الأذون', 'Kenzy 30% of delivery orders'],
+    cost_comm_suk: ['عمولات سواكن الأخرى', 'Other Suakin commissions'],
+    cost_catering: ['إقفال الكاترينج — كشف الوكيل', 'Catering close-out — agent statement'],
+  },
 };
 
 // مونتي — المقارنة بدليلة وعمّان تأتي في الحزمة نفسها (`line_compare`)
