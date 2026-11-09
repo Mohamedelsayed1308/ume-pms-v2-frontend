@@ -413,6 +413,24 @@ function parseWorkbook(wb: XLSX.WorkBook, cfg: VesselConfig): Voyage[] {
     .filter((v) => v.month != null);
 }
 
+/*
+ * بندٌ واحد باسمين: قيود QuickBooks (حتّى `cogsUntil`) تحمل الاسم العربيّ من خريطة
+ * `CogsImportPanel` — «زيوت» — وفواتير النظام بعدها تحمل اسم البند في القاعدة — «Lubricants».
+ * فظهرت زيوت بوسيدون سطرين في المشتريات والتقرير الماليّ (طلب المالك ٩ نوفمبر ٢٠٢٦).
+ * يُوحَّد اسم بند الفاتورة هنا قبل أيّ تجميع، فتراه الشاشة والورق والتقارير اسماً واحداً.
+ */
+const ITEM_ALIASES: Record<string, string> = { lubricants: 'زيوت', lubricant: 'زيوت', 'lube oil': 'زيوت', 'lub oil': 'زيوت' };
+export const canonItemName = (n?: string | null) => (n ? ITEM_ALIASES[n.trim().toLowerCase()] || n : n);
+export function canonInvoiceItems<T extends { item?: { name?: string } | null; line_items?: unknown }>(inv: T): T {
+  return {
+    ...inv,
+    item: inv.item ? { ...inv.item, name: canonItemName(inv.item.name) ?? undefined } : inv.item,
+    line_items: Array.isArray(inv.line_items)
+      ? inv.line_items.map((l: { item_name?: string }) => ({ ...l, item_name: canonItemName(l.item_name) ?? undefined }))
+      : inv.line_items,
+  };
+}
+
 const REV_ROWS = [
   { key: 'truck', cKey: 'truckC', label: 'نولون شاحنات' },
   { key: 'veh', cKey: 'vehC', label: 'نولون سيارات' },
@@ -541,7 +559,7 @@ export default function VesselProfitReport({ config }: { config: VesselConfig })
    * (عدا المرتّبات، فلها خانتها). بشكل الفاتورة نفسه كي لا يتغيّر حساب المشتريات.
    */
   const costDocs = useMemo(() => [
-    ...invoices.flatMap((inv) => {
+    ...invoices.map(canonInvoiceItems).flatMap((inv) => {
       const names = [inv.item?.name, ...(Array.isArray(inv.line_items) ? inv.line_items.map((l: { item_name?: string }) => l.item_name) : [])].filter(Boolean).map((n: string) => n.toLowerCase());
       if ((cfg.ignoreInvoiceItems || []).some((k) => names.some((n) => n.includes(k.toLowerCase())))) return [];
       if (!cfg.cogsUntil || String(inv.invoice_date || '').slice(0, 10) > cfg.cogsUntil) return [inv];
