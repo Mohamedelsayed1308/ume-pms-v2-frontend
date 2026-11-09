@@ -54,7 +54,8 @@ function mount(lang: 'ar' | 'en' = 'ar', over: Partial<FinData> = {}) {
 
 describe('ledgerGapTarget', () => {
   it('picks an existing item with an amount, never a new zero line', () => {
-    // ألكوديا يناير–أكتوبر ٢٠٢٦: Other EXPS عند الوارد صفر، وعند الصادر 145,835.10
+    // ألكوديا يناير–أكتوبر ٢٠٢٦ من الشيت: Other EXPS عند الوارد مفتاحه othersI (145,835.10)، وعمولة 10% أكبر منه
+    expect(ledgerGapTarget({ otherExpsE: 0, egyPort: 1442669.68 }, { comm10: 1227308.09, othersI: 145835.1 })).toEqual({ side: 'I', key: 'othersI' });
     expect(ledgerGapTarget({ otherExpsE: 145835.1, egyPort: 9 }, { otherExpsI: 0, comm10: 5 })).toEqual({ side: 'E', key: 'otherExpsE' });
     expect(ledgerGapTarget({ otherExpsE: 10 }, { otherExpsI: -3 })).toEqual({ side: 'I', key: 'otherExpsI' });
     expect(ledgerGapTarget({ a: 1 }, { b: 2, c: -7 })).toEqual({ side: 'I', key: 'c' });

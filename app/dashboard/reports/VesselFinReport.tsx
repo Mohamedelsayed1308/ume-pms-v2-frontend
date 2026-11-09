@@ -146,8 +146,9 @@ export const AGENCY_OTHER = 'agencyOther';
  */
 export function ledgerGapTarget(E: Record<string, number>, I: Record<string, number>): { side: 'E' | 'I'; key: string } {
   const has = (o: Record<string, number>, k: string) => Math.abs(o[k] || 0) >= 0.005;
-  if (has(I, 'otherExpsI')) return { side: 'I', key: 'otherExpsI' };
-  if (has(E, 'otherExpsE')) return { side: 'E', key: 'otherExpsE' };
+  // «Other EXPS» له أكثر من مفتاح: `othersI` في الشيت الموحّد مقابل `otherExpsI` في الإعداد، و`others` عند بيلاجوس
+  for (const k of ['otherExpsI', 'othersI', 'others']) if (has(I, k)) return { side: 'I', key: k };
+  for (const k of ['otherExpsE', 'othersE', 'others']) if (has(E, k)) return { side: 'E', key: k };
   const top = (o: Record<string, number>) => Object.keys(o).filter((k) => has(o, k)).sort((x, y) => Math.abs(o[y]) - Math.abs(o[x]))[0];
   const ti = top(I);
   if (ti) return { side: 'I', key: ti };
