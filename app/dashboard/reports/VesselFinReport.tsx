@@ -1,6 +1,6 @@
 'use client';
 import { useMemo, useState } from 'react';
-import { costSegments, costBreakdown, BUCKETS, CODE_OF_BUCKET, ASSIGNABLE_CODES, LOCKED_COST_KEYS, type ExecData, type CostDetailGroup } from './VesselExecReport';
+import { costSegments, costBreakdown, BUCKETS, CODE_OF_BUCKET, ASSIGNABLE_CODES, LOCKED_COST_KEYS, type ExecData, type CostDetailGroup, type CostDetailItem } from './VesselExecReport';
 import { useI18n } from '@/lib/i18n';
 import SaveAsMenu from '@/components/SaveAsMenu';
 import { DEFAULT_PROFILE, type ReportProfile } from '@/lib/reports/reportProfile';
@@ -136,20 +136,37 @@ const fmt = (n: number) =>
   Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const pct = (n: number, of: number) => (of ? ((n / of) * 100).toFixed(1) + '%' : '—');
 
-/** مفتاح السطر الذي يجمع باقي سطر الوكلاء وفرق دفتر المركب */
+/** مفتاح السطر الذي يجمع باقي سطر الوكلاء وفرق دفتر المركب حين لا يوجد بندٌ يحمله */
 export const AGENCY_OTHER = 'agencyOther';
 
 /**
- * فرق دفتر المركب لا يظهر سطراً مستقلّاً في تفصيل الهيكل (أمر المالك ٩ نوفمبر ٢٠٢٦):
- * يُضمّ إلى باقي سطر الوكلاء في سطرٍ واحد «مصاريف وكالة أخرى». مجموع المجموعة لا يتغيّر.
+ * البند الذي يحمل فرق دفتر المركب في جدول الوكيلين (أمر المالك ٩ نوفمبر ٢٠٢٦):
+ * «Other EXPS» عند وكيل الوارد، ثمّ عند وكيل الصادر، وإلّا يُفتح عند الوارد.
  */
-export function mergeLedgerGap(groups: CostDetailGroup[]): CostDetailGroup[] {
+export function ledgerGapTarget(E: Record<string, number>, I: Record<string, number>): { side: 'E' | 'I'; key: string } {
+  if ('otherExpsI' in I) return { side: 'I', key: 'otherExpsI' };
+  if ('otherExpsE' in E) return { side: 'E', key: 'otherExpsE' };
+  return { side: 'I', key: 'otherExpsI' };
+}
+
+/**
+ * فرق دفتر المركب لا يظهر سطراً مستقلّاً في تفصيل الهيكل: يُضاف إلى البند نفسه الذي
+ * حمله في جدول الوكيلين إن كان في مجموعته، وإلّا ضُمّ إلى باقي سطر الوكلاء في سطرٍ
+ * واحد «مصاريف وكالة أخرى». مجموع المجموعة لا يتغيّر في الحالين.
+ */
+export function mergeLedgerGap(groups: CostDetailGroup[], targetKey?: string): CostDetailGroup[] {
   return groups.map((g) => {
     const gap = g.items.find((i) => i.kind === 'gap');
     if (!gap) return g;
-    const rest = g.items.filter((i) => i.kind !== 'gap' && i.kind !== 'residual');
-    const value = g.items.filter((i) => i.kind === 'gap' || i.kind === 'residual').reduce((s, i) => s + i.value, 0);
-    const items = Math.abs(value) >= 0.005 ? [...rest, { key: AGENCY_OTHER, label: AGENCY_OTHER, value, kind: 'residual' as const }] : rest;
+    const target = targetKey ? g.items.find((i) => i.key === targetKey && !i.kind) : undefined;
+    let items: CostDetailItem[];
+    if (target) {
+      items = g.items.filter((i) => i !== gap).map((i) => (i === target ? { ...i, value: i.value + gap.value } : i));
+    } else {
+      const rest = g.items.filter((i) => i.kind !== 'gap' && i.kind !== 'residual');
+      const value = g.items.filter((i) => i.kind === 'gap' || i.kind === 'residual').reduce((s, i) => s + i.value, 0);
+      items = Math.abs(value) >= 0.005 ? [...rest, { key: AGENCY_OTHER, label: AGENCY_OTHER, value, kind: 'residual' as const }] : rest;
+    }
     return { ...g, items: items.sort((x, y) => y.value - x.value) };
   });
 }
@@ -287,6 +304,14 @@ export default function VesselFinReport({
    */
   const bookGap = data.net - (data.revenue - (data.expE + data.expI) - data.bunkerCost - data.salaries);
   const agentExp = data.expE + data.expI - bookGap;
+  // ويحمله بندٌ في جدول أحد الوكيلين، فيُطابق مجموعا الجدولين سطرَ قائمة الدخل
+  const gapAt = ledgerGapTarget(data.E.exp as Record<string, number>, data.I.exp as Record<string, number>);
+  const withGap = (side: 'E' | 'I', exp: Record<string, number>) =>
+    side === gapAt.side && Math.abs(bookGap) >= 0.005 ? { ...exp, [gapAt.key]: (exp[gapAt.key] || 0) - bookGap } : exp;
+  const expEShown = withGap('E', data.E.exp as Record<string, number>);
+  const expIShown = withGap('I', data.I.exp as Record<string, number>);
+  const totE = data.expE - (gapAt.side === 'E' ? bookGap : 0);
+  const totI = data.expI - (gapAt.side === 'I' ? bookGap : 0);
   const gross = data.revenue - agentExp;
 
   const segs = useMemo(() => costSegments(exec), [exec]);
@@ -295,9 +320,9 @@ export default function VesselFinReport({
   /*
    * تفصيل الهيكل برموزه — بأمر المالك ٢٩ سبتمبر ٢٠٢٦: كلّ بند مصروفٍ فعليّ في
    * الفترة تحت رمز مجموعته، ومجموع كلّ رمزٍ = سطره في الحلقة.
-   * وباقي سطر الوكلاء وفرق الدفتر يُعرضان سطراً واحداً «مصاريف وكالة أخرى».
+   * وفرق الدفتر يُضاف إلى البند الذي حمله في جدول الوكيلين.
    */
-  const groups = useMemo(() => mergeLedgerGap(costBreakdown(exec, { purchasesByItem: purchases?.byItem })), [exec, purchases]);
+  const groups = useMemo(() => mergeLedgerGap(costBreakdown(exec, { purchasesByItem: purchases?.byItem }), gapAt.key), [exec, purchases, gapAt.key]);
   const groupsTotal = groups.reduce((s, g) => s + g.value, 0) || 1;
   const segName = (id: string) => {
     const o = profile.bucketNames?.[id];
@@ -573,10 +598,10 @@ export default function VesselFinReport({
                 <table>
                   <thead><tr><th scope="col">{T('المصروف', 'Expense')}</th><th scope="col">{T('المبلغ', 'Amount')}</th><th scope="col">%</th></tr></thead>
                   <tbody>
-                    {Object.entries(data.E.exp as Record<string, number>).filter(([, v]) => Math.abs(v) >= 0.005).map(([k, v]) => (
+                    {Object.entries(expEShown).filter(([, v]) => Math.abs(v) >= 0.005).map(([k, v]) => (
                       <tr key={k}><td>{expLabel(k)}</td><td>{fmt(v)}</td><td>{pct(v, R)}</td></tr>
                     ))}
-                    <tr className="tot"><td>{T('الإجمالي', 'Total')}</td><td>{fmt(data.expE)}</td><td>{pct(data.expE, R)}</td></tr>
+                    <tr className="tot"><td>{T('الإجمالي', 'Total')}</td><td>{fmt(totE)}</td><td>{pct(totE, R)}</td></tr>
                   </tbody>
                 </table>
               </div>
@@ -585,10 +610,10 @@ export default function VesselFinReport({
                 <table>
                   <thead><tr><th scope="col">{T('المصروف', 'Expense')}</th><th scope="col">{T('المبلغ', 'Amount')}</th><th scope="col">%</th></tr></thead>
                   <tbody>
-                    {Object.entries(data.I.exp as Record<string, number>).filter(([, v]) => Math.abs(v) >= 0.005).map(([k, v]) => (
+                    {Object.entries(expIShown).filter(([, v]) => Math.abs(v) >= 0.005).map(([k, v]) => (
                       <tr key={k}><td>{expLabel(k)}</td><td>{fmt(v)}</td><td>{pct(v, R)}</td></tr>
                     ))}
-                    <tr className="tot"><td>{T('الإجمالي', 'Total')}</td><td>{fmt(data.expI)}</td><td>{pct(data.expI, R)}</td></tr>
+                    <tr className="tot"><td>{T('الإجمالي', 'Total')}</td><td>{fmt(totI)}</td><td>{pct(totI, R)}</td></tr>
                   </tbody>
                 </table>
               </div>

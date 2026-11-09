@@ -118,6 +118,9 @@ describe('ledger variance merged into agency expenses (owner, 9 Nov 2026)', () =
     expect(cell('مجمل الربح')).toBe('92,000.00');
     expect(cell('قبل المشتريات')).toBe('49,000.00');
     expect(root.textContent).not.toContain('BALANCE');
+    // ويحمله بندٌ في جدول الوكيل (Other EXPS عند الوارد)، فمجموعا الجدولين = سطر القائمة
+    const tots = Array.from(root.querySelectorAll<HTMLTableRowElement>('.cols tr.tot')).map((r) => r.cells[1].textContent);
+    expect(tots).toEqual(['4,000.00', '4,000.00']);
     expect(root.textContent).not.toContain('فروق دفتر');
   });
 });

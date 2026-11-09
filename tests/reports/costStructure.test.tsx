@@ -137,9 +137,12 @@ describe('financial report — cost structure detail', () => {
     expect(rows[0]).toEqual(['A', 'عمولات الوكلاء', '1,500.00', expect.any(String)]);
     expect(rows).toContainEqual(['D', 'EGP Port Dues', '2,500.00', expect.any(String)]);
     expect(rows).toContainEqual(['C', 'تموينات', '5,000.00', expect.any(String)]);
-    // باقي سطر الوكلاء (300) وفرق الدفتر (1,000) سطرٌ واحد — أمر المالك ٩ نوفمبر ٢٠٢٦
-    expect(rows).toContainEqual(['F', 'مصاريف وكالة أخرى', '1,300.00', expect.any(String)]);
-    expect(rows.some((r) => /فروق دفتر|باقي سطر الوكلاء/.test(r[1] || ''))).toBe(false);
+    // فرق الدفتر (1,000) يحمله Other EXPS عند الصادر (−500 ← 500) — أمر المالك ٩ نوفمبر ٢٠٢٦
+    const oth = rows.find((r) => r[0] === 'F' && r[2] === '500.00' && r[1] !== 'بند جديد');
+    expect(oth).toBeTruthy();
+    expect(rows.some((r) => r[2] === '-500.00')).toBe(false);
+    expect(rows).toContainEqual(['F', 'باقي سطر الوكلاء — بنودٌ دون حدّ العرض', '300.00', expect.any(String)]);
+    expect(rows.some((r) => /فروق دفتر|مصاريف وكالة أخرى/.test(r[1] || ''))).toBe(false);
     expect(rows.at(-1)).toEqual(['', 'إجمالي المصروفات', expect.any(String), '100%']);
   });
 
