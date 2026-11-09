@@ -141,12 +141,18 @@ export const AGENCY_OTHER = 'agencyOther';
 
 /**
  * البند الذي يحمل فرق دفتر المركب في جدول الوكيلين (أمر المالك ٩ نوفمبر ٢٠٢٦):
- * «Other EXPS» عند وكيل الوارد، ثمّ عند وكيل الصادر، وإلّا يُفتح عند الوارد.
+ * «Other EXPS» الذي له مبلغ عند الوارد ثمّ عند الصادر، وإلّا أكبر بنود الوارد ثمّ الصادر.
+ * بندٌ قائمٌ له مبلغ دائماً — لا سطرٌ جديد يظهر بالفرق وحده.
  */
 export function ledgerGapTarget(E: Record<string, number>, I: Record<string, number>): { side: 'E' | 'I'; key: string } {
-  if ('otherExpsI' in I) return { side: 'I', key: 'otherExpsI' };
-  if ('otherExpsE' in E) return { side: 'E', key: 'otherExpsE' };
-  return { side: 'I', key: 'otherExpsI' };
+  const has = (o: Record<string, number>, k: string) => Math.abs(o[k] || 0) >= 0.005;
+  if (has(I, 'otherExpsI')) return { side: 'I', key: 'otherExpsI' };
+  if (has(E, 'otherExpsE')) return { side: 'E', key: 'otherExpsE' };
+  const top = (o: Record<string, number>) => Object.keys(o).filter((k) => has(o, k)).sort((x, y) => Math.abs(o[y]) - Math.abs(o[x]))[0];
+  const ti = top(I);
+  if (ti) return { side: 'I', key: ti };
+  const te = top(E);
+  return te ? { side: 'E', key: te } : { side: 'I', key: 'otherExpsI' };
 }
 
 /**

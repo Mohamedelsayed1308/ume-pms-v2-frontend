@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, fireEvent, screen, waitFor } from '@testing-library/react';
 import SaveAsMenu from '@/components/SaveAsMenu';
 import * as XLSX from 'xlsx';
-import VesselFinReport, { type FinData } from '@/app/dashboard/reports/VesselFinReport';
+import VesselFinReport, { ledgerGapTarget, type FinData } from '@/app/dashboard/reports/VesselFinReport';
 import type { ExecData } from '@/app/dashboard/reports/VesselExecReport';
 import { parseCell, extractReport, buildWorkbook, planSlides, pageCuts, safeFileName, buildPptx, pruneEmptyColumns, hasArabic, breakPoints, type XRow } from '@/lib/reports/saveAs';
 
@@ -51,6 +51,16 @@ function mount(lang: 'ar' | 'en' = 'ar', over: Partial<FinData> = {}) {
   if (lang === 'en') fireEvent.click(u.getByText('EN'));
   return document.getElementById('vf-doc')!;
 }
+
+describe('ledgerGapTarget', () => {
+  it('picks an existing item with an amount, never a new zero line', () => {
+    // ألكوديا يناير–أكتوبر ٢٠٢٦: Other EXPS عند الوارد صفر، وعند الصادر 145,835.10
+    expect(ledgerGapTarget({ otherExpsE: 145835.1, egyPort: 9 }, { otherExpsI: 0, comm10: 5 })).toEqual({ side: 'E', key: 'otherExpsE' });
+    expect(ledgerGapTarget({ otherExpsE: 10 }, { otherExpsI: -3 })).toEqual({ side: 'I', key: 'otherExpsI' });
+    expect(ledgerGapTarget({ a: 1 }, { b: 2, c: -7 })).toEqual({ side: 'I', key: 'c' });
+    expect(ledgerGapTarget({ a: 1 }, {})).toEqual({ side: 'E', key: 'a' });
+  });
+});
 
 describe('parseCell', () => {
   it('reads accounting numbers, negatives in brackets, and percentages', () => {
@@ -118,9 +128,10 @@ describe('ledger variance merged into agency expenses (owner, 9 Nov 2026)', () =
     expect(cell('مجمل الربح')).toBe('92,000.00');
     expect(cell('قبل المشتريات')).toBe('49,000.00');
     expect(root.textContent).not.toContain('BALANCE');
-    // ويحمله بندٌ في جدول الوكيل (Other EXPS عند الوارد)، فمجموعا الجدولين = سطر القائمة
+    // ولا Other EXPS هنا: يحمله أكبر بنود الوارد (رسوم ميناء السعودية 3,000 ← 4,000)، فمجموعا الجدولين = سطر القائمة
     const tots = Array.from(root.querySelectorAll<HTMLTableRowElement>('.cols tr.tot')).map((r) => r.cells[1].textContent);
     expect(tots).toEqual(['4,000.00', '4,000.00']);
+    expect(root.querySelector('.cols')!.textContent).not.toContain('Other EXPS');
     expect(root.textContent).not.toContain('فروق دفتر');
   });
 });
