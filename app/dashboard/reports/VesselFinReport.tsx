@@ -1,6 +1,6 @@
 'use client';
 import { useMemo, useState } from 'react';
-import { costSegments, costBreakdown, BUCKETS, CODE_OF_BUCKET, ASSIGNABLE_CODES, LOCKED_COST_KEYS, type ExecData } from './VesselExecReport';
+import { costSegments, costBreakdown, BUCKETS, CODE_OF_BUCKET, ASSIGNABLE_CODES, LOCKED_COST_KEYS, type ExecData, type CostDetailGroup } from './VesselExecReport';
 import { useI18n } from '@/lib/i18n';
 import SaveAsMenu from '@/components/SaveAsMenu';
 import { DEFAULT_PROFILE, type ReportProfile } from '@/lib/reports/reportProfile';
@@ -136,6 +136,24 @@ const fmt = (n: number) =>
   Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const pct = (n: number, of: number) => (of ? ((n / of) * 100).toFixed(1) + '%' : '—');
 
+/** مفتاح السطر الذي يجمع باقي سطر الوكلاء وفرق دفتر المركب */
+export const AGENCY_OTHER = 'agencyOther';
+
+/**
+ * فرق دفتر المركب لا يظهر سطراً مستقلّاً في تفصيل الهيكل (أمر المالك ٩ نوفمبر ٢٠٢٦):
+ * يُضمّ إلى باقي سطر الوكلاء في سطرٍ واحد «مصاريف وكالة أخرى». مجموع المجموعة لا يتغيّر.
+ */
+export function mergeLedgerGap(groups: CostDetailGroup[]): CostDetailGroup[] {
+  return groups.map((g) => {
+    const gap = g.items.find((i) => i.kind === 'gap');
+    if (!gap) return g;
+    const rest = g.items.filter((i) => i.kind !== 'gap' && i.kind !== 'residual');
+    const value = g.items.filter((i) => i.kind === 'gap' || i.kind === 'residual').reduce((s, i) => s + i.value, 0);
+    const items = Math.abs(value) >= 0.005 ? [...rest, { key: AGENCY_OTHER, label: AGENCY_OTHER, value, kind: 'residual' as const }] : rest;
+    return { ...g, items: items.sort((x, y) => y.value - x.value) };
+  });
+}
+
 const CSS = `
 @media print {
   @page { size: A4 portrait; margin: 11mm 10mm; }
@@ -258,20 +276,18 @@ export default function VesselFinReport({
   const periodKey = isRange ? `${month} → ${monthTo}` : month;
 
   const R = data.revenue || 1;
-  const agentExp = data.expE + data.expI;
-  const gross = data.revenue - agentExp;
-  const beforePurch = gross - data.bunkerCost - data.salaries;
   const purchTotal = purchases?.total || 0;
 
   /*
-   * فرق الدفتر.
+   * فرق الدفتر — مدمجٌ في مصروفات الوكلاء بأمر المالك ٩ نوفمبر ٢٠٢٦.
    *
-   * السلّم يصحّ إن كان `BALANCE` في دفتر المركب مساوياً لمكوّناته. وهو ليس كذلك
-   * دائماً — رحلاتٌ معلومة يخالف فيها العمودُ مكوّناته. فيُحسب الفرق ويُعرض سطراً
-   * صريحاً بدل أن يُوزَّع صامتاً على بندٍ فيبدو السلّم متّسقاً وهو ليس كذلك.
+   * `BALANCE` في دفتر المركب لا يساوي مكوّناته دائماً. كان الفرق سطراً مستقلّاً
+   * في قائمة الدخل ومعه حاشية، فأثار أسئلة القارئ. فصار جزءاً من سطر مصروفات
+   * الوكلاء، والصافي باقٍ من `BALANCE` كما هو، فيُغلق السلّم عليه.
    */
-  const bookGap = data.net - beforePurch;
-  const hasGap = Math.abs(bookGap) > 0.5;
+  const bookGap = data.net - (data.revenue - (data.expE + data.expI) - data.bunkerCost - data.salaries);
+  const agentExp = data.expE + data.expI - bookGap;
+  const gross = data.revenue - agentExp;
 
   const segs = useMemo(() => costSegments(exec), [exec]);
   const segTotal = segs.reduce((s, x) => s + x.value, 0) || 1;
@@ -279,8 +295,9 @@ export default function VesselFinReport({
   /*
    * تفصيل الهيكل برموزه — بأمر المالك ٢٩ سبتمبر ٢٠٢٦: كلّ بند مصروفٍ فعليّ في
    * الفترة تحت رمز مجموعته، ومجموع كلّ رمزٍ = سطره في الحلقة.
+   * وباقي سطر الوكلاء وفرق الدفتر يُعرضان سطراً واحداً «مصاريف وكالة أخرى».
    */
-  const groups = useMemo(() => costBreakdown(exec, { purchasesByItem: purchases?.byItem }), [exec, purchases]);
+  const groups = useMemo(() => mergeLedgerGap(costBreakdown(exec, { purchasesByItem: purchases?.byItem })), [exec, purchases]);
   const groupsTotal = groups.reduce((s, g) => s + g.value, 0) || 1;
   const segName = (id: string) => {
     const o = profile.bucketNames?.[id];
@@ -303,8 +320,8 @@ export default function VesselFinReport({
     if (key === 'purchases') return kind === 'residual'
       ? T('مشتريات لم تُنسب إلى بند', 'Purchases not assigned to an item')
       : T('مشتريات العبّارة / مصاريف أخرى', 'Purchases & services');
+    if (key === AGENCY_OTHER) return T('مصاريف وكالة أخرى', 'Other agency expenses');
     if (kind === 'residual') return T('باقي سطر الوكلاء — بنودٌ دون حدّ العرض', 'Rest of the agency line — items below the display threshold');
-    if (kind === 'gap') return T('فروق دفتر المركب (عمود BALANCE)', 'Vessel ledger variance (BALANCE column)');
     return expLabel(key);
   };
 
@@ -464,15 +481,6 @@ export default function VesselFinReport({
                 <td className="shr">{pct(data.salaries, R)}</td>
                 <td className="ref">{T('البنكر والمرتبات', 'Bunkers & crew wages')}</td>
               </tr>
-              {hasGap && (
-                <tr className="gap">
-                  <td className="lbl">{bookGap > 0 ? '+' : '−'} {T('فروق دفتر المركب (عمود BALANCE)', 'Vessel ledger variance (BALANCE column)')}</td>
-                  {/* القيمة بإشارتها لـ«حفظ باسم»: النصّ مطلقٌ والإشارة في عنوان السطر */}
-                  <td className="amt" data-x={bookGap}>{fmt(Math.abs(bookGap))}</td>
-                  <td className="shr">{pct(Math.abs(bookGap), R)}</td>
-                  <td className="ref">{T('انظر الحاشية', 'See note')}</td>
-                </tr>
-              )}
               <tr className="sub">
                 <td className="lbl">{profile.invoices ? T('= صافي الربح قبل المشتريات', '= Operating Profit before Purchases') : T(`= صافي الربح قبل ${segName('purchases')}`, `= Operating Profit before ${segName('purchases')}`)}</td>
                 <td className="amt">{fmt(data.net)}</td>
@@ -509,16 +517,6 @@ export default function VesselFinReport({
               <>كل نسبةٍ محسوبةٌ من إجمالي الإيراد. ومتوسط الرحلة الواحدة: إيراد <b>{fmt(data.revenue / (data.count || 1))}</b> · صافي نهائي <b>{fmt((data.net - purchTotal) / (data.count || 1))}</b> على {data.count} رحلة.</>
             )}
           </div>
-
-          {hasGap && (
-            <div className="note warn">
-              {en ? (
-                <><b>Vessel ledger variance:</b> the sum of the <code>BALANCE</code> column in the vessel ledger does not equal its components (revenue less expenses and bunkers) by <b>{fmt(Math.abs(bookGap))}</b>. The net above is taken from <code>BALANCE</code> as the authoritative figure; the variance is shown on its own line and not allocated to any item, so the statement does not appear reconciled when it is not. It is corrected in the vessel ledger, not in this report.</>
-              ) : (
-                <><b>فروق دفتر المركب:</b> مجموع عمود <code>BALANCE</code> في الدفتر لا يساوي مكوّناته (الإيراد ناقص المصاريف والبنكر) بفارق <b>{fmt(Math.abs(bookGap))}</b>. الصافي أعلاه مأخوذٌ من <code>BALANCE</code> لأنه المعتمد، والفرق معروضٌ سطراً مستقلاً ولم يُوزَّع على بندٍ حتى لا يبدو السلّم متّسقاً وهو ليس كذلك. وعلاجه في دفتر المركب لا في التقرير.</>
-              )}
-            </div>
-          )}
 
           {/* ── ص٢ · تحليل الإيرادات ── */}
           <div className="vf-sec">

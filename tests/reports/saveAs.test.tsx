@@ -105,15 +105,20 @@ describe('extractReport on the real financial window', () => {
   });
 });
 
-describe('ledger variance line', () => {
-  it('exports the variance with its sign, though the screen shows it absolute with the sign in the label', () => {
-    // الصافي من BALANCE أقلّ من مكوّناته بألف: الفرق سالب
-    const m = extractReport(mount('ar', { net: 49000 }), 'r');
+describe('ledger variance merged into agency expenses (owner, 9 Nov 2026)', () => {
+  it('shows no variance line or note; the agency line absorbs it and the ladder closes on the BALANCE net', () => {
+    // الصافي من BALANCE أقلّ من مكوّناته بألف: مصروفات الوكلاء 7,000 تصير 8,000
+    const root = mount('ar', { net: 49000 });
+    const m = extractReport(root, 'r');
     const pl = m.sections[0].blocks[0];
     if (pl.type !== 'table') throw new Error('no statement');
-    const gap = pl.rows.find((r) => r.kind === 'gap')!;
-    expect(gap.cells[0].text.startsWith('−')).toBe(true);
-    expect(gap.cells[1]).toMatchObject({ text: '1,000.00', value: -1000, kind: 'num' });
+    expect(pl.rows.some((r) => r.kind === 'gap')).toBe(false);
+    const cell = (label: string) => pl.rows.find((r) => r.cells[0].text.includes(label))!.cells[1].text;
+    expect(cell('مصروفات الوكلاء')).toBe('(8,000.00)');
+    expect(cell('مجمل الربح')).toBe('92,000.00');
+    expect(cell('قبل المشتريات')).toBe('49,000.00');
+    expect(root.textContent).not.toContain('BALANCE');
+    expect(root.textContent).not.toContain('فروق دفتر');
   });
 });
 
