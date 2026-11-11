@@ -334,8 +334,6 @@ export default function WasaProfitReport() {
             </table>
           </div>
 
-          <StockBox stock={stock} added={agg.stockAdded} endLabel={mLabel(endKey)} en={en} />
-
           {meta && meta.notes.length > 0 && (
             <div className="bg-white rounded-xl shadow p-4 text-sm">
               <h3 className="font-bold text-gray-700 mb-2">{T('ملاحظات على الأرقام', 'Notes on the figures')}</h3>
@@ -343,6 +341,9 @@ export default function WasaProfitReport() {
               {meta.built && <p className="text-xs text-gray-400 mt-2">{T('بُنيت الحزمة', 'Package built')}: {meta.built.replace('T', ' ')}</p>}
             </div>
           )}
+
+          {/* المخزون قبل الصافي الشهريّ بطلب المالك ١١ نوفمبر ٢٠٢٦ */}
+          <StockBox stock={stock} added={agg.stockAdded} endLabel={mLabel(endKey)} en={en} />
 
           {/* الصافي الشهريّ ثمّ هيكل التكاليف آخر الكارت بطلب المالك ١١ نوفمبر ٢٠٢٦ */}
           {trend.length > 0 && (
@@ -405,7 +406,7 @@ function StockBox({ stock, added, endLabel, en }: { stock: { total: number; line
  * ── مستند الطباعة ──
  * بترتيب ورقة جوبال (٣ نوفمبر ٢٠٢٦) وأنماطها نفسها، تحت مُعرّفه الخاصّ، ويزيد عليها
  * مربّع مخزون الحوض والملاحظات — فالورقة التي تُرسَل تحمل ما يقيّد أرقامها.
- * والصافي الشهريّ وهيكل التكاليف (الحلقة) في آخر الورقة بطلب المالك ١١ نوفمبر ٢٠٢٦، والمخزون تحت الإيراد.
+ * وفي آخر الورقة بطلب المالك ١١ نوفمبر ٢٠٢٦: مخزون الحوض ثمّ الصافي الشهريّ ثمّ هيكل التكاليف (الحلقة).
  */
 const SHORT_GROUP = 6;
 export function WasaPrintDoc({ agg, groups, margin, periodLabel, trend, en, stock, endLabel, notes }: {
@@ -437,13 +438,6 @@ export function WasaPrintDoc({ agg, groups, margin, periodLabel, trend, en, stoc
             {agg.incomeLines.slice().sort((a, b) => b.value - a.value).map((l, i) => (<tr key={`${l.label}-${i}`}><td>{lbl(l.label, en)}</td><td><N v={l.value} /></td></tr>))}
             <tr className="tot"><td>{T('إجمالي الإيراد', 'Total Revenue')}</td><td>{fmt(agg.incomeTotal)}</td></tr>
           </tbody></table>
-          <div className="stock">
-            <h3>{T('مخزون الحوض الجافّ — خارج التكاليف', 'Dry-dock Stock — not in costs')}</h3>
-            <table><tbody>
-              {stock.lines.map((l) => <tr key={l.label}><td>{l.label}</td><td>{fmt(l.value)}</td></tr>)}
-              <tr className="tot"><td>{T('الرصيد في آخر', 'Balance at end of')} {endLabel}</td><td>{fmt(stock.total)}</td></tr>
-            </tbody></table>
-          </div>
         </div>
         <div>
           <h3>{T('التكاليف بالمجموعات', 'Operating Costs by Group')}</h3>
@@ -480,10 +474,18 @@ export function WasaPrintDoc({ agg, groups, margin, periodLabel, trend, en, stoc
         </tbody></table>
       </div>
 
+      <div className="stock">
+        <h3>{T('مخزون الحوض الجافّ — خارج التكاليف', 'Dry-dock Stock — not in costs')}</h3>
+        <table><tbody>
+          {stock.lines.map((l) => <tr key={l.label}><td>{l.label}</td><td>{fmt(l.value)}</td></tr>)}
+          <tr className="tot"><td>{T('الرصيد في آخر', 'Balance at end of')} {endLabel}</td><td>{fmt(stock.total)}</td></tr>
+        </tbody></table>
+      </div>
+
       {trend.length > 0 && (
         <div className="cbox">
           <h3>{T('الصافي الشهري', 'Monthly Net Result')}</h3>
-          <TrendBars data={trend} h={190} />
+          <TrendBars data={trend} h={150} />
         </div>
       )}
 

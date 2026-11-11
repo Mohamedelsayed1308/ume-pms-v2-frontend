@@ -145,8 +145,14 @@ describe('هيكل التكاليف آخر الورقة (طلب المالك ١�
     expect(kids.indexOf('cbox')).toBeLessThan(kids.indexOf('struct'));
   });
 
-  it('المخزون تحت الإيراد في العمود الأوّل', () => {
-    const [rev] = Array.from(d.querySelectorAll('.cols > div'));
-    expect(rev.querySelector('.stock tr.tot')).not.toBeNull();
+  it('المخزون في آخر الورقة قبل الصافي الشهريّ، لا تحت الإيراد (طلب المالك ١١ نوفمبر)', () => {
+    expect(d.querySelector('.cols .stock')).toBeNull();
+    const t = render(
+      <WasaPrintDoc agg={agg} groups={groups} margin={46.8} periodLabel="x" en={false}
+        trend={months.map((m) => ({ label: m.key, value: m.net }))} stock={stockAsOf(months, '2026-03')} endLabel="مارس 2026" notes={meta!.notes} />,
+    ).container.querySelector('#wasa-doc') as HTMLElement;
+    const kids = Array.from(t.children).map((c) => c.className);
+    expect(kids.indexOf('stock')).toBeGreaterThan(kids.indexOf('detail'));
+    expect(kids.indexOf('cbox')).toBe(kids.indexOf('stock') + 1);
   });
 });
