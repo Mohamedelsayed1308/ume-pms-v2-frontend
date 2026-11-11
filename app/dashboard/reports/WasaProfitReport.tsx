@@ -282,7 +282,7 @@ export default function WasaProfitReport() {
       {errors.length > 0 && (
         <div role="alert" className="bg-red-50 border border-red-200 rounded-xl p-3 text-sm text-red-700 print:hidden">
           <p className="font-bold mb-1">{T('الحزمة مرفوضة', 'Package rejected')}</p>
-          <ul className="list-disc pr-5 space-y-0.5">{errors.slice(0, 12).map((e, i) => <li key={i}>{e}</li>)}</ul>
+          <ul className="list-disc ps-5 space-y-0.5">{errors.slice(0, 12).map((e, i) => <li key={i}>{e}</li>)}</ul>
         </div>
       )}
       {!loading && !months.length && !errors.length && (
@@ -307,9 +307,9 @@ export default function WasaProfitReport() {
               <h3 className="font-bold text-gray-700 mb-3">{T('الإيرادات', 'Revenue')}</h3>
               <table className="w-full text-sm"><tbody>
                 {agg.incomeLines.slice().sort((a, b) => b.value - a.value).map((l, i) => (
-                  <tr key={`${l.label}-${i}`} className="border-t"><td className="py-1">{lbl(l.label, en)}</td><td className={`py-1 text-left font-medium ${l.value < 0 ? 'text-red-600' : ''}`}><N v={l.value} /></td></tr>
+                  <tr key={`${l.label}-${i}`} className="border-t"><td className="py-1">{lbl(l.label, en)}</td><td className={`py-1 text-end font-medium ${l.value < 0 ? 'text-red-600' : ''}`}><N v={l.value} /></td></tr>
                 ))}
-                <tr className="border-t bg-gray-50 font-bold"><td className="py-1">{T('إجمالي الإيراد', 'Total Revenue')}</td><td className="py-1 text-left">{fmt(agg.incomeTotal)}</td></tr>
+                <tr className="border-t bg-gray-50 font-bold"><td className="py-1">{T('إجمالي الإيراد', 'Total Revenue')}</td><td className="py-1 text-end">{fmt(agg.incomeTotal)}</td></tr>
               </tbody></table>
             </div>
 
@@ -323,7 +323,7 @@ export default function WasaProfitReport() {
                       <span className="w-3 h-3 rounded-full inline-block" style={{ background: grpMeta(g.id).color }} />
                       <span className="flex-1 truncate">{gName(g.id)}</span>
                       <span className="font-medium">{fmtAbbr(g.total)}</span>
-                      <span className="text-gray-400 w-9 text-left">{agg.costTotal ? Math.round((g.total / agg.costTotal) * 100) : 0}%</span>
+                      <span className="text-gray-400 w-9 text-end">{agg.costTotal ? Math.round((g.total / agg.costTotal) * 100) : 0}%</span>
                     </div>
                   ))}
                 </div>
@@ -334,21 +334,21 @@ export default function WasaProfitReport() {
           <div className="bg-white rounded-xl shadow p-4">
             <h3 className="font-bold text-gray-700 mb-3">{T('التكاليف بالتفصيل', 'Cost Breakdown')}</h3>
             <table className="w-full text-sm">
-              <thead className="text-gray-500 text-xs"><tr><th scope="col" className="text-right py-1">{T('المجموعة', 'Cost Group')}</th><th scope="col" className="text-left py-1">{T('المبلغ', 'Amount (USD)')}</th><th scope="col" className="text-left py-1 w-16">%</th></tr></thead>
+              <thead className="text-gray-500 text-xs"><tr><th scope="col" className="text-start py-1">{T('المجموعة', 'Cost Group')}</th><th scope="col" className="text-end py-1">{T('المبلغ', 'Amount (USD)')}</th><th scope="col" className="text-end py-1 w-16">%</th></tr></thead>
               <tbody>
                 {sortedGroups.map((g) => (
                   <Fragment key={g.id}>
                     <tr className="border-t cursor-pointer hover:bg-gray-50" onClick={() => setExpanded((e) => ({ ...e, [g.id]: !e[g.id] }))}>
                       <td className="py-1.5 font-medium">{expanded[g.id] ? '▾' : '▸'} {gName(g.id)}</td>
-                      <td className="py-1.5 text-left font-medium text-red-600"><N v={g.total} /></td>
-                      <td className="py-1.5 text-left text-gray-400">{agg.costTotal ? Math.round((g.total / agg.costTotal) * 100) : 0}%</td>
+                      <td className="py-1.5 text-end font-medium text-red-600"><N v={g.total} /></td>
+                      <td className="py-1.5 text-end text-gray-400">{agg.costTotal ? Math.round((g.total / agg.costTotal) * 100) : 0}%</td>
                     </tr>
                     {expanded[g.id] && g.lines.slice().sort((a, b) => b.value - a.value).map((l, i) => (
-                      <tr key={`${l.label}-${i}`} className="bg-gray-50/50 text-gray-600"><td className="py-1 pr-6 text-xs">{lbl(l.label, en)}</td><td className="py-1 text-left text-xs"><N v={l.value} /></td><td /></tr>
+                      <tr key={`${l.label}-${i}`} className="bg-gray-50/50 text-gray-600"><td className="py-1 ps-6 text-xs">{lbl(l.label, en)}</td><td className="py-1 text-end text-xs"><N v={l.value} /></td><td /></tr>
                     ))}
                   </Fragment>
                 ))}
-                <tr className="border-t bg-gray-50 font-bold"><td className="py-1.5">{T('إجمالي التكاليف', 'Total Operating Costs')}</td><td className="py-1.5 text-left text-red-700">{fmt(agg.costTotal)}</td><td /></tr>
+                <tr className="border-t bg-gray-50 font-bold"><td className="py-1.5">{T('إجمالي التكاليف', 'Total Operating Costs')}</td><td className="py-1.5 text-end text-red-700">{fmt(agg.costTotal)}</td><td /></tr>
               </tbody>
             </table>
           </div>
@@ -365,7 +365,7 @@ export default function WasaProfitReport() {
           {meta && meta.notes.length > 0 && (
             <div className="bg-white rounded-xl shadow p-4 text-sm">
               <h3 className="font-bold text-gray-700 mb-2">{T('ملاحظات على الأرقام', 'Notes on the figures')}</h3>
-              <ul className="list-disc pr-5 pl-5 space-y-1 text-gray-600">{meta.notes.map((n, i) => <li key={i}>{en ? n.en : n.ar}</li>)}</ul>
+              <ul className="list-disc ps-5 space-y-1 text-gray-600">{meta.notes.map((n, i) => <li key={i}>{en ? n.en : n.ar}</li>)}</ul>
               {meta.built && <p className="text-xs text-gray-400 mt-2">{T('بُنيت الحزمة', 'Package built')}: {meta.built.replace('T', ' ')}</p>}
             </div>
           )}
@@ -392,9 +392,9 @@ function StockBox({ stock, added, endLabel, en }: { stock: { total: number; line
       </p>
       {stock.lines.length ? (
         <table className="w-full text-sm"><tbody>
-          {stock.lines.map((l) => <tr key={l.label} className="border-t border-amber-200"><td className="py-1">{l.label}</td><td className="py-1 text-left font-medium">{fmt(l.value)}</td></tr>)}
-          <tr className="border-t border-amber-300 font-bold"><td className="py-1">{T('الرصيد في آخر', 'Balance at end of')} {endLabel}</td><td className="py-1 text-left">{fmt(stock.total)}</td></tr>
-          <tr className="text-amber-800 text-xs"><td className="py-1">{T('منه ما أُضيف في الفترة', 'Of which added in the period')}</td><td className="py-1 text-left">{fmt(added)}</td></tr>
+          {stock.lines.map((l) => <tr key={l.label} className="border-t border-amber-200"><td className="py-1">{l.label}</td><td className="py-1 text-end font-medium">{fmt(l.value)}</td></tr>)}
+          <tr className="border-t border-amber-300 font-bold"><td className="py-1">{T('الرصيد في آخر', 'Balance at end of')} {endLabel}</td><td className="py-1 text-end">{fmt(stock.total)}</td></tr>
+          <tr className="text-amber-800 text-xs"><td className="py-1">{T('منه ما أُضيف في الفترة', 'Of which added in the period')}</td><td className="py-1 text-end">{fmt(added)}</td></tr>
         </tbody></table>
       ) : <p className="text-sm text-amber-800">{T('لا مخزون حتّى آخر', 'No stock up to the end of')} {endLabel}</p>}
     </div>
