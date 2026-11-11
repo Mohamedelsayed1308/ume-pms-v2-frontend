@@ -336,13 +336,6 @@ export default function WasaProfitReport() {
 
           <StockBox stock={stock} added={agg.stockAdded} endLabel={mLabel(endKey)} en={en} />
 
-          {trend.length > 0 && (
-            <div className="bg-white rounded-xl shadow p-4">
-              <h3 className="font-bold text-gray-700 mb-3">{T('الصافي الشهري', 'Monthly Net Result')}</h3>
-              <TrendBars data={trend} />
-            </div>
-          )}
-
           {meta && meta.notes.length > 0 && (
             <div className="bg-white rounded-xl shadow p-4 text-sm">
               <h3 className="font-bold text-gray-700 mb-2">{T('ملاحظات على الأرقام', 'Notes on the figures')}</h3>
@@ -351,7 +344,15 @@ export default function WasaProfitReport() {
             </div>
           )}
 
-          {/* هيكل التكاليف آخر الكارت بطلب المالك ١١ نوفمبر ٢٠٢٦ */}
+          {/* الصافي الشهريّ ثمّ هيكل التكاليف آخر الكارت بطلب المالك ١١ نوفمبر ٢٠٢٦ */}
+          {trend.length > 0 && (
+            <div className="bg-white rounded-xl shadow p-4">
+              <h3 className="font-bold text-gray-700 mb-3">{T('الصافي الشهري', 'Monthly Net Result')}</h3>
+              <TrendBars data={trend} />
+            </div>
+          )}
+
+
           <div className="bg-white rounded-xl shadow p-4" data-testid="cost-structure">
             <h3 className="font-bold text-gray-700 mb-3">{T('هيكل التكاليف', 'Cost Structure')}</h3>
             <div className="flex flex-wrap items-center gap-6">
@@ -404,7 +405,7 @@ function StockBox({ stock, added, endLabel, en }: { stock: { total: number; line
  * ── مستند الطباعة ──
  * بترتيب ورقة جوبال (٣ نوفمبر ٢٠٢٦) وأنماطها نفسها، تحت مُعرّفه الخاصّ، ويزيد عليها
  * مربّع مخزون الحوض والملاحظات — فالورقة التي تُرسَل تحمل ما يقيّد أرقامها.
- * وهيكل التكاليف (الحلقة) في آخر الورقة بطلب المالك ١١ نوفمبر ٢٠٢٦، والمخزون تحت الإيراد.
+ * والصافي الشهريّ وهيكل التكاليف (الحلقة) في آخر الورقة بطلب المالك ١١ نوفمبر ٢٠٢٦، والمخزون تحت الإيراد.
  */
 const SHORT_GROUP = 6;
 export function WasaPrintDoc({ agg, groups, margin, periodLabel, trend, en, stock, endLabel, notes }: {
@@ -459,13 +460,6 @@ export function WasaPrintDoc({ agg, groups, margin, periodLabel, trend, en, stoc
         </div>
       </div>
 
-      {trend.length > 0 && (
-        <div className="cbox">
-          <h3>{T('الصافي الشهري', 'Monthly Net Result')}</h3>
-          <TrendBars data={trend} h={190} />
-        </div>
-      )}
-
       <div className="detail">
         <h3>{T('التكاليف بالتفصيل', 'Cost Breakdown by Line Item')}</h3>
         <div className="dcols">
@@ -485,6 +479,13 @@ export function WasaPrintDoc({ agg, groups, margin, periodLabel, trend, en, stoc
           <tr className="tot"><td>{T('إجمالي التكاليف', 'Total Operating Costs')}</td><td>{fmt(agg.costTotal)}</td><td className="pc">100%</td></tr>
         </tbody></table>
       </div>
+
+      {trend.length > 0 && (
+        <div className="cbox">
+          <h3>{T('الصافي الشهري', 'Monthly Net Result')}</h3>
+          <TrendBars data={trend} h={190} />
+        </div>
+      )}
 
       {positive.length > 0 && (
         <div className="struct">

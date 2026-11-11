@@ -135,6 +135,16 @@ describe('هيكل التكاليف آخر الورقة (طلب المالك ١�
     expect(d.querySelector('.struct tr.tot')?.textContent).toContain('100%');
   });
 
+  it('الصافي الشهريّ في الورقة الأخيرة قبل هيكل التكاليف، لا بعد الإيراد', () => {
+    const t = render(
+      <WasaPrintDoc agg={agg} groups={groups} margin={46.8} periodLabel="x" en={false}
+        trend={months.map((m) => ({ label: m.key, value: m.net }))} stock={stockAsOf(months, '2026-03')} endLabel="مارس 2026" notes={meta!.notes} />,
+    ).container.querySelector('#wasa-doc') as HTMLElement;
+    const kids = Array.from(t.children).map((c) => c.className);
+    expect(kids.indexOf('cbox')).toBeGreaterThan(kids.indexOf('detail'));
+    expect(kids.indexOf('cbox')).toBeLessThan(kids.indexOf('struct'));
+  });
+
   it('المخزون تحت الإيراد في العمود الأوّل', () => {
     const [rev] = Array.from(d.querySelectorAll('.cols > div'));
     expect(rev.querySelector('.stock tr.tot')).not.toBeNull();
