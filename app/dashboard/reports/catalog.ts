@@ -11,7 +11,7 @@
 export interface Bi { ar: string; en: string }
 export type CatKey = 'fleet' | 'suppliers' | 'cash' | 'ops' | 'tools';
 export type ReportId =
-  | 'fleet-dashboard' | 'vessel-profit' | 'alcudia-profit' | 'poseidon-profit' | 'daleela-line' | 'monte-line' | 'amman-line' | 'gubal-profit'
+  | 'fleet-dashboard' | 'vessel-profit' | 'alcudia-profit' | 'poseidon-profit' | 'daleela-line' | 'monte-line' | 'amman-line' | 'gubal-profit' | 'wasa-profit'
   | 'supplier-statement' | 'unpaid-supplier' | 'vessel-suppliers'
   | 'due-alerts' | 'unpaid-vessel'
   | 'dept-delays' | 'user-activity'
@@ -48,6 +48,7 @@ export const REPORTS: ReportMeta[] = [
   { id: 'monte-line', cat: 'fleet', icon: 'coins', title: B('ربحية مونتي — جدّة/سواكن', 'Monte Profitability — Jeddah/Suakin'), desc: B('رحلات مونتي ببنودها والإشغال وشهراً بشهر من أبريل ومخزون الوقود وكشف الوكيل والمقارنة بدليلة', 'Monte voyages itemised, occupancy, monthly since April, fuel stock, agent statement & Daleela comparison'), question: B('كم تربح مونتي في الرحلة وبعد تكاليفها الثابتة، وأين تقف من أوّل أبريل؟', 'What does Monte earn per voyage and after fixed costs, and where does it stand since April?'), resultType: PNL, needs: R_OWN, keywords: 'monte مونتي express اكسبريس جدة سواكن jeddah suakin sudan السودان ربح profit وقود fuel اشغال occupancy وكيل agent' },
   { id: 'amman-line', cat: 'fleet', icon: 'coins', title: B('ربحية عمّان — جدّة/سواكن', 'Amman Profitability — Jeddah/Suakin'), desc: B('رحلات عمّان ببنودها من كشف الوكيل والإشغال وشهراً بشهر من يناير وتكلفة السفينة بالإيجار ومخزون الوقود', 'Amman voyages itemised from the agent SOA, occupancy, monthly since January, vessel cost incl. hire & fuel stock'), question: B('كم تربح عمّان في الرحلة وبعد الإيجار وتكلفة السفينة، وأين تقف من أوّل يناير؟', 'What does Amman earn per voyage and after hire and vessel cost, and where does it stand since January?'), resultType: PNL, needs: R_OWN, keywords: 'amman عمان عمّان جدة سواكن jeddah suakin sudan السودان ربح profit ايجار hire وقود fuel اشغال occupancy وكيل agent طبالي pallets' },
   { id: 'gubal-profit', cat: 'fleet', icon: 'coins', title: B('ربحية Gubal', 'Gubal Profitability'), desc: B('قائمة دخل شهرية / من فترة لفترة لمركب جوبال', 'Monthly / period income statement — Gubal'), question: B('ما قائمة دخل Gubal لفترة محددة؟', 'What is Gubal’s income statement for a period?'), resultType: PNL, needs: R_OWN, keywords: 'gubal جوبال قائمة دخل income statement' },
+  { id: 'wasa-profit', cat: 'fleet', icon: 'coins', title: B('ربحية Wasa Express', 'Wasa Express Profitability'), desc: B('قائمة دخل شهرية / من فترة لفترة لمركب واسا بالدولار، ومخزون الحوض الجافّ', 'Monthly / period income statement in USD — Wasa Express, with dry-dock stock'), question: B('ما قائمة دخل Wasa Express لفترة محددة؟', 'What is Wasa Express’s income statement for a period?'), resultType: PNL, needs: R_OWN, keywords: 'wasa واسا express اكسبريس زاريكون zaricon قائمة دخل income statement حوض dry dock' },
 
   { id: 'supplier-statement', cat: 'suppliers', icon: 'receipt', title: B('كشف حساب مورد', 'Supplier Statement'), desc: B('مدين / دائن / رصيد متراكم لكل عملة', 'Debit / credit / running balance per currency'), question: B('ما رصيدنا مع مورد بكل عملة، وكيف تكوّن؟', 'What is our balance with a supplier per currency, and how did it build up?'), resultType: B('دفتر حركات لكل عملة', 'Ledger per currency'), needs: R_SUP, keywords: 'رصيد مورد حساب مدين دائن دفتر ledger balance statement account' },
   { id: 'unpaid-supplier', cat: 'suppliers', icon: 'factory', title: B('مستحقات مورد', 'Supplier Outstanding'), desc: B('الفواتير غير المدفوعة أو الجزئية لمورد', 'Unpaid / partial invoices per supplier'), question: B('ما فواتير المورد التي لم تُسدَّد بالكامل؟', 'Which of a supplier’s invoices are not fully paid?'), resultType: LIST, needs: R_SUP, keywords: 'مستحقات غير مدفوعة جزئي outstanding unpaid payable' },
@@ -65,7 +66,7 @@ export const REPORTS: ReportMeta[] = [
 // كل تقرير → الشاشة المطلوبة للوصول (تصفية حسب الصلاحية داخل مركز التحليلات)
 export const REPORT_REQUIRES: Record<ReportId, string> = {
   'fleet-dashboard': '/dashboard/vessels', 'vessel-profit': '/dashboard/vessels',
-  'alcudia-profit': '/dashboard/vessels', 'gubal-profit': '/dashboard/vessels',
+  'alcudia-profit': '/dashboard/vessels', 'gubal-profit': '/dashboard/vessels', 'wasa-profit': '/dashboard/vessels',
   'poseidon-profit': '/dashboard/vessels', 'daleela-line': '/dashboard/vessels', 'monte-line': '/dashboard/vessels', 'amman-line': '/dashboard/vessels',
   'vessel-suppliers': '/dashboard/vessels',
   'supplier-statement': '/dashboard/suppliers', 'unpaid-supplier': '/dashboard/suppliers',

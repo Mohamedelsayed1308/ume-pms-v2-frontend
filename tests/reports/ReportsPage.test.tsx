@@ -15,6 +15,7 @@ vi.mock('@/lib/i18n', () => ({ useI18n: () => ({ locale: 'ar', t: (_k: string, f
 vi.mock('@/app/dashboard/reports/VesselProfitReport', () => ({ default: () => <div>vessel</div>, PELAGOS: {}, ALCUDIA: {}, POSEIDON: {} }));
 vi.mock('@/app/dashboard/reports/LineProfitReport', () => ({ default: () => <div>line</div>, DALEELA_JS: {} }));
 vi.mock('@/app/dashboard/reports/GubalProfitReport', () => ({ default: () => <div>gubal</div> }));
+vi.mock('@/app/dashboard/reports/WasaProfitReport', () => ({ default: () => <div>wasa</div> }));
 vi.mock('@/app/dashboard/reports/ExchangeRatesCard', () => ({ default: () => <div>fx</div> }));
 vi.mock('@/app/dashboard/reports/FleetDashboard', () => ({ default: () => <div>fleet</div> }));
 

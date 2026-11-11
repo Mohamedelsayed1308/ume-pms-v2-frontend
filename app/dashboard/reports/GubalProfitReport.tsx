@@ -552,7 +552,7 @@ export function GubalPrintDoc({ agg, groups, margin, periodLabel, trend, en }: {
   );
 }
 
-function Donut({ segs, total }: { segs: { value: number; color: string }[]; total: number }) {
+export function Donut({ segs, total }: { segs: { value: number; color: string }[]; total: number }) {
   const size = 180, sw = 32, r = (size - sw) / 2, c = size / 2, circ = 2 * Math.PI * r;
   let acc = 0;
   return (
@@ -568,7 +568,7 @@ function Donut({ segs, total }: { segs: { value: number; color: string }[]; tota
   );
 }
 
-function TrendBars({ data, h = 280 }: { data: { label: string; value: number }[]; h?: number }) {
+export function TrendBars({ data, h = 280 }: { data: { label: string; value: number }[]; h?: number }) {
   const W = 900, H = h, m = { l: 55, r: 10, t: 26, b: 30 };
   const pw = W - m.l - m.r, ph = H - m.t - m.b;
   const maxV = Math.max(0, ...data.map((d) => d.value));

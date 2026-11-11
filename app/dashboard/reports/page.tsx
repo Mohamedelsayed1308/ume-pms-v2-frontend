@@ -5,6 +5,7 @@ import * as XLSX from 'xlsx';
 import VesselProfitReport, { PELAGOS, ALCUDIA, POSEIDON } from './VesselProfitReport';
 import LineProfitReport, { AMMAN_JS, DALEELA_JS, MONTE_JS } from './LineProfitReport';
 import GubalProfitReport from './GubalProfitReport';
+import WasaProfitReport from './WasaProfitReport';
 import ExchangeRatesCard from './ExchangeRatesCard';
 import FleetDashboard from './FleetDashboard';
 import ReportsCatalog from './ReportsCatalog';
@@ -228,7 +229,7 @@ export default function ReportsPage() {
   const needsVessel = ['unpaid-vessel', 'vessel-suppliers'].includes(reportType);
   const needsDays = reportType === 'due-alerts';
   const noFilter = reportType === 'user-activity' || reportType === 'dept-delays';
-  const selfContained = ['fleet-dashboard', 'vessel-profit', 'alcudia-profit', 'poseidon-profit', 'daleela-line', 'monte-line', 'amman-line', 'gubal-profit', 'exchange-rates', 'supplier-statement'].includes(reportType);
+  const selfContained = ['fleet-dashboard', 'vessel-profit', 'alcudia-profit', 'poseidon-profit', 'daleela-line', 'monte-line', 'amman-line', 'gubal-profit', 'wasa-profit', 'exchange-rates', 'supplier-statement'].includes(reportType);
 
   const filteredSuppliers = suppliers.filter((s) =>
     (s.name || '').toLowerCase().includes(supplierSearch.toLowerCase()));
@@ -312,6 +313,7 @@ export default function ReportsPage() {
       {reportType === 'monte-line' && <LineProfitReport config={MONTE_JS} />}
       {reportType === 'amman-line' && <LineProfitReport config={AMMAN_JS} />}
       {reportType === 'gubal-profit' && <GubalProfitReport />}
+      {reportType === 'wasa-profit' && <WasaProfitReport />}
       {reportType === 'exchange-rates' && <ExchangeRatesCard />}
 
       {/* Filters */}
