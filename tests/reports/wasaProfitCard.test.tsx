@@ -117,3 +117,26 @@ describe('ورقة واسا المطبوعة', () => {
     expect(d.querySelector('.notes li')?.textContent).toBe('Note');
   });
 });
+
+describe('هيكل التكاليف آخر الورقة (طلب المالك ١١ نوفمبر ٢٠٢٦)', () => {
+  const { months, meta } = validateWasaPackage(pkg());
+  const agg = aggregateWasa(months)!;
+  const groups = agg.groups.filter((g) => g.total);
+  const d = render(
+    <WasaPrintDoc agg={agg} groups={groups} margin={46.8} periodLabel="x" en={false}
+      trend={[]} stock={stockAsOf(months, '2026-03')} endLabel="مارس 2026" notes={meta!.notes} />,
+  ).container.querySelector('#wasa-doc') as HTMLElement;
+
+  it('الحلقة في قسمٍ بعد التفصيل، لا تحت الإيراد', () => {
+    expect(d.querySelector('.cols svg')).toBeNull();
+    const kids = Array.from(d.children).map((c) => c.className);
+    expect(kids.indexOf('struct')).toBeGreaterThan(kids.indexOf('detail'));
+    expect(d.querySelectorAll('.struct tbody tr .sw')).toHaveLength(2);
+    expect(d.querySelector('.struct tr.tot')?.textContent).toContain('100%');
+  });
+
+  it('المخزون تحت الإيراد في العمود الأوّل', () => {
+    const [rev] = Array.from(d.querySelectorAll('.cols > div'));
+    expect(rev.querySelector('.stock tr.tot')).not.toBeNull();
+  });
+});

@@ -302,8 +302,7 @@ export default function WasaProfitReport() {
             <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 col-span-2 lg:col-span-1" data-testid="stock-kpi"><p className="text-xs text-amber-800">{T('مخزون الحوض الجافّ', 'Dry-dock Stock')}</p><p className="text-xl font-bold text-amber-900 mt-1">{fmt(stock.total)}</p><p className="text-xs text-amber-700 mt-1">{T('خارج التكاليف', 'Not in costs')}</p></div>
           </div>
 
-          <div className="grid md:grid-cols-2 gap-4">
-            <div className="bg-white rounded-xl shadow p-4">
+          <div className="bg-white rounded-xl shadow p-4">
               <h3 className="font-bold text-gray-700 mb-3">{T('الإيرادات', 'Revenue')}</h3>
               <table className="w-full text-sm"><tbody>
                 {agg.incomeLines.slice().sort((a, b) => b.value - a.value).map((l, i) => (
@@ -312,24 +311,6 @@ export default function WasaProfitReport() {
                 <tr className="border-t bg-gray-50 font-bold"><td className="py-1">{T('إجمالي الإيراد', 'Total Revenue')}</td><td className="py-1 text-end">{fmt(agg.incomeTotal)}</td></tr>
               </tbody></table>
             </div>
-
-            <div className="bg-white rounded-xl shadow p-4">
-              <h3 className="font-bold text-gray-700 mb-3">{T('هيكل التكاليف', 'Cost Structure')}</h3>
-              <div className="flex items-center gap-4">
-                <Donut segs={sortedGroups.filter((g) => g.total > 0).map((g) => ({ value: g.total, color: grpMeta(g.id).color }))} total={agg.costTotal} />
-                <div className="flex-1 space-y-1 text-sm max-h-64 overflow-auto">
-                  {sortedGroups.map((g) => (
-                    <div key={g.id} className="flex items-center gap-2">
-                      <span className="w-3 h-3 rounded-full inline-block" style={{ background: grpMeta(g.id).color }} />
-                      <span className="flex-1 truncate">{gName(g.id)}</span>
-                      <span className="font-medium">{fmtAbbr(g.total)}</span>
-                      <span className="text-gray-400 w-9 text-end">{agg.costTotal ? Math.round((g.total / agg.costTotal) * 100) : 0}%</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
 
           <div className="bg-white rounded-xl shadow p-4">
             <h3 className="font-bold text-gray-700 mb-3">{T('التكاليف بالتفصيل', 'Cost Breakdown')}</h3>
@@ -369,6 +350,24 @@ export default function WasaProfitReport() {
               {meta.built && <p className="text-xs text-gray-400 mt-2">{T('بُنيت الحزمة', 'Package built')}: {meta.built.replace('T', ' ')}</p>}
             </div>
           )}
+
+          {/* هيكل التكاليف آخر الكارت بطلب المالك ١١ نوفمبر ٢٠٢٦ */}
+          <div className="bg-white rounded-xl shadow p-4" data-testid="cost-structure">
+            <h3 className="font-bold text-gray-700 mb-3">{T('هيكل التكاليف', 'Cost Structure')}</h3>
+            <div className="flex flex-wrap items-center gap-6">
+              <Donut segs={sortedGroups.filter((g) => g.total > 0).map((g) => ({ value: g.total, color: grpMeta(g.id).color }))} total={agg.costTotal} />
+              <table className="flex-1 min-w-[280px] max-w-xl text-sm"><tbody>
+                {sortedGroups.map((g) => (
+                  <tr key={g.id} className="border-t">
+                    <td className="py-1"><span className="w-3 h-3 rounded-full inline-block align-middle me-2" style={{ background: grpMeta(g.id).color }} />{gName(g.id)}</td>
+                    <td className="py-1 text-end font-medium"><N v={g.total} /></td>
+                    <td className="py-1 text-end text-gray-400 w-12">{agg.costTotal ? Math.round((g.total / agg.costTotal) * 100) : 0}%</td>
+                  </tr>
+                ))}
+                <tr className="border-t bg-gray-50 font-bold"><td className="py-1">{T('إجمالي التكاليف', 'Total Operating Costs')}</td><td className="py-1 text-end">{fmt(agg.costTotal)}</td><td className="py-1 text-end w-12">100%</td></tr>
+              </tbody></table>
+            </div>
+          </div>
         </div>
       )}
 
@@ -405,6 +404,7 @@ function StockBox({ stock, added, endLabel, en }: { stock: { total: number; line
  * ── مستند الطباعة ──
  * بترتيب ورقة جوبال (٣ نوفمبر ٢٠٢٦) وأنماطها نفسها، تحت مُعرّفه الخاصّ، ويزيد عليها
  * مربّع مخزون الحوض والملاحظات — فالورقة التي تُرسَل تحمل ما يقيّد أرقامها.
+ * وهيكل التكاليف (الحلقة) في آخر الورقة بطلب المالك ١١ نوفمبر ٢٠٢٦، والمخزون تحت الإيراد.
  */
 const SHORT_GROUP = 6;
 export function WasaPrintDoc({ agg, groups, margin, periodLabel, trend, en, stock, endLabel, notes }: {
@@ -436,12 +436,13 @@ export function WasaPrintDoc({ agg, groups, margin, periodLabel, trend, en, stoc
             {agg.incomeLines.slice().sort((a, b) => b.value - a.value).map((l, i) => (<tr key={`${l.label}-${i}`}><td>{lbl(l.label, en)}</td><td><N v={l.value} /></td></tr>))}
             <tr className="tot"><td>{T('إجمالي الإيراد', 'Total Revenue')}</td><td>{fmt(agg.incomeTotal)}</td></tr>
           </tbody></table>
-          {positive.length > 0 && (
-            <div className="donut">
-              <Donut segs={positive.map((g) => ({ value: g.total, color: grpMeta(g.id).color }))} total={agg.costTotal} />
-              <div className="cap">{T('هيكل التكاليف', 'Cost Structure')}<b>{fmtAbbr(agg.costTotal)}</b></div>
-            </div>
-          )}
+          <div className="stock">
+            <h3>{T('مخزون الحوض الجافّ — خارج التكاليف', 'Dry-dock Stock — not in costs')}</h3>
+            <table><tbody>
+              {stock.lines.map((l) => <tr key={l.label}><td>{l.label}</td><td>{fmt(l.value)}</td></tr>)}
+              <tr className="tot"><td>{T('الرصيد في آخر', 'Balance at end of')} {endLabel}</td><td>{fmt(stock.total)}</td></tr>
+            </tbody></table>
+          </div>
         </div>
         <div>
           <h3>{T('التكاليف بالمجموعات', 'Operating Costs by Group')}</h3>
@@ -455,13 +456,6 @@ export function WasaPrintDoc({ agg, groups, margin, periodLabel, trend, en, stoc
             ))}
             <tr className="tot"><td>{T('إجمالي التكاليف', 'Total Operating Costs')}</td><td>{fmt(agg.costTotal)}</td><td className="pc">100%</td></tr>
           </tbody></table>
-          <div className="stock">
-            <h3>{T('مخزون الحوض الجافّ — خارج التكاليف', 'Dry-dock Stock — not in costs')}</h3>
-            <table><tbody>
-              {stock.lines.map((l) => <tr key={l.label}><td>{l.label}</td><td>{fmt(l.value)}</td></tr>)}
-              <tr className="tot"><td>{T('الرصيد في آخر', 'Balance at end of')} {endLabel}</td><td>{fmt(stock.total)}</td></tr>
-            </tbody></table>
-          </div>
         </div>
       </div>
 
@@ -492,6 +486,25 @@ export function WasaPrintDoc({ agg, groups, margin, periodLabel, trend, en, stoc
         </tbody></table>
       </div>
 
+      {positive.length > 0 && (
+        <div className="struct">
+          <h3>{T('هيكل التكاليف', 'Cost Structure')}</h3>
+          <div className="sbody">
+            <Donut segs={positive.map((g) => ({ value: g.total, color: grpMeta(g.id).color }))} total={agg.costTotal} />
+            <table><tbody>
+              {groups.map((g) => (
+                <tr key={g.id}>
+                  <td>{g.total > 0 && <span className="sw" style={{ background: grpMeta(g.id).color }} />}{gName(g.id)}</td>
+                  <td><N v={g.total} /></td>
+                  <td className="pc">{pct(g.total)}</td>
+                </tr>
+              ))}
+              <tr className="tot"><td>{T('إجمالي التكاليف', 'Total Operating Costs')}</td><td>{fmt(agg.costTotal)}</td><td className="pc">100%</td></tr>
+            </tbody></table>
+          </div>
+        </div>
+      )}
+
       {notes.length > 0 && (
         <div className="notes">
           <h3>{T('ملاحظات على الأرقام', 'Notes on the figures')}</h3>
@@ -509,6 +522,10 @@ export const WASA_PRINT_CSS = GUBAL_PRINT_CSS.split('#gubal-doc').join('#wasa-do
   #wasa-doc .stock h3 { background:#fef3c7; color:#78350f; border-right-color:#d97706; }
   #wasa-doc.en .stock h3 { border-left-color:#d97706; }
   #wasa-doc .stock tr.tot td { background:#fde68a; color:#78350f; }
+  #wasa-doc .struct { margin-top:8px; break-inside: avoid; page-break-inside: avoid; }
+  #wasa-doc .struct .sbody { display:flex; align-items:center; gap:18px; }
+  #wasa-doc .struct svg { width:150px; height:150px; flex-shrink:0; }
+  #wasa-doc .struct table { flex:1; max-width:115mm; }
   #wasa-doc .notes { margin-top:8px; break-inside: avoid; page-break-inside: avoid; }
   #wasa-doc .notes ul { margin:2px 0 0; padding:0 16px; font-size:7.5pt; color:#475569; }
   #wasa-doc .notes li { margin:1px 0; }
